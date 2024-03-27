@@ -1,4 +1,7 @@
 import os
+import sys
+if sys.__stdout__ is None or sys.__stderr__ is None:
+    os.environ['KIVY_NO_CONSOLELOG'] = '1'
 import shutil
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
@@ -11,6 +14,11 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.progressbar import ProgressBar
 import threading
 from kivy.clock import Clock
+import logging
+
+
+logging.basicConfig(level=logging.INFO)
+
 #  several functionalities:
 # Navigating to a path entered by the user.
 # Selecting source and target directories for moving contents and creating a symlink.
