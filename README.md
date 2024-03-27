@@ -1,10 +1,13 @@
 
 ## Big links make big chains
-BigLinks is currently a windows desktop application designed to help users manage their limited file storage more efficiently by leveraging symbolic links to keep data on other local drives. 
+BigLinks is a desktop app to help users manage limited file storage more by leveraging symbolic links to keep data on other local drives. (Currently only tested on Windows)
 This preserves default install and program locations, at the symbolically linked location, so the OS sees the folder ,but the data storage is actually elsewhere.
 
 ## What is a Symbolic Link?
-A symbolic link (often abbreviated as symlink) is a type of file that serves as a reference or pointer to another file or directory. Unlike a shortcut, a symlink acts as a transparent alias to the file or folder it links to, allowing applications and users to access it as if it were located at the symlink's location. This feature is incredibly useful for managing files across different partitions or drives, making it seem as if they're located in a single, convenient location.
+A symbolic link (often abbreviated as symlink) is a type of file that serves as a reference or pointer to another file or directory. 
+Unlike a shortcut, a symlink acts as a transparent alias to the file or folder it links to, allowing applications and users to access it as if it were located at the symlink's location. 
+This feature is incredibly useful for managing files across different partitions or drives, making it seem as if they're located in a single, convenient location.
+
 There are various types of Symbolic Links
 This uses soft links.
 Soft Links: Pointers to a file or directory's path. If the target is moved or deleted, the link breaks.
