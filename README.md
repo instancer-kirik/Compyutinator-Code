@@ -1,6 +1,7 @@
 
 ## Big links make big chains
 BigLinks is a desktop app to help users manage limited file storage more by leveraging symbolic links to keep data on other local drives. (Currently only tested on Windows)
+
 This preserves default install and program locations, at the symbolically linked location, so the OS sees the folder, but the data storage is actually elsewhere.
 
 ## What is a Symbolic Link?
