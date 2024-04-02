@@ -23,7 +23,7 @@ Permissions: Specific permissions may be required to create or access symlinks o
 Security: Exercise caution as symlinks can potentially expose sensitive directories or files outside the intended scope.
 Important: Ensure compatibility and test symlinks and this tool in your specific network and OS environment to prevent data loss or unintended access.
 
-### Also haven't tested large folder moves yet or nested symlinks. Nested folders work tho c:
+## Also haven't tested large folder moves yet or nested symlinks. Nested folders work tho c:
 
 ## Framework
 BigLinks is built using the Kivy framework; open source and cross-platform.
