@@ -26,7 +26,7 @@ Important: Ensure compatibility and test symlinks and this tool in your specific
 ## Also haven't tested large folder moves yet or nested symlinks. Nested folders work tho c:
 
 ## Framework
-BigLinks is built using the --Kivy-- PyQt framework; open source and cross-platform.
+BigLinks is built using the PyQt framework; open source and cross-platform.
 Build exe with:
 
 ```pyinstaller --onefile --uac-admin --manifest=app.manifest main.py```
