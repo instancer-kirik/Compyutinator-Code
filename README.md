@@ -28,6 +28,7 @@ Important: Ensure compatibility and test symlinks and this tool in your specific
 ## Framework
 BigLinks is built using the --Kivy-- PyQt framework; open source and cross-platform.
 Build exe with:
+
 ```pyinstaller --onefile --uac-admin --manifest=app.manifest main.py```
 
 ## Features
