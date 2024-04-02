@@ -332,6 +332,7 @@ class MainWindow(QMainWindow):
     def undo_move(self, instance):
         if not self.source_path or not self.target_path or not hasattr(self, 'moved_files'):
             self.message_container.text = "Cannot undo move: missing source, target, or moved files list."
+            logging.info(f"Cannot undo move: missing source, target, or moved files list.")
             return
 
         try:
@@ -345,8 +346,10 @@ class MainWindow(QMainWindow):
                     shutil.move(target_item_path, source_item_path)
             
             self.message_container.text = "Move operation undone successfully."
+            logging.info(f"Move operation undone successfully.")
         except OSError as e:
             self.message_container.text = f"Failed to undo move: {e}"
+            logging.info(f"Failed to undo move: {e}")
         finally:
             self.rollback_button.disabled = True  # Disable the undo button to prevent repeated undos
     def remove_symlink(self, instance):
@@ -356,10 +359,13 @@ class MainWindow(QMainWindow):
                 self.message_container.text = "Symlink removed successfully."
                 self.remove_symlink_button.disabled = True  # Disable the button after removal
                 self.source_path = None  # Clear the source path
+                logging.info(f"Removed Symlink")
             except OSError as e:
                 self.message_container.text = f"Failed to remove symlink: {e}"
+                logging.info(f"Failed to remove symlink: {e}")
         else:
             self.message_container.text = "No symlink selected."
+            logging.info(f"No symlink selected.")
 
     
     def disable_all_buttons(self):
