@@ -6,7 +6,10 @@ import threading
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit,QInputDialog, QProgressBar, QFileDialog, QMessageBox
 from PyQt5.QtCore import QThread, pyqtSignal
 
-
+#Things I want to change on this. 
+# Linking to a populated file if desired. i.e leaving the rename folder blank
+# actually working messagecontainer, progressbar
+#
 
 log_directory = os.path.join(os.getcwd(), 'logs')
 if not os.path.exists(log_directory):
