@@ -1,0 +1,60 @@
+QMainWindow {
+    background-color: #2E2E2E;
+    color: #FFFFFF;
+}
+QTreeView {
+    background-color: #1C1C1C;
+    alternate-background-color: #3C3C3C;
+    color: #FFFFFF;
+    selection-background-color: #8B0000;
+    selection-color: #FFFFFF;
+}
+QTreeView::item:hover {
+    background-color: #551A1A;
+}
+QTreeView::item:selected {
+    background-color: #8B0000;
+}
+QTreeView::branch:closed:has-children {
+    color: #FF3333;
+}
+QTreeView::branch:open:has-children {
+    color: #FF3333;
+}
+QTreeView::branch:has-children:!has-siblings:closed,
+QTreeView::branch:closed:has-children:has-siblings {
+    color: #FF3333;
+}
+QTreeView::branch:open:has-children:!has-siblings,
+QTreeView::branch:open:has-children:has-siblings {
+     background-color: #1C1C1C;
+    color: #FF3333;
+}
+QHeaderView::section {
+    background-color: #1C1C1C;
+    color: #FFFFFF;
+}
+QScrollBar:vertical {
+    background: #2E2E2E;
+    width: 15px;
+}
+QScrollBar::handle:vertical {
+    background: grey;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    background: #2E2E2E;
+}
+QScrollBar:horizontal {
+    background: #2E2E2E;
+    height: 15px;
+}
+QScrollBar::handle:horizontal {
+    background: grey;
+}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    background: #2E2E2E;
+}
+QHeaderView::section {
+    background-color: #1C1C1C;
+    color: #FFFFFF;
+}

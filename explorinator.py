@@ -1,156 +1,157 @@
-import sys
 import os
-import signal
-from PyQt5.QtWidgets import QApplication, QMainWindow, QFileSystemModel, QTreeView, QVBoxLayout, QWidget, QLabel, QStyle
-from PyQt5.QtMultimedia import QMediaPlayer
-from PyQt5.QtCore import Qt, QUrl, QTimer
+import sys
+import logging
+from PyQt6.QtWidgets import QApplication, QMainWindow, QDockWidget, QTabWidget
+from PyQt6.QtGui import QAction
+from PyQt6.QtCore import Qt, QSettings
+from big_links import SymbolicLinkerWidget
+from file_explorer import FileExplorerWidget
+from code_editor import CodeEditorWidget
+from process_manager import ProcessManagerWidget
+from action_pad import ActionPadWidget
+from terminal_widget import TerminalWidget
+from theme_manager import ThemeManagerWidget
+from html_viewer import HTMLViewerWidget
 
-class FileExplorer(QMainWindow):
+log_directory = os.path.join(os.getcwd(), 'logs')
+if not os.path.exists(log_directory):
+    os.makedirs(log_directory)
+
+log_file_path = os.path.join(log_directory, 'app.log')
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.FileHandler(log_file_path, 'a'), logging.StreamHandler()])
+
+logging.info("Application started")
+
+class MainApplication(QMainWindow):
     def __init__(self):
         super().__init__()
-
-        self.setWindowTitle("File Explorer")
+        self.setWindowTitle('Main Application')
         self.setGeometry(300, 100, 800, 600)
+        self.child_processes = {}
+        self.initUI()
+        self.load_settings()
 
-        self.model = QFileSystemModel()
-        self.model.setRootPath('')
+    def initUI(self):
+        self.add_symbolic_linker_dock()
+        self.add_file_explorer_dock()
+        self.add_code_editor_dock()
+        self.add_process_manager_dock()
+        self.add_action_pad_dock()
+        self.add_terminal_dock()
+        self.add_theme_manager_dock()
+        self.add_html_viewer_dock()
 
-        self.tree = QTreeView()
-        self.tree.setModel(self.model)
-        self.tree.setRootIndex(self.model.index(''))
-        self.tree.doubleClicked.connect(self.on_double_click)
+        # Adding menu bar for saving and loading layouts
+        menubar = self.menuBar()
+        file_menu = menubar.addMenu('File')
+        save_layout_action = QAction('Save Layout', self)
+        save_layout_action.triggered.connect(self.save_layout)
+        file_menu.addAction(save_layout_action)
 
-        self.layout = QVBoxLayout()
-        self.layout.addWidget(self.tree)
+        load_layout_action = QAction('Load Layout', self)
+        load_layout_action.triggered.connect(self.load_layout)
+        file_menu.addAction(load_layout_action)
 
-        self.loading_label = QLabel("Loading...", self)
-        self.loading_label.setAlignment(Qt.AlignCenter)
-        self.loading_label.setStyleSheet("QLabel { background-color : black; color : white; }")
-        self.loading_label.hide()
+        self.tab_widget = QTabWidget()
+        self.tab_widget.tabBarClicked.connect(self.handle_tab_change)
+        self.setCentralWidget(self.tab_widget)
 
-        self.layout.addWidget(self.loading_label)
+    def handle_tab_change(self, index):
+        tab_color = self.theme_manager_widget.current_theme["tab_color"]
+        self.apply_tab_color(QColor(tab_color), index)
 
-        self.container = QWidget()
-        self.container.setLayout(self.layout)
-
-        self.setCentralWidget(self.container)
-
-        self.player = QMediaPlayer()
-        self.player.setVolume(50)
-        self.player.mediaStatusChanged.connect(self.media_status_changed)
-
-        self.current_index = -1
-
-        self.setStyleSheet(self.get_dark_red_style())
-
-    def get_dark_red_style(self):
-        return """
-        QMainWindow {
-            background-color: #2E2E2E;
-            color: #FFFFFF;
-        }
-        QTreeView {
-            background-color: #1C1C1C;
-            alternate-background-color: #3C3C3C;
-            color: #FFFFFF;
-            selection-background-color: #8B0000;
-            selection-color: #FFFFFF;
-        }
-        QTreeView::item:hover {
-            background-color: #551A1A;
-        }
-        QTreeView::item:selected {
-            background-color: #8B0000;
-        }
-        QTreeView::branch:closed:has-children {
-            border-image: none;
-            image: none;
-        }
-        QTreeView::branch:open:has-children {
-            border-image: none;
-            image: none;
-        }
-        QTreeView::branch:has-children:!has-siblings:closed,
-        QTreeView::branch:closed:has-children:has-siblings {
-            border-image: none;
-            qproperty-icon: url(:/images/branch_closed.png);
-        }
-        QTreeView::branch:open:has-children:!has-siblings,
-        QTreeView::branch:open:has-children:has-siblings {
-            border-image: none;
-            qproperty-icon: url(:/images/branch_open.png);
-        }
-        QHeaderView::section {
-            background-color: #1C1C1C;
-            color: #FFFFFF;
-        }
-        QScrollBar:vertical {
-            background: #2E2E2E;
-            width: 15px;
-        }
-        QScrollBar::handle:vertical {
-            background: grey;
-        }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-            background: #2E2E2E;
-        }
-        QScrollBar:horizontal {
-            background: #2E2E2E;
-            height: 15px;
-        }
-        QScrollBar::handle:horizontal {
-            background: grey;
-        }
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-            background: #2E2E2E;
-        }
-        QHeaderView::section {
-            background-color: #1C1C1C;
-            color: #FFFFFF;
-        }
+    def apply_tab_color(self, color, index):
+        stylesheet = f"""
+        QTabBar::tab:selected {{
+            background-color: {color.name()};
+        }}
         """
+        self.tab_widget.setStyleSheet(stylesheet)
 
-    def on_double_click(self, index):
-        file_path = self.model.filePath(index)
-        if os.path.isfile(file_path) and (file_path.endswith('.mp3') or file_path.endswith('.wav')):
-            self.play_audio(file_path)
+    def add_symbolic_linker_dock(self):
+        self.symbolic_linker_widget = SymbolicLinkerWidget()
+        symbolic_linker_dock = QDockWidget("Symbolic Linker", self)
+        symbolic_linker_dock.setWidget(self.symbolic_linker_widget)
+        self.addDockWidget(Qt.LeftDockWidgetArea, symbolic_linker_dock)
 
-    def play_audio(self, file_path):
-        self.loading_label.show()
-        self.player.setMedia(QUrl.fromLocalFile(file_path))
-        self.player.play()
+    def add_file_explorer_dock(self):
+        self.file_explorer_widget = FileExplorerWidget()
+        file_explorer_dock = QDockWidget("File Explorer", self)
+        file_explorer_dock.setWidget(self.file_explorer_widget)
+        self.addDockWidget(Qt.LeftDockWidgetArea, file_explorer_dock)
 
-    def media_status_changed(self, status):
-        if status == QMediaPlayer.LoadedMedia:
-            QTimer.singleShot(500, self.hide_loading_label)
+    def add_code_editor_dock(self):
+        self.code_editor_widget = CodeEditorWidget()
+        code_editor_dock = QDockWidget("Code Editor", self)
+        code_editor_dock.setWidget(self.code_editor_widget)
+        self.addDockWidget(Qt.RightDockWidgetArea, code_editor_dock)
 
-    def hide_loading_label(self):
-        self.loading_label.hide()
+    def add_process_manager_dock(self):
+        self.process_manager_widget = ProcessManagerWidget(self)
+        process_manager_dock = QDockWidget("Process Manager", self)
+        process_manager_dock.setWidget(self.process_manager_widget)
+        self.addDockWidget(Qt.BottomDockWidgetArea, process_manager_dock)
 
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Up or event.key() == Qt.Key_Down:
-            current_index = self.tree.currentIndex()
-            if event.key() == Qt.Key_Up:
-                next_index = self.tree.indexAbove(current_index)
-            else:
-                next_index = self.tree.indexBelow(current_index)
-                
-            if next_index.isValid():
-                self.tree.setCurrentIndex(next_index)
-                file_path = self.model.filePath(next_index)
-                if os.path.isfile(file_path) and (file_path.endswith('.mp3') or file_path.endswith('.wav')):
-                    self.play_audio(file_path)
+    def add_action_pad_dock(self):
+        self.action_pad_widget = ActionPadWidget(self)
+        action_pad_dock = QDockWidget("Action Pad", self)
+        action_pad_dock.setWidget(self.action_pad_widget)
+        self.addDockWidget(Qt.BottomDockWidgetArea, action_pad_dock)
 
-def handle_sigint(signal, frame):
-    print("Exiting...")
-    QApplication.quit()
+    def add_terminal_dock(self):
+        self.terminal_widget = TerminalWidget()
+        terminal_dock = QDockWidget("Terminal", self)
+        terminal_dock.setWidget(self.terminal_widget)
+        self.addDockWidget(Qt.BottomDockWidgetArea, terminal_dock)
+
+    def add_theme_manager_dock(self):
+        self.theme_manager_widget = ThemeManagerWidget(self)
+        theme_manager_dock = QDockWidget("Theme Manager", self)
+        theme_manager_dock.setWidget(self.theme_manager_widget)
+        self.addDockWidget(Qt.RightDockWidgetArea, theme_manager_dock)
+
+    def add_html_viewer_dock(self):
+        self.html_viewer_widget = HTMLViewerWidget()
+        html_viewer_dock = QDockWidget("HTML Viewer", self)
+        html_viewer_dock.setWidget(self.html_viewer_widget)
+        self.addDockWidget(Qt.RightDockWidgetArea, html_viewer_dock)
+
+    def save_layout(self):
+        settings = QSettings("MyCompany", "MyApp")
+        settings.setValue("geometry", self.saveGeometry())
+        settings.setValue("windowState", self.saveState())
+
+    def load_layout(self):
+        settings = QSettings("MyCompany", "MyApp")
+        self.restoreGeometry(settings.value("geometry"))
+        self.restoreState(settings.value("windowState"))
+
+    def save_settings(self):
+        settings = QSettings("MyCompany", "MyApp")
+        theme = self.theme_manager_widget.get_current_theme()
+        settings.setValue("theme", theme)
+
+    def load_settings(self):
+        settings = QSettings("MyCompany", "MyApp")
+        self.restoreGeometry(settings.value("geometry"))
+        self.restoreState(settings.value("windowState"))
+        theme = settings.value("theme", {
+            "theme_color": "default",
+            "scrollbar_color": "default",
+            "header_color": "default",
+            "main_window_color": "default",
+            "window_color": "default",
+            "tab_color": "default"
+        })
+        self.theme_manager_widget.apply_theme(theme)
+
+    def closeEvent(self, event):
+        self.save_settings()
+        super().closeEvent(event)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-
-    # Handle SIGINT (Ctrl+C)
-    signal.signal(signal.SIGINT, handle_sigint)
-
-    file_explorer = FileExplorer()
-    file_explorer.show()
+    main_app = MainApplication()
+    main_app.show()
     sys.exit(app.exec_())
