@@ -1,5 +1,7 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLineEdit, QHBoxLayout
-from PyQt6.QtCore import QProcess
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLineEdit, QMenu, QApplication
+from PyQt6.QtGui import QAction
+from PyQt6.QtCore import QProcess, Qt
+import os
 
 class TerminalWidget(QWidget):
     def __init__(self, parent=None):
@@ -11,6 +13,8 @@ class TerminalWidget(QWidget):
 
         self.output = QTextEdit()
         self.output.setReadOnly(True)
+        self.output.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.output.customContextMenuRequested.connect(self.show_context_menu)
         self.layout.addWidget(self.output)
 
         self.input = QLineEdit()
@@ -38,3 +42,30 @@ class TerminalWidget(QWidget):
         error_output = self.process.readAllStandardError().data().decode()
         if error_output:
             self.output.append(error_output)
+
+    def show_context_menu(self, position):
+        menu = QMenu()
+        
+        copy_action = QAction("Copy", self)
+        copy_action.triggered.connect(self.copy_text)
+        menu.addAction(copy_action)
+
+        clear_action = QAction("Clear", self)
+        clear_action.triggered.connect(self.clear_output)
+        menu.addAction(clear_action)
+        
+        menu.exec(self.output.mapToGlobal(position))
+
+    def copy_text(self):
+        cursor = self.output.textCursor()
+        if cursor.hasSelection():
+            selected_text = cursor.selectedText()
+            QApplication.clipboard().setText(selected_text)
+
+    def clear_output(self):
+        self.output.clear()
+
+    def closeEvent(self, event):
+        self.process.terminate()
+        self.process.waitForFinished()
+        super().closeEvent(event)

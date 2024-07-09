@@ -1,25 +1,61 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QTextEdit, QFileDialog, QMessageBox, QInputDialog
 from PyQt6.QtCore import QTimer
-
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QMouseEvent
+import os
 class CodeEditorWidget(QWidget):
     def __init__(self):
         super().__init__()
 
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
-
+       
         self.tab_widget = QTabWidget()
         self.tab_widget.setTabsClosable(True)
         self.tab_widget.tabCloseRequested.connect(self.close_tab)
         self.tab_widget.currentChanged.connect(self.check_for_unsaved_changes)
         self.layout.addWidget(self.tab_widget)
-
+        self.setAcceptDrops(True)
         self.auto_save_timer = QTimer(self)
         self.auto_save_timer.timeout.connect(self.auto_save)
         self.auto_save_timer.start(300000)  # Auto-save every 5 minutes
 
         self.add_tab("Untitled")
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
 
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
+
+    def dropEvent(self, event):
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls:
+                file_path = urls[0].toLocalFile()
+                if os.path.isfile(file_path):
+                    if event.keyboardModifiers() == Qt.KeyboardModifier.ControlModifier:
+                        # Paste the path as text
+                        self.paste_text(file_path)
+                    else:
+                        # Open the file
+                        self.open_file(file_path)
+            event.acceptProposedAction()
+        else:
+            super().dropEvent(event)
+
+    def open_file(self, file_path):
+        with open(file_path, 'r') as file:
+            self.setPlainText(file.read())
+
+    def paste_text(self, text):
+        cursor = self.textCursor()
+        cursor.insertText(text)
     def add_tab(self, title, content=""):
         new_tab = QTextEdit()
         new_tab.setPlainText(content)

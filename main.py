@@ -1,17 +1,11 @@
 import os
 import sys
 import logging
-from PyQt6.QtWidgets import QApplication, QMainWindow, QDockWidget, QTabWidget, QMenuBar, QMenu
-from PyQt6.QtGui import QAction
-from PyQt6.QtCore import Qt, QSettings
-from big_links import SymbolicLinkerWidget
-from file_explorer import FileExplorerWidget
-from code_editor import CodeEditorWidget
-from process_manager import ProcessManagerWidget
-from action_pad import ActionPadWidget
-from terminal_widget import TerminalWidget
-from theme_manager import ThemeManagerWidget
-from html_viewer import HTMLViewerWidget
+from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget, QListWidget, QMenuBar, QMenu, QWidget
+from PyQt6.QtGui import QCursor, QAction
+from PyQt6.QtCore import Qt, QSettings, QByteArray, QTimer
+from HMC.widget_manager import WidgetManager
+from GUX.overlay import CharachorderOverlay, BrightnessFlashlight
 
 log_directory = os.path.join(os.getcwd(), 'logs')
 if not os.path.exists(log_directory):
@@ -23,42 +17,89 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 logging.info("Application started")
 
+default_theme = {
+    "main_window_color": "#2E3440",
+    "window_color": "#3B4252",
+    "header_color": "#4C566A",
+    "theme_color": "#81A1C1",
+    "scrollbar_color": "#4C566A",
+    "scrollbar_foreground_color": "#D8DEE9",
+    "text_color": "#ECEFF4",
+    "tab_colors": {
+        0: "#81A1C1",
+        1: "#88C0D0",
+        2: "#5E81AC",
+    },
+    "last_focused_tab_color": "#81A1C1"
+}
+
+def merge_themes(default_theme, custom_theme):
+    merged_theme = default_theme.copy()
+    merged_theme.update(custom_theme)
+    return merged_theme
+
 class MainApplication(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('Main Application')
         self.setGeometry(300, 100, 800, 600)
         self.child_processes = {}
+        self.history = []
+        self.max_history_length = 10
+        self.last_focused_widget = None
+        self.flashlight = BrightnessFlashlight(size=200)
+        self.overlay = CharachorderOverlay(flashlight=self.flashlight)
+        self.overlay.show()
+        self.widget_manager = WidgetManager(self)
         self.initUI()
         self.load_settings()
 
     def initUI(self):
-        self.add_symbolic_linker_dock()
-        self.add_file_explorer_dock()
-        self.add_code_editor_dock()
-        self.add_process_manager_dock()
-        self.add_action_pad_dock()
-        self.add_terminal_dock()
-        self.add_theme_manager_dock()
-        self.add_html_viewer_dock()
-
-        # Adding menu bar for saving and loading layouts
-        menubar = self.menuBar()
-        file_menu = menubar.addMenu('File')
-        save_layout_action = QAction('Save Layout', self)
-        save_layout_action.triggered.connect(self.save_layout)
-        file_menu.addAction(save_layout_action)
-
-        load_layout_action = QAction('Load Layout', self)
-        load_layout_action.triggered.connect(self.load_layout)
-        file_menu.addAction(load_layout_action)
-
         self.tab_widget = QTabWidget()
-        self.tab_widget.tabBarClicked.connect(self.handle_tab_change)
+        self.tab_widget.currentChanged.connect(self.handle_tab_change)
         self.setCentralWidget(self.tab_widget)
 
+        self.widget_manager.create_widgets()
+        self.add_history_tab()
+
+        self.create_menu_bar()
+
+        if self.widget_manager.theme_manager_widget:
+            self.widget_manager.theme_manager_widget.theme_changed.connect(self.apply_theme)
+
+    def add_history_tab(self):
+        self.history_widget = QListWidget()
+        self.tab_widget.addTab(self.history_widget, "History")
+
+    def update_history(self, path):
+        if path in self.history:
+            self.history.remove(path)
+        self.history.insert(0, path)
+        if len(self.history) > self.max_history_length:
+            self.history.pop()
+
+        self.history_widget.clear()
+        for item in self.history:
+            self.history_widget.addItem(item)
+
+        if self.widget_manager.ai_chat_widget:
+            self.widget_manager.ai_chat_widget.set_context(path)
+
     def handle_tab_change(self, index):
-        tab_color = self.theme_manager_widget.current_theme["tab_color"]
+        self.last_focused_widget = self.tab_widget.widget(index)
+        self.update_tab_color(index)
+
+    def focus_changed_event(self, old, new):
+        if new is not None and isinstance(new, QWidget):
+            for widget in self.widget_manager.dock_widgets:
+                if widget.isAncestorOf(new):
+                    self.last_focused_widget = widget
+                    self.update_tab_color(self.tab_widget.indexOf(self.last_focused_widget))
+                    break
+
+
+    def update_tab_color(self, index):
+        tab_color = self.widget_manager.theme_manager_widget.current_theme["tab_colors"].get(index, self.widget_manager.theme_manager_widget.current_theme["last_focused_tab_color"])
         self.apply_tab_color(tab_color, index)
 
     def apply_tab_color(self, color, index):
@@ -68,54 +109,42 @@ class MainApplication(QMainWindow):
         }}
         """
         self.tab_widget.setStyleSheet(stylesheet)
+        self.widget_manager.theme_manager_widget.current_theme["last_focused_tab_color"] = color
 
-    def add_symbolic_linker_dock(self):
-        self.symbolic_linker_widget = SymbolicLinkerWidget()
-        symbolic_linker_dock = QDockWidget("Symbolic Linker", self)
-        symbolic_linker_dock.setWidget(self.symbolic_linker_widget)
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, symbolic_linker_dock)
+    def create_menu_bar(self):
+        menubar = self.menuBar()
 
-    def add_file_explorer_dock(self):
-        self.file_explorer_widget = FileExplorerWidget()
-        file_explorer_dock = QDockWidget("File Explorer", self)
-        file_explorer_dock.setWidget(self.file_explorer_widget)
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, file_explorer_dock)
+        file_menu = menubar.addMenu('File')
+        save_layout_action = QAction('Save Layout', self)
+        save_layout_action.triggered.connect(self.save_layout)
+        file_menu.addAction(save_layout_action)
 
-    def add_code_editor_dock(self):
-        self.code_editor_widget = CodeEditorWidget()
-        code_editor_dock = QDockWidget("Code Editor", self)
-        code_editor_dock.setWidget(self.code_editor_widget)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, code_editor_dock)
+        load_layout_action = QAction('Load Layout', self)
+        load_layout_action.triggered.connect(self.load_layout)
+        file_menu.addAction(load_layout_action)
 
-    def add_process_manager_dock(self):
-        self.process_manager_widget = ProcessManagerWidget(self)
-        process_manager_dock = QDockWidget("Process Manager", self)
-        process_manager_dock.setWidget(self.process_manager_widget)
-        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, process_manager_dock)
+        view_menu = menubar.addMenu('View')
 
-    def add_action_pad_dock(self):
-        self.action_pad_widget = ActionPadWidget(self)
-        action_pad_dock = QDockWidget("Action Pad", self)
-        action_pad_dock.setWidget(self.action_pad_widget)
-        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, action_pad_dock)
+        self.add_toggle_view_action(view_menu, "Symbolic Linker", self.widget_manager.symbolic_linker_dock)
+        self.add_toggle_view_action(view_menu, "File Explorer", self.widget_manager.file_explorer_dock)
+        self.add_toggle_view_action(view_menu, "Code Editor", self.widget_manager.code_editor_dock)
+        self.add_toggle_view_action(view_menu, "Process Manager", self.widget_manager.process_manager_dock)
+        self.add_toggle_view_action(view_menu, "Action Pad", self.widget_manager.action_pad_dock)
+        self.add_toggle_view_action(view_menu, "Terminal", self.widget_manager.terminal_dock)
+        self.add_toggle_view_action(view_menu, "Theme Manager", self.widget_manager.theme_manager_dock)
+        self.add_toggle_view_action(view_menu, "HTML Viewer", self.widget_manager.html_viewer_dock)
+        self.add_toggle_view_action(view_menu, "AI Chat", self.widget_manager.ai_chat_dock)
+        self.add_toggle_view_action(view_menu, "Media Player", self.widget_manager.media_player_dock)
+        self.add_toggle_view_action(view_menu, "Download Manager", self.widget_manager.download_manager_dock)
+        self.add_toggle_view_action(view_menu, "Sticky Notes", self.widget_manager.sticky_note_manager_dock)
+        self.add_toggle_view_action(view_menu, "Overlay", self.widget_manager.overlay_dock)
 
-    def add_terminal_dock(self):
-        self.terminal_widget = TerminalWidget()
-        terminal_dock = QDockWidget("Terminal", self)
-        terminal_dock.setWidget(self.terminal_widget)
-        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, terminal_dock)
-
-    def add_theme_manager_dock(self):
-        self.theme_manager_widget = ThemeManagerWidget(self)
-        theme_manager_dock = QDockWidget("Theme Manager", self)
-        theme_manager_dock.setWidget(self.theme_manager_widget)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, theme_manager_dock)
-
-    def add_html_viewer_dock(self):
-        self.html_viewer_widget = HTMLViewerWidget()
-        html_viewer_dock = QDockWidget("HTML Viewer", self)
-        html_viewer_dock.setWidget(self.html_viewer_widget)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, html_viewer_dock)
+    def add_toggle_view_action(self, menu, title, dock_widget):
+        action = QAction(title, self, checkable=True)
+        action.setChecked(True)
+        action.triggered.connect(dock_widget.setVisible)
+        dock_widget.visibilityChanged.connect(action.setChecked)
+        menu.addAction(action)
 
     def save_layout(self):
         settings = QSettings("MyCompany", "MyApp")
@@ -124,34 +153,84 @@ class MainApplication(QMainWindow):
 
     def load_layout(self):
         settings = QSettings("MyCompany", "MyApp")
-        self.restoreGeometry(settings.value("geometry"))
-        self.restoreState(settings.value("windowState"))
-
-    def save_settings(self):
-        settings = QSettings("MyCompany", "MyApp")
-        theme = self.theme_manager_widget.get_current_theme()
-        settings.setValue("theme", theme)
+        geometry = settings.value("geometry")
+        windowState = settings.value("windowState")
+        if geometry:
+            self.restoreGeometry(QByteArray(geometry))
+        if windowState:
+            self.restoreState(QByteArray(windowState))
 
     def load_settings(self):
-        settings = QSettings("MyCompany", "MyApp")
-        self.restoreGeometry(settings.value("geometry"))
-        self.restoreState(settings.value("windowState"))
-        theme = settings.value("theme", {
-            "theme_color": "default",
-            "scrollbar_color": "default",
-            "header_color": "default",
-            "main_window_color": "default",
-            "window_color": "default",
-            "tab_color": "default"
-        })
-        self.theme_manager_widget.apply_theme(theme)
+        self.load_layout()
 
-    def closeEvent(self, event):
-        self.save_settings()
-        super().closeEvent(event)
+    def save_settings(self):
+        self.save_layout()
+
+    def apply_theme(self, theme):
+        merged_theme = merge_themes(default_theme, theme)
+        stylesheet = f"""
+        QMainWindow {{
+            background-color: {theme["main_window_color"]};
+            color: {theme["text_color"]};
+        }}
+        QTreeView {{
+            background-color: {theme["window_color"]};
+            alternate-background-color: {theme["header_color"]};
+            color: {theme["text_color"]};
+            selection-background-color: {theme["theme_color"]};
+            selection-color: {theme["text_color"]};
+        }}
+        QTreeView::item:hover {{
+            background-color: {theme["theme_color"]};
+        }}
+        QTreeView::item:selected {{
+            background-color: {theme["theme_color"]};
+        }}
+        QHeaderView::section {{
+            background-color: {theme["header_color"]};
+            color: {theme["text_color"]};
+        }}
+        QScrollBar:vertical {{
+            background: {theme["scrollbar_color"]};
+            width: 15px;
+        }}
+        QScrollBar::handle:vertical {{
+            background: {theme["scrollbar_foreground_color"]};
+        }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+            background: {theme["scrollbar_color"]};
+        }}
+        QScrollBar:horizontal {{
+            background: {theme["scrollbar_color"]};
+            height: 15px;
+        }}
+        QScrollBar::handle:horizontal {{
+            background: {theme["scrollbar_foreground_color"]};
+        }}
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+            background: {theme["scrollbar_color"]};
+        }}
+        QHeaderView::section {{
+            background-color: {theme["header_color"]};
+            color: {theme["text_color"]};
+        }}
+        """
+        self.setStyleSheet(stylesheet)
+        self.widget_manager.theme_manager_widget.current_theme = merged_theme
+        for index in range(self.tab_widget.count()):
+            tab_color = theme["tab_colors"].get(index, theme["last_focused_tab_color"])
+            self.apply_tab_color(tab_color, index)
+
+    def set_serial_port(self, port):
+        self.serial_port = port
+        logging.info(f"Serial port set to {port}")
+        if self.serial_port:
+            self.overlay.set_serial_port(self.serial_port)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     main_app = MainApplication()
+    QApplication.instance().focusChanged.connect(main_app.focus_changed_event)
     main_app.show()
-    sys.exit(app.exec_())
+ 
+    sys.exit(app.exec())

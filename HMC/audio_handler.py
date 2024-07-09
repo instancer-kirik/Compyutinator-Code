@@ -1,5 +1,5 @@
 from PyQt6.QtMultimedia import QAudioOutput, QAudioFormat, QMediaPlayer
-from PyQt6.QtCore import QUrl
+from PyQt6.QtCore import QUrl, QIODevice, QByteArray
 import pyogg
 
 class AudioHandler:
