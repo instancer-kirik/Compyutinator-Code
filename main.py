@@ -2,10 +2,10 @@ import os
 import sys
 import logging
 from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget, QListWidget, QMenuBar, QMenu, QWidget
-from PyQt6.QtGui import QCursor, QAction
+from PyQt6.QtGui import QAction
 from PyQt6.QtCore import Qt, QSettings, QByteArray, QTimer
 from HMC.widget_manager import WidgetManager
-from GUX.overlay import CharachorderOverlay, BrightnessFlashlight
+from GUX.overlay import CompositeOverlay, Flashlight
 
 log_directory = os.path.join(os.getcwd(), 'logs')
 if not os.path.exists(log_directory):
@@ -47,8 +47,8 @@ class MainApplication(QMainWindow):
         self.history = []
         self.max_history_length = 10
         self.last_focused_widget = None
-        self.flashlight = BrightnessFlashlight(size=200)
-        self.overlay = CharachorderOverlay(flashlight=self.flashlight)
+        self.flashlight = Flashlight(size=200)
+        self.overlay = CompositeOverlay(flashlight_size=200, flashlight_power=0.5, serial_port=None)
         self.overlay.show()
         self.widget_manager = WidgetManager(self)
         self.initUI()
@@ -59,13 +59,9 @@ class MainApplication(QMainWindow):
         self.tab_widget.currentChanged.connect(self.handle_tab_change)
         self.setCentralWidget(self.tab_widget)
 
-        self.widget_manager.create_widgets()
         self.add_history_tab()
 
         self.create_menu_bar()
-
-        if self.widget_manager.theme_manager_widget:
-            self.widget_manager.theme_manager_widget.theme_changed.connect(self.apply_theme)
 
     def add_history_tab(self):
         self.history_widget = QListWidget()
@@ -96,7 +92,6 @@ class MainApplication(QMainWindow):
                     self.last_focused_widget = widget
                     self.update_tab_color(self.tab_widget.indexOf(self.last_focused_widget))
                     break
-
 
     def update_tab_color(self, index):
         tab_color = self.widget_manager.theme_manager_widget.current_theme["tab_colors"].get(index, self.widget_manager.theme_manager_widget.current_theme["last_focused_tab_color"])
@@ -138,6 +133,7 @@ class MainApplication(QMainWindow):
         self.add_toggle_view_action(view_menu, "Download Manager", self.widget_manager.download_manager_dock)
         self.add_toggle_view_action(view_menu, "Sticky Notes", self.widget_manager.sticky_note_manager_dock)
         self.add_toggle_view_action(view_menu, "Overlay", self.widget_manager.overlay_dock)
+        self.add_toggle_view_action(view_menu, "Diff Merger", self.widget_manager.diff_merger_dock)
 
     def add_toggle_view_action(self, menu, title, dock_widget):
         action = QAction(title, self, checkable=True)
@@ -225,12 +221,11 @@ class MainApplication(QMainWindow):
         self.serial_port = port
         logging.info(f"Serial port set to {port}")
         if self.serial_port:
-            self.overlay.set_serial_port(self.serial_port)
+            self.overlay.set_serial_port(port)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     main_app = MainApplication()
     QApplication.instance().focusChanged.connect(main_app.focus_changed_event)
     main_app.show()
- 
     sys.exit(app.exec())

@@ -12,13 +12,16 @@ from HMC.theme_manager import ThemeManagerWidget
 from GUX.html_viewer import HTMLViewerWidget
 from GUX.ai_chat import AIChatWidget
 from GUX.media_player import MediaPlayer
+from GUX.diff_merger import DiffMergerWidget
 from HMC.sticky_note_manager import StickyNoteManager
 from HMC.download_manager import DownloadManager, DownloadManagerUI
 import sys
 from PyQt6.QtCore import Qt, QSettings, QByteArray
-from GUX.overlay import BrightnessFlashlight
+from GUX.overlay import Flashlight
 import serial
 import serial.tools.list_ports
+
+from GUX.diff_merger import DiffMergerWidget
 
 
 class WidgetManager:
@@ -27,7 +30,7 @@ class WidgetManager:
         self.dock_widgets = []
         self.overlay_dock = None
         self.serial_port_picker = None
-
+        self.create_widgets()
     def add_dock_widget(self, widget, title, area):
         dock_widget = QDockWidget(title, self.main_app)
         dock_widget.setObjectName(f"{title.replace(' ', '')}DockWidget")
@@ -52,6 +55,7 @@ class WidgetManager:
         self.add_sticky_note_manager_dock()
         self.add_overlay_dock()
         self.add_brightness_dock()
+        self.add_diff_merger_dock()
     def add_symbolic_linker_dock(self):
         self.symbolic_linker_widget = SymbolicLinkerWidget()
         self.symbolic_linker_dock = self.add_dock_widget(self.symbolic_linker_widget, "Symbolic Linker", Qt.DockWidgetArea.LeftDockWidgetArea)
@@ -116,7 +120,11 @@ class WidgetManager:
 
     
    
+    def add_diff_merger_dock(self):
+        self.diff_merger_widget = DiffMergerWidget()
+        self.diff_merger_dock = self.add_dock_widget(self.diff_merger_widget, "Diff Merger", Qt.DockWidgetArea.RightDockWidgetArea)
    
+    
     def add_overlay_dock(self):
         self.overlay_dock = QDockWidget("Overlay Settings", self.main_app)
         self.overlay_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
@@ -128,8 +136,8 @@ class WidgetManager:
         slider = QSlider(Qt.Orientation.Horizontal)
         slider.setMinimum(0)
         slider.setMaximum(100)
-        slider.setValue(int(self.main_app.flashlight.power * 100))
-        slider.valueChanged.connect(lambda value: self.main_app.flashlight.set_power(value / 100.0))
+        slider.setValue(int(self.main_app.overlay.flashlight_overlay.power * 100))
+        slider.valueChanged.connect(self.update_flashlight_settings)
         layout.addWidget(slider)
 
         # Serial port picker
@@ -144,6 +152,12 @@ class WidgetManager:
 
         self.dock_widgets.append(self.overlay_dock)
 
+    def update_flashlight_settings(self, value):
+        power = value / 100.0
+        self.main_app.overlay.flashlight_overlay.set_power(power)
+        if power > 0.42:
+            new_size = int(200 * (power / 0.42))
+            self.main_app.overlay.flashlight_overlay.set_size(new_size)
     def update_serial_ports(self):
         ports = serial.tools.list_ports.comports()
         self.serial_port_picker.clear()
@@ -152,14 +166,12 @@ class WidgetManager:
     def on_serial_port_selected(self, index):
         selected_port = self.serial_port_picker.currentText()
         self.main_app.set_serial_port(selected_port)
-    # def update_serial_port(self):
-    #     selected_port = self.port_combo.currentText()
-    #     self.main_app.set_serial_port(selected_port)
+
     def refresh_serial_ports(self):
         ports = serial.tools.list_ports.comports()
         self.serial_port_picker.clear()
         for port in ports:
             self.serial_port_picker.addItem(port.device)
-      
+
     def update_flashlight_power(self, value):
         self.flashlight.set_power(value / 100)
