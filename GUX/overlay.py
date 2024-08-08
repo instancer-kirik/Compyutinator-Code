@@ -69,7 +69,7 @@ class Flashlight(Overlay):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(center, self.size, self.size)
 
-class CharachorderOverlay(Overlay):
+class CustomchorderOverlay(Overlay):
     def __init__(self, serial_port=None, baud_rate=115200):
         super().__init__()
         self.serial_port = serial_port
@@ -111,8 +111,8 @@ class CompositeOverlay(Overlay):
         self.flashlight_overlay = Flashlight(size=flashlight_size, power=flashlight_power)
         self.flashlight_overlay.setParent(self)
         
-        self.charachorder_overlay = CharachorderOverlay(serial_port, baud_rate)
-        self.charachorder_overlay.setParent(self)
+        self.customchorder_overlay = CustomchorderOverlay(serial_port, baud_rate)
+        self.customchorder_overlay.setParent(self)
 
         self.cursor_effect_timer = QTimer(self)
         self.cursor_effect_timer.timeout.connect(self.update_cursor_effect)
@@ -120,7 +120,7 @@ class CompositeOverlay(Overlay):
         self.cursor_pos = QCursor.pos()
 
         self.label = QLabel(self)
-        self.label.setText("Charachorder Display Active")
+        self.label.setText("Custom Chorder Display Initialized")
         self.label.setStyleSheet("QLabel { color : white; font-size: 20px; }")
         layout = QVBoxLayout()
         layout.addWidget(self.label)
@@ -130,17 +130,17 @@ class CompositeOverlay(Overlay):
         self.cursor_pos = QCursor.pos()
         self.flashlight_overlay.cursor_pos = self.cursor_pos
         self.flashlight_overlay.update()
-        self.charachorder_overlay.update()
+        self.customchorder_overlay.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
         if not painter.isActive():
             return
         self.flashlight_overlay.render(painter)
-        self.charachorder_overlay.render(painter)
+        self.customchorder_overlay.render(painter)
 
     def set_serial_port(self, port):
-        self.charachorder_overlay.set_serial_port(port)
+        self.customchorder_overlay.set_serial_port(port)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -95,6 +95,9 @@ class WidgetManager:
     def add_media_player_dock(self):
         self.media_player_widget = MediaPlayer()
         self.media_player_dock = self.add_dock_widget(self.media_player_widget, "Media Player", Qt.DockWidgetArea.BottomDockWidgetArea)
+    def add_transcriptor_live_dock(self):
+        self.transcriptor_live_widget = VoiceTypingWidget(self)
+        self.transcriptor_live_dock = self.add_dock_widget(self.transcriptor_live_widget, "Transcriptor-Live", Qt.DockWidgetArea.BottomDockWidgetArea)
 
     def add_download_manager_dock(self):
         self.download_manager = DownloadManager()

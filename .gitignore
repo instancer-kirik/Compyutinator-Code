@@ -128,3 +128,5 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+# Big model
+NITTY_GRITTY/vosk-model-en-us-0.22/

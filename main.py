@@ -1,12 +1,13 @@
-import os
 import sys
+import os
 import logging
-from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget, QListWidget, QMenuBar, QMenu, QWidget
-from PyQt6.QtGui import QAction
-from PyQt6.QtCore import Qt, QSettings, QByteArray, QTimer
+from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget, QListWidget, QVBoxLayout, QWidget, QLabel, QPushButton
+from PyQt6.QtGui import QAction, QDesktopServices
+from PyQt6.QtCore import QSettings, QByteArray, QUrl
 from HMC.widget_manager import WidgetManager
+from HMC.transcriptor_live_widget import VoiceTypingWidget
 from GUX.overlay import CompositeOverlay, Flashlight
-
+from GUX.log_viewer_widget import LogViewerWidget
 log_directory = os.path.join(os.getcwd(), 'logs')
 if not os.path.exists(log_directory):
     os.makedirs(log_directory)
@@ -14,7 +15,6 @@ if not os.path.exists(log_directory):
 log_file_path = os.path.join(log_directory, 'app.log')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.FileHandler(log_file_path, 'a'), logging.StreamHandler()])
-
 logging.info("Application started")
 
 default_theme = {
@@ -41,14 +41,14 @@ def merge_themes(default_theme, custom_theme):
 class MainApplication(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('Main Application')
+        self.setWindowTitle('Computinator Code')
         self.setGeometry(300, 100, 800, 600)
         self.child_processes = {}
         self.history = []
         self.max_history_length = 10
         self.last_focused_widget = None
         self.flashlight = Flashlight(size=200)
-        self.overlay = CompositeOverlay(flashlight_size=200, flashlight_power=0.5, serial_port=None)
+        self.overlay = CompositeOverlay(flashlight_size=200, flashlight_power=0.069, serial_port=None)
         self.overlay.show()
         self.widget_manager = WidgetManager(self)
         self.initUI()
@@ -60,12 +60,13 @@ class MainApplication(QMainWindow):
         self.setCentralWidget(self.tab_widget)
 
         self.add_history_tab()
-
         self.create_menu_bar()
-
+        self.add_support_box()
+        self.add_transcriptor_live_tab()
+        self.add_logs_viewer_tab()
     def add_history_tab(self):
         self.history_widget = QListWidget()
-        self.tab_widget.addTab(self.history_widget, "History")
+        self.tab_widget.addTab(self.history_widget, "Action History")
 
     def update_history(self, path):
         if path in self.history:
@@ -223,6 +224,31 @@ class MainApplication(QMainWindow):
         if self.serial_port:
             self.overlay.set_serial_port(port)
 
+    def add_support_box(self):
+        support_box = QWidget()
+        support_layout = QVBoxLayout()
+        support_label = QLabel("Support Me")
+        github_button = QPushButton("https://github.com/instancer-kirik/BigLinks")
+        github_button.clicked.connect(self.open_github)
+
+        support_layout.addWidget(support_label)
+        support_layout.addWidget(github_button)
+        support_box.setLayout(support_layout)
+        
+        self.tab_widget.addTab(support_box, "Support Me")
+
+    def open_github(self):
+      QDesktopServices.openUrl(QUrl("https://github.com/instancer-kirik/BigLinks"))
+
+    def add_transcriptor_live_tab(self):
+        self.transcriptor_live_widget = VoiceTypingWidget(self)
+        self.tab_widget.addTab(self.transcriptor_live_widget, "Voice Typing")
+    def add_logs_viewer_tab(self):
+        self.log_viewer_widget = LogViewerWidget(log_file_path=self.get_log_file_path())
+        self.tab_widget.addTab(self.log_viewer_widget, "Logs Viewer")
+
+    def get_log_file_path(self):
+        return os.path.join(os.getcwd(), 'logs', 'app.log')
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     main_app = MainApplication()

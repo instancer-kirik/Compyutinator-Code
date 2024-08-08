@@ -1,5 +1,6 @@
+import pyaudio
 from PyQt6.QtMultimedia import QAudioOutput, QAudioFormat, QMediaPlayer
-from PyQt6.QtCore import QUrl, QIODevice, QByteArray
+from PyQt6.QtCore import QUrl, QIODevice, QByteArray, QBuffer
 import pyogg
 
 class AudioHandler:

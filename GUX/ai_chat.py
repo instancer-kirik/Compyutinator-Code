@@ -6,6 +6,7 @@ from PyQt6.QtCore import QThread, pyqtSignal, Qt
 
 # Load environment variables from .env file
 load_dotenv()
+#want to get context drops working and the rest of it working too lol
 
 class OpenAIClient:
     def __init__(self, api_key, context=""):

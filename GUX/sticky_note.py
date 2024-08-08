@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLabel
 from PyQt6.QtCore import Qt, QMimeData
 from PyQt6.QtGui import QDrag
-
+#these probably don't save yet
 class StickyNoteWidget(QWidget):
     def __init__(self, note_id, note_content="", parent=None):
         super().__init__(parent)
@@ -12,7 +12,7 @@ class StickyNoteWidget(QWidget):
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
 
-        self.header = QLabel(f"Sticky Note {self.note_id}")
+        self.header = QLabel(f"Sticky Note {self.note_id} - Doesn't save yet, add path selection")
         self.layout.addWidget(self.header)
 
         self.text_edit = QTextEdit()
