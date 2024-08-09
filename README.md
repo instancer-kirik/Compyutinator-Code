@@ -42,6 +42,12 @@ Progress Bar: Provides real-time feedback on the progress of moving folders, enh
 Elevated Permissions Handling: Creating symlinks requires elevated permissions on Windows.
 
 ## Getting Started
+Not yet streamlined..
+
+I use miniconda and python, you might need to pip install pyaudio, pyogg, keyboard, pyautogui, PyQt6, numpy, vosk, dotenv,,, pyserial or serial, threading? openai? difflib? pyinstaller? idk 
+
+pip install keyboard, numpy,  openai, PyAudio, PyAutoGUI, PyOgg, PyQt6-WebEngine, pyserial, PySocks, python-dotenv, serial, sounddevice, vosk
+
 you can run this to create the exe in dist/
 pyinstaller --onefile --windowed --manifest=app.manifest main.py
 
