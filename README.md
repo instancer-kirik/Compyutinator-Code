@@ -3,7 +3,8 @@
 BigLinks is a widget in a PyQt app Computinator Code, to help users manage limited file storage more by leveraging symbolic links to keep data on other local drives. (Currently only tested on Windows)
 
 This preserves default install and program locations, at the symbolically linked location, so the OS sees the folder, but the data storage is actually elsewhere.
-
+## Computinator Code?
+So I wanted to make a better file explorer that can preview audio clips with arrow keys and can sort by date modified, and a code editor. I already had a PyQt repo set up for BigLinks, so I just built them together; and added a whole bunch of tools and half-baked features.
 ## What is a Symbolic Link?
 A symbolic link (often abbreviated as symlink) is a type of file that serves as a reference or pointer to another file or directory. 
 
