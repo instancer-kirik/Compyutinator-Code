@@ -1,9 +1,10 @@
 
 ## Big links make big chains
-BigLinks is a desktop app to help users manage limited file storage more by leveraging symbolic links to keep data on other local drives. (Currently only tested on Windows)
+BigLinks is a widget in a PyQt app Computinator Code, to help users manage limited file storage more by leveraging symbolic links to keep data on other local drives. (Currently only tested on Windows)
 
 This preserves default install and program locations, at the symbolically linked location, so the OS sees the folder, but the data storage is actually elsewhere.
-
+## Computinator Code?
+So I wanted to make a better file explorer that can preview audio clips with arrow keys and can sort by date modified, and a code editor. I already had a PyQt repo set up for BigLinks, so I just built them together; and added a whole bunch of tools and half-baked features.
 ## What is a Symbolic Link?
 A symbolic link (often abbreviated as symlink) is a type of file that serves as a reference or pointer to another file or directory. 
 
@@ -41,6 +42,12 @@ Progress Bar: Provides real-time feedback on the progress of moving folders, enh
 Elevated Permissions Handling: Creating symlinks requires elevated permissions on Windows.
 
 ## Getting Started
+Not yet streamlined..
+
+I use miniconda and python, you might need to pip install pyaudio, pyogg, keyboard, pyautogui, PyQt6, numpy, vosk, dotenv,,, pyserial or serial, threading? openai? difflib? pyinstaller? idk 
+
+pip install keyboard, numpy,  openai, PyAudio, PyAutoGUI, PyOgg, PyQt6-WebEngine, pyserial, PySocks, python-dotenv, serial, sounddevice, vosk
+
 you can run this to create the exe in dist/
 pyinstaller --onefile --windowed --manifest=app.manifest main.py
 
