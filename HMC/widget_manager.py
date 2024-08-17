@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import  QVBoxLayout, QDockWidget, QWidget, QSlider, QComboBox, QLabel
+from PyQt6.QtWidgets import  QVBoxLayout, QDockWidget, QWidget, QSlider, QComboBox, QLabel, QTabWidget
 
 from PyQt6.QtGui import QAction
 from PyQt6.QtCore import Qt, QSettings, QByteArray
@@ -25,19 +25,27 @@ from GUX.diff_merger import DiffMergerWidget
 
 
 class WidgetManager:
-    def __init__(self, main_app):
+    def __init__(self, main_app, db_manager):
         self.main_app = main_app
+        self.db_manager = db_manager
         self.dock_widgets = []
+        self.tab_widget = QTabWidget()
         self.overlay_dock = None
         self.serial_port_picker = None
         self.create_widgets()
+        
     def add_dock_widget(self, widget, title, area):
         dock_widget = QDockWidget(title, self.main_app)
         dock_widget.setObjectName(f"{title.replace(' ', '')}DockWidget")
+        widget.setMinimumWidth(300)
         dock_widget.setWidget(widget)
         self.main_app.addDockWidget(area, dock_widget)
         self.dock_widgets.append(dock_widget)
+        
         widget.installEventFilter(self.main_app)
+        if len(self.dock_widgets) > 1:
+            self.main_app.tabifyDockWidget(self.dock_widgets[-2], dock_widget)
+
         return dock_widget
 
     def create_widgets(self):
@@ -56,9 +64,10 @@ class WidgetManager:
         self.add_overlay_dock()
         self.add_brightness_dock()
         self.add_diff_merger_dock()
+        #self.add_transcriptor_live_dock()
     def add_symbolic_linker_dock(self):
         self.symbolic_linker_widget = SymbolicLinkerWidget()
-        self.symbolic_linker_dock = self.add_dock_widget(self.symbolic_linker_widget, "Symbolic Linker", Qt.DockWidgetArea.LeftDockWidgetArea)
+        self.symbolic_linker_dock = self.add_dock_widget(self.symbolic_linker_widget, "BigLinks", Qt.DockWidgetArea.LeftDockWidgetArea)
 
     def add_file_explorer_dock(self):
         self.file_explorer_widget = FileExplorerWidget(self.main_app)
@@ -73,9 +82,11 @@ class WidgetManager:
         self.process_manager_dock = self.add_dock_widget(self.process_manager_widget, "Process Manager", Qt.DockWidgetArea.BottomDockWidgetArea)
 
     def add_action_pad_dock(self):
-        self.action_pad_widget = ActionPadWidget(self.main_app)
+        # Pass the db_manager to ActionPadWidget
+        self.action_pad_widget = ActionPadWidget(self.db_manager, self.main_app)
         self.action_pad_dock = self.add_dock_widget(self.action_pad_widget, "Action Pad", Qt.DockWidgetArea.BottomDockWidgetArea)
-
+       
+        
     def add_terminal_dock(self):
         self.terminal_widget = TerminalWidget()
         self.terminal_dock = self.add_dock_widget(self.terminal_widget, "Terminal", Qt.DockWidgetArea.BottomDockWidgetArea)
@@ -95,9 +106,9 @@ class WidgetManager:
     def add_media_player_dock(self):
         self.media_player_widget = MediaPlayer()
         self.media_player_dock = self.add_dock_widget(self.media_player_widget, "Media Player", Qt.DockWidgetArea.BottomDockWidgetArea)
-    def add_transcriptor_live_dock(self):
-        self.transcriptor_live_widget = VoiceTypingWidget(self)
-        self.transcriptor_live_dock = self.add_dock_widget(self.transcriptor_live_widget, "Transcriptor-Live", Qt.DockWidgetArea.BottomDockWidgetArea)
+    # def add_transcriptor_live_dock(self):
+    #     self.transcriptor_live_widget = VoiceTypingWidget(self)
+    #     self.transcriptor_live_dock = self.add_dock_widget(self.transcriptor_live_widget, "Transcriptor-Live", Qt.DockWidgetArea.BottomDockWidgetArea)
 
     def add_download_manager_dock(self):
         self.download_manager = DownloadManager()

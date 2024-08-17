@@ -1,8 +1,40 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QTextEdit, QFileDialog, QMessageBox, QInputDialog
-from PyQt6.QtCore import QTimer
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QMouseEvent
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QTabWidget, QTextEdit, QFileDialog,
+                             QMessageBox, QInputDialog)
+from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtGui import QSyntaxHighlighter, QTextCharFormat, QBrush, QColor, QMouseEvent
 import os
+import sys
+
+class PythonHighlighter(QSyntaxHighlighter):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.highlighting_rules = []
+
+        # Define formats
+        self.keyword_format = QTextCharFormat()
+        self.keyword_format.setForeground(QBrush(QColor(0, 0, 255)))
+        keywords = ["def", "class", "import", "from", "return", "if", "else", "elif"]
+        for keyword in keywords:
+            pattern = rf"\b{keyword}\b"
+            self.highlighting_rules.append((pattern, self.keyword_format))
+
+        self.comment_format = QTextCharFormat()
+        self.comment_format.setForeground(QBrush(QColor(0, 128, 0)))
+        self.highlighting_rules.append((r"#.*", self.comment_format))
+
+        self.string_format = QTextCharFormat()
+        self.string_format.setForeground(QBrush(QColor(255, 0, 0)))
+        self.highlighting_rules.append((r'"[^"]*"', self.string_format))
+        self.highlighting_rules.append((r"'[^']*'", self.string_format))
+
+    def highlightBlock(self, text):
+        for pattern, fmt in self.highlighting_rules:
+            expression = QRegularExpression(pattern)
+            iterator = expression.globalMatch(text)
+            while iterator.hasNext():
+                match = iterator.next()
+                self.setFormat(match.capturedStart(), match.capturedLength(), fmt)
+
 class CodeEditorWidget(QWidget):
     def __init__(self):
         super().__init__()
@@ -21,6 +53,7 @@ class CodeEditorWidget(QWidget):
         self.auto_save_timer.start(300000)  # Auto-save every 5 minutes
 
         self.add_tab("Untitled")
+    
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
@@ -51,11 +84,20 @@ class CodeEditorWidget(QWidget):
 
     def open_file(self, file_path):
         with open(file_path, 'r') as file:
-            self.setPlainText(file.read())
+            content = file.read()
+        editor = self.tab_widget.currentWidget()
+        editor.setPlainText(content)
+        editor.setProperty("file_path", file_path)
+        self.tab_widget.setTabText(self.tab_widget.currentIndex(), os.path.basename(file_path))
+
+        # Apply syntax highlighting based on file extension
+        if file_path.endswith('.py'):
+            self.apply_syntax_highlighter(editor)
 
     def paste_text(self, text):
-        cursor = self.textCursor()
+        cursor = self.tab_widget.currentWidget().textCursor()
         cursor.insertText(text)
+
     def add_tab(self, title, content=""):
         new_tab = QTextEdit()
         new_tab.setPlainText(content)
@@ -67,10 +109,10 @@ class CodeEditorWidget(QWidget):
         editor = self.tab_widget.widget(index)
         if editor.document().isModified():
             reply = QMessageBox.question(self, 'Save Changes', "The document has been modified. Do you want to save your changes?",
-                                         QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel, QMessageBox.Cancel)
-            if reply == QMessageBox.Yes:
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
+            if reply == QMessageBox.StandardButton.Yes:
                 self.save_file(editor)
-            elif reply == QMessageBox.Cancel:
+            elif reply == QMessageBox.StandardButton.Cancel:
                 return
         self.tab_widget.removeTab(index)
 
@@ -108,15 +150,19 @@ class CodeEditorWidget(QWidget):
                 editor.setProperty("file_path", file_path)
                 self.save_file(editor)
 
+    def apply_syntax_highlighter(self, editor):
+        highlighter = PythonHighlighter(editor.document())
+        editor.setProperty("highlighter", highlighter)
+
     def eventFilter(self, obj, event):
         if obj == self.tab_widget.tabBar():
-            if event.type() == QMouseEvent.Enter:
+            if event.type() == QMouseEvent.Type.Enter:
                 self.scroll_timer.start(20)
-            elif event.type() == QMouseEvent.Leave:
+            elif event.type() == QMouseEvent.Type.Leave:
                 self.scroll_timer.stop()
                 self.scroll_speed = 1
                 self.scroll_direction = None
-            elif event.type() == QMouseEvent.MouseMove:
+            elif event.type() == QMouseEvent.Type.MouseMove:
                 self.update_scroll_speed(event.pos())
         return super().eventFilter(obj, event)
 
@@ -148,9 +194,8 @@ class CodeEditorWidget(QWidget):
         self.tab_widget.setCurrentIndex((current_index + self.scroll_direction) % self.tab_widget.count())
 
 if __name__ == "__main__":
-    import sys
     from PyQt6.QtWidgets import QApplication
     app = QApplication(sys.argv)
     editor = CodeEditorWidget()
     editor.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

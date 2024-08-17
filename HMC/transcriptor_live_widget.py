@@ -9,7 +9,7 @@ from PyQt6.QtCore import QThread, pyqtSignal, pyqtSlot, QTimer, Qt
 from PyQt6.QtGui import QTextCursor, QPainter
 import keyboard  # For global hotkeys
 from HMC.audio_handler import AudioHandler
-
+import logging
 class RealTimeTranscriptionThread(QThread):
     transcription_update = pyqtSignal(str, bool)
     audio_level_update = pyqtSignal(int)
@@ -34,23 +34,27 @@ class RealTimeTranscriptionThread(QThread):
         self.stream = audio.open(format=audio_format, channels=channels, rate=rate, input=True, frames_per_buffer=chunk, input_device_index=self.device_index)
 
         while self.running:
-            if not self.paused:
-                data = self.stream.read(chunk, exception_on_overflow=False)
-                data16 = np.frombuffer(data, dtype=np.int16)
-                audio_level = np.linalg.norm(data16)
-                self.audio_level_update.emit(int(audio_level))
+            try:
+                if not self.paused:
+                    data = self.stream.read(chunk, exception_on_overflow=False)
+                    data16 = np.frombuffer(data, dtype=np.int16)
+                    audio_level = np.linalg.norm(data16)
+                    self.audio_level_update.emit(int(audio_level))
 
-                if audio_level > self.silence_threshold:
-                    if self.recognizer.AcceptWaveform(data):
-                        result = self.recognizer.Result()
-                        text = json.loads(result)["text"]
-                        if text:
-                            self.emit_transcription_update(text, is_final=True)
-                    else:
-                        partial = self.recognizer.PartialResult()
-                        partial_text = json.loads(partial)["partial"]
-                        if partial_text:
-                            self.emit_transcription_update(partial_text, is_final=False)
+                    if audio_level > self.silence_threshold:
+                        if self.recognizer.AcceptWaveform(data):
+                            result = self.recognizer.Result()
+                            text = json.loads(result)["text"]
+                            if text:
+                                self.emit_transcription_update(text, is_final=True)
+                        else:
+                            partial = self.recognizer.PartialResult()
+                            partial_text = json.loads(partial)["partial"]
+                            if partial_text:
+                                self.emit_transcription_update(partial_text, is_final=False)
+            except Exception as e:
+                logging.error("Error in transcription thread: %s", str(e))
+                self.running = False
 
         self.stream.stop_stream()
         self.stream.close()
@@ -148,110 +152,146 @@ class VoiceTypingWidget(QWidget):
         keyboard.add_hotkey('ctrl+shift+t', self.toggle_transcription)
 
     def play_audio(self):
-        file_path = 'path/to/your/audio/file.ogg'  # Change this to your audio file path
-        self.audio_handler.play(file_path)
+        try:
+            file_path = 'path/to/your/audio/file.ogg'  # Change this to your audio file path
+            self.audio_handler.play(file_path)
+        except Exception as e:
+            logging.error("Error playing audio: %s", str(e))
 
     def stop_audio(self):
-        self.audio_handler.stop()
+        try:
+            self.audio_handler.stop()
+        except Exception as e:
+            logging.error("Error stopping audio: %s", str(e))
 
     @pyqtSlot()
     def toggle_transcription(self):
-        if self.transcribing:
-            self.stop_transcription()
-        else:
-            self.start_transcription()
+        try:
+            if self.transcribing:
+                self.stop_transcription()
+            else:
+                self.start_transcription()
+        except Exception as e:
+            logging.error("Error toggling transcription: %s", str(e))
 
     def start_transcription(self):
-        self.transcribe_button.setText("Stop Transcription")
-        self.transcribing = True
-        model_path = 'X:/_Work/Python/kivy/BigLinks/NITTY_GRITTY/vosk-model-small-en-us-0.15'
-        
-        if not self.thread:
-            self.thread = RealTimeTranscriptionThread(model_path, device_index=self.selected_device_index)
-            self.thread.transcription_update.connect(self.update_transcription)
-            self.thread.audio_level_update.connect(self.update_audio_level)
-            self.thread.start()
-        else:
-            self.thread.device_index = self.selected_device_index
-            self.thread.resume()
+        try:
+            self.transcribe_button.setText("Stop Transcription")
+            self.transcribing = True
+            model_path = 'X:/_Work/Python/kivy/BigLinks/NITTY_GRITTY/vosk-model-small-en-us-0.15'
 
-        self.start_spinner()
+            if not self.thread:
+                self.thread = RealTimeTranscriptionThread(model_path, device_index=self.selected_device_index)
+                self.thread.transcription_update.connect(self.update_transcription)
+                self.thread.audio_level_update.connect(self.update_audio_level)
+                self.thread.start()
+            else:
+                self.thread.device_index = self.selected_device_index
+                self.thread.resume()
+
+            self.start_spinner()
+        except Exception as e:
+            logging.error("Error starting transcription: %s", str(e))
 
     def stop_transcription(self):
-        self.transcribe_button.setText("Start Transcription")
-        self.transcribing = False
-        if self.thread:
-            self.thread.pause()
-        self.stop_spinner()
+        try:
+            self.transcribe_button.setText("Start Transcription")
+            self.transcribing = False
+            if self.thread:
+                self.thread.pause()
+            self.stop_spinner()
+        except Exception as e:
+            logging.error("Error stopping transcription: %s", str(e))
 
     def clear_text(self):
-        self.text_edit.clear()
+        try:
+            self.text_edit.clear()
+        except Exception as e:
+            logging.error("Error clearing text: %s", str(e))
 
     @pyqtSlot(int)
     def update_audio_level(self, level):
-        normalized_level = min(100, max(0, int(level / 100)))
-        self.audio_level.setLevel(normalized_level)
+        try:
+            normalized_level = min(100, max(0, int(level / 100)))
+            self.audio_level.setLevel(normalized_level)
+        except Exception as e:
+            logging.error("Error updating audio level: %s", str(e))
 
     @pyqtSlot(str, bool)
     def update_transcription(self, text, is_final):
-        # Update the in-app text box for reference
-        cursor = self.text_edit.textCursor()
+        try:
+            # Update the in-app text box for reference
+            cursor = self.text_edit.textCursor()
 
-        if is_final:
-            # For final text, replace the previous partial text with the new final text
-            if self.partial_text:
-                # Remove the previous partial text from the GUI and screen
-                cursor.movePosition(QTextCursor.MoveOperation.End)
-                cursor.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.KeepAnchor, len(self.partial_text))
-                cursor.removeSelectedText()
+            if is_final:
+                # For final text, replace the previous partial text with the new final text
+                if self.partial_text:
+                    # Remove the previous partial text from the GUI and screen
+                    cursor.movePosition(QTextCursor.MoveOperation.End)
+                    cursor.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.KeepAnchor, len(self.partial_text))
+                    cursor.removeSelectedText()
 
+                    self.typing_flag = True
+                    pyautogui.press('backspace', presses=len(self.partial_text))
+                    self.typing_flag = False
+
+                # Insert the new final text
+                cursor.insertText(text + " ")
+                self.text_edit.setTextCursor(cursor)
+                self.text_edit.ensureCursorVisible()
+
+                # Type the final text using pyautogui
                 self.typing_flag = True
-                pyautogui.press('backspace', presses=len(self.partial_text))
+                pyautogui.write(text + " ")
                 self.typing_flag = False
 
-            # Insert the new final text
-            cursor.insertText(text + " ")
-            self.text_edit.setTextCursor(cursor)
-            self.text_edit.ensureCursorVisible()
+                self.partial_text = ""
+            else:
+                # Append the new partial text
+                cursor.insertText(text[len(self.partial_text):])
+                self.text_edit.setTextCursor(cursor)
+                self.text_edit.ensureCursorVisible()
 
-            # Type the final text using pyautogui
-            self.typing_flag = True
-            pyautogui.write(text + " ")
-            self.typing_flag = False
+                # Type the partial text using pyautogui
+                self.typing_flag = True
+                pyautogui.write(text[len(self.partial_text):])
+                self.typing_flag = False
 
-            self.partial_text = ""
-        else:
-            # Append the new partial text
-            cursor.insertText(text[len(self.partial_text):])
-            self.text_edit.setTextCursor(cursor)
-            self.text_edit.ensureCursorVisible()
+                self.partial_text = text
 
-            # Type the partial text using pyautogui
-            self.typing_flag = True
-            pyautogui.write(text[len(self.partial_text):])
-            self.typing_flag = False
-
-            self.partial_text = text
-
-        # Force the GUI to update
-        QApplication.processEvents()
+            # Force the GUI to update
+            QApplication.processEvents()
+        except Exception as e:
+            logging.error("Error updating transcription: %s", str(e))
 
     def keyPressEvent(self, event):
-        if not self.typing_flag:
-            super().keyPressEvent(event)
+        try:
+            if not self.typing_flag:
+                super().keyPressEvent(event)
+        except Exception as e:
+            logging.error("Error in keyPressEvent: %s", str(e))
 
     def start_spinner(self):
-        self.spinner_active = True
-        self.spinner_sequence = ["|", "/", "-", "\\"]
-        self.spinner_index = 0
-        self.update_spinner()
+        try:
+            self.spinner_active = True
+            self.spinner_sequence = ["|", "/", "-", "\\"]
+            self.spinner_index = 0
+            self.update_spinner()
+        except Exception as e:
+            logging.error("Error starting spinner: %s", str(e))
 
     def stop_spinner(self):
-        self.spinner_active = False
-        self.spinner_label.setText("")
+        try:
+            self.spinner_active = False
+            self.spinner_label.setText("")
+        except Exception as e:
+            logging.error("Error stopping spinner: %s", str(e))
 
     def update_spinner(self):
-        if self.spinner_active:
-            self.spinner_label.setText(self.spinner_sequence[self.spinner_index])
-            self.spinner_index = (self.spinner_index + 1) % len(self.spinner_sequence)
-            QTimer.singleShot(100, self.update_spinner)  # Update spinner every 100ms
+        try:
+            if self.spinner_active:
+                self.spinner_label.setText(self.spinner_sequence[self.spinner_index])
+                self.spinner_index = (self.spinner_index + 1) % len(self.spinner_sequence)
+                QTimer.singleShot(100, self.update_spinner)  # Update spinner every 100ms
+        except Exception as e:
+            logging.error("Error updating spinner: %s", str(e))

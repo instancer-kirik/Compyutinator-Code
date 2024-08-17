@@ -249,47 +249,22 @@ class VoiceTypingApp(QMainWindow):
 
     @pyqtSlot(str, bool)
     def update_transcription(self, text, is_final):
-        # Update the in-app text box for reference
-        cursor = self.text_edit.textCursor()
-
-        if is_final:
-            # For final text, replace the previous partial text with the new final text
-            if self.partial_text:
-                # Remove the previous partial text from the GUI and screen
+        try:
+            cursor = self.text_edit.textCursor()
+            if is_final:
                 cursor.movePosition(QTextCursor.MoveOperation.End)
-                cursor.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.KeepAnchor, len(self.partial_text))
-                cursor.removeSelectedText()
-
-                self.typing_flag = True
-                pyautogui.press('backspace', presses=len(self.partial_text))
-                self.typing_flag = False
-
-            # Insert the new final text
-            cursor.insertText(text + " ")
-            self.text_edit.setTextCursor(cursor)
+                self.text_edit.setTextCursor(cursor)
+                self.text_edit.insertText(text + " ")
+            else:
+                self.text_edit.insertPlainText(text)
+                cursor.movePosition(QTextCursor.MoveOperation.EndOfLine, QTextCursor.MoveMode.KeepAnchor)
+                self.text_edit.setTextCursor(cursor)
             self.text_edit.ensureCursorVisible()
+            # Update the UI after a short delay using a timer
+            QTimer.singleShot(10, self.update_ui)
+        except Exception as e:
+            logging.error("Error updating transcription: %s", str(e))
 
-            # Type the final text using pyautogui
-            self.typing_flag = True
-            pyautogui.write(text + " ")
-            self.typing_flag = False
-
-            self.partial_text = ""
-        else:
-            # Append the new partial text
-            cursor.insertText(text[len(self.partial_text):])
-            self.text_edit.setTextCursor(cursor)
-            self.text_edit.ensureCursorVisible()
-
-            # Type the partial text using pyautogui
-            self.typing_flag = True
-            pyautogui.write(text[len(self.partial_text):])
-            self.typing_flag = False
-
-            self.partial_text = text
-
-        # Force the GUI to update
-        QApplication.processEvents()
 
     def keyPressEvent(self, event):
         if not self.typing_flag:

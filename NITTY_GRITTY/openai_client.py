@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import openai
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLineEdit, QPushButton, QHBoxLayout, QLabel
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
-
+#Last I checked, this isn't working yet, support other model apis?
 # Load environment variables from .env file
 load_dotenv()
 

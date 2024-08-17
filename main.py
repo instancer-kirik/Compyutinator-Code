@@ -3,11 +3,13 @@ import os
 import logging
 from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget, QListWidget, QVBoxLayout, QWidget, QLabel, QPushButton
 from PyQt6.QtGui import QAction, QDesktopServices
+from PyQt6.QtWidgets import QMenu
 from PyQt6.QtCore import QSettings, QByteArray, QUrl
 from HMC.widget_manager import WidgetManager
 from HMC.transcriptor_live_widget import VoiceTypingWidget
 from GUX.overlay import CompositeOverlay, Flashlight
 from GUX.log_viewer_widget import LogViewerWidget
+from NITTY_GRITTY.database import DatabaseManager, setup_local_database
 log_directory = os.path.join(os.getcwd(), 'logs')
 if not os.path.exists(log_directory):
     os.makedirs(log_directory)
@@ -50,7 +52,11 @@ class MainApplication(QMainWindow):
         self.flashlight = Flashlight(size=200)
         self.overlay = CompositeOverlay(flashlight_size=200, flashlight_power=0.069, serial_port=None)
         self.overlay.show()
-        self.widget_manager = WidgetManager(self)
+        
+        self.db_manager = DatabaseManager('local')
+        # Pass DatabaseManager to WidgetManager
+        self.widget_manager = WidgetManager(self, self.db_manager)
+        
         self.initUI()
         self.load_settings()
 
@@ -135,7 +141,7 @@ class MainApplication(QMainWindow):
         self.add_toggle_view_action(view_menu, "Sticky Notes", self.widget_manager.sticky_note_manager_dock)
         self.add_toggle_view_action(view_menu, "Overlay", self.widget_manager.overlay_dock)
         self.add_toggle_view_action(view_menu, "Diff Merger", self.widget_manager.diff_merger_dock)
-
+       #its on the main content, not a dockable self.add_toggle_view_action(view_menu, "Transcriptor", self.widget_manager.transcriptor_live_dock)
     def add_toggle_view_action(self, menu, title, dock_widget):
         action = QAction(title, self, checkable=True)
         action.setChecked(True)
@@ -144,12 +150,12 @@ class MainApplication(QMainWindow):
         menu.addAction(action)
 
     def save_layout(self):
-        settings = QSettings("MyCompany", "MyApp")
+        settings = QSettings("instance.select", "Computinator Code")
         settings.setValue("geometry", self.saveGeometry())
         settings.setValue("windowState", self.saveState())
 
     def load_layout(self):
-        settings = QSettings("MyCompany", "MyApp")
+        settings = QSettings("instance.select", "Computinator Code")
         geometry = settings.value("geometry")
         windowState = settings.value("windowState")
         if geometry:
