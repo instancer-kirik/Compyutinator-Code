@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import  QVBoxLayout, QDockWidget, QWidget, QSlider, QComboBox, QLabel, QTabWidget
+from PyQt6.QtWidgets import  QVBoxLayout, QDockWidget, QWidget, QSlider, QComboBox, QLabel, QTabWidget, QSizePolicy
 
 from PyQt6.QtGui import QAction
 from PyQt6.QtCore import Qt, QSettings, QByteArray
@@ -136,8 +136,11 @@ class WidgetManager:
    
     def add_diff_merger_dock(self):
         self.diff_merger_widget = DiffMergerWidget()
+        self.diff_merger_widget.setMinimumSize(600, 300)
+       
+
         self.diff_merger_dock = self.add_dock_widget(self.diff_merger_widget, "Diff Merger", Qt.DockWidgetArea.RightDockWidgetArea)
-   
+     
     
     def add_overlay_dock(self):
         self.overlay_dock = QDockWidget("Overlay Settings", self.main_app)
