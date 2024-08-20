@@ -1,5 +1,6 @@
 How to run it? I do command
 C:Users/ME/miniconda3/python.exe x:/_WORK/Python/Qt/BigLinks/main.py
+
 you might have to install the packages, the list might not be up to date, but they're all on pip maybe
 
 ## Big links make big chains
