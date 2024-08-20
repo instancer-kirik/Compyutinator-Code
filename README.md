@@ -1,3 +1,5 @@
+How to run it? I do command
+C:Users/ME/miniconda3/python.exe x:/_WORK/Python/Qt/BigLinks/main.py 
 
 ## Big links make big chains
 BigLinks is a widget in a PyQt app Computinator Code, to help users manage limited file storage more by leveraging symbolic links to keep data on other local drives. (Currently only tested on Windows)
