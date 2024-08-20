@@ -1,7 +1,9 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QTabWidget, QTextEdit, QFileDialog,
-                             QMessageBox, QInputDialog)
-from PyQt6.QtCore import QTimer, Qt
-from PyQt6.QtGui import QSyntaxHighlighter, QTextCharFormat, QBrush, QColor, QMouseEvent
+                             QMessageBox, QInputDialog, QApplication, QWidget, QPlainTextEdit, QTreeWidget, QTreeWidgetItem, QListView, QTextEdit
+)
+from PyQt6.QtCore import QTimer, Qt, QSize, QRegularExpression, QEvent, QSize, QRect, pyqtSignal
+
+from PyQt6.QtGui import QSyntaxHighlighter, QTextCharFormat, QBrush, QColor, QMouseEvent, QFont, QPainter, QTextCursor, QTextFormat
 import os
 import sys
 
@@ -192,6 +194,143 @@ class CodeEditorWidget(QWidget):
     def wrap_tabs(self):
         current_index = self.tab_widget.currentIndex()
         self.tab_widget.setCurrentIndex((current_index + self.scroll_direction) % self.tab_widget.count())
+
+class CompEditor(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        
+        # Initialize the layout
+        layout = QVBoxLayout(self)
+        
+        # Line number area
+        self.lineNumberArea = LineNumberArea(self)
+        
+        # File outline widget
+        self.file_outline_widget = FileOutlineWidget()
+        
+        # Text editor
+        self.text_edit = QPlainTextEdit()
+        self.text_edit.setFont(QFont("Courier", 10))
+        
+        # Connect signals
+        self.text_edit.blockCountChanged.connect(self.updateLineNumberAreaWidth)
+        self.text_edit.cursorPositionChanged.connect(self.highlightCurrentLine)
+        self.text_edit.textChanged.connect(self.update_file_outline)
+        
+        # Add widgets to the layout
+        layout.addWidget(self.text_edit)
+        layout.addWidget(self.file_outline_widget)
+        
+        # Set margins for line number area
+        self.updateLineNumberAreaWidth(0)
+    
+    def update_file_outline(self):
+        text = self.text_edit.toPlainText()
+        self.file_outline_widget.populate_file_outline(text)
+
+    def highlightCurrentLine(self):
+        extraSelections = []
+        if not self.text_edit.isReadOnly():
+            selection = QTextEdit.ExtraSelection()
+            lineColor = QColor(Qt.GlobalColor.yellow).lighter(160)
+            selection.format.setBackground(lineColor)
+
+            # Get the cursor and its current block
+            cursor = self.text_edit.textCursor()
+            block = cursor.block()
+            block_start = block.position()  # Start position of the block
+            block_end = block_start + block.length()  # End position of the block
+
+            # Adjust the cursor to select the entire line
+            cursor.setPosition(block_start)
+            cursor.setPosition(block_end - 1, QTextCursor.MoveMode.KeepAnchor)  # Ensure we don't go out of range
+            selection.cursor = cursor
+
+            extraSelections.append(selection)
+        
+        self.text_edit.setExtraSelections(extraSelections)
+
+    def lineNumberAreaWidth(self):
+        digits = 1
+        count = max(1, self.text_edit.blockCount())
+        while count >= 10:
+            count //= 10
+            digits += 1
+        space = 3 + self.text_edit.fontMetrics().horizontalAdvance('9') * digits
+        return space
+
+    def updateLineNumberAreaWidth(self, _):
+        self.text_edit.setViewportMargins(self.lineNumberAreaWidth(), 0, 0, 0)
+
+    def updateLineNumberArea(self, rect, dy):
+        if dy:
+            self.lineNumberArea.scroll(0, dy)
+        else:
+            self.lineNumberArea.update(0, rect.y(), self.lineNumberArea.width(), rect.height())
+        if rect.contains(self.text_edit.viewport().rect()):
+            self.updateLineNumberAreaWidth(0)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        cr = self.contentsRect()
+        self.lineNumberArea.setGeometry(QRect(cr.left(), cr.top(), self.lineNumberAreaWidth(), cr.height()))
+
+    def get_line_numbers(self):
+        text = self.text_edit.toPlainText()
+        return text.splitlines(keepends=True)  # Keeps newline characters
+
+    def lineNumberAreaPaintEvent(self, event):
+        painter = QPainter(self.lineNumberArea)
+        painter.fillRect(event.rect(), Qt.GlobalColor.lightGray)
+
+        block = self.text_edit.firstVisibleBlock()
+        blockNumber = block.blockNumber()
+        top = round(self.text_edit.blockBoundingGeometry(block).translated(self.text_edit.contentOffset()).top())
+        bottom = top + round(self.text_edit.blockBoundingRect(block).height())
+
+        while block.isValid() and top <= event.rect().bottom():
+            if block.isVisible() and bottom >= event.rect().top():
+                number = str(blockNumber + 1)
+                painter.setPen(Qt.GlobalColor.black)
+                painter.drawText(
+                    0,  # x
+                    top,  # y
+                    self.lineNumberArea.width(),  # width
+                    self.text_edit.fontMetrics().height(),  # height
+                    Qt.AlignmentFlag.AlignRight,  # flags
+                    number  # text
+                )
+
+            block = block.next()
+            top = bottom
+            bottom = top + round(self.text_edit.blockBoundingRect(block).height())
+            blockNumber += 1
+
+
+class LineNumberArea(QWidget):
+    def __init__(self, editor):
+        super().__init__(editor)
+        self.editor = editor
+
+    def sizeHint(self):
+        return QSize(self.editor.lineNumberAreaWidth(), 0)
+
+    def paintEvent(self, event):
+        self.editor.lineNumberAreaPaintEvent(event)
+
+
+class FileOutlineWidget(QTreeWidget):  # Correcting the widget type to QTreeWidget
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setHeaderHidden(True)  # Hide the header to make it look like an outline
+
+    def populate_file_outline(self, text):
+        self.clear()
+        lines = text.splitlines()
+        for i, line in enumerate(lines):
+            if line.strip().startswith('class ') or line.strip().startswith('def '):
+                item = QTreeWidgetItem([f"{i + 1}: {line.strip()}"])
+                self.addTopLevelItem(item)
 
 if __name__ == "__main__":
     from PyQt6.QtWidgets import QApplication
