@@ -120,8 +120,8 @@ class CompositeOverlay(Overlay):
         self.cursor_pos = QCursor.pos()
 
         self.label = QLabel(self)
-        self.label.setText("Custom Chorder Display Initialized")
-        self.label.setStyleSheet("QLabel { color : white; font-size: 20px; }")
+        self.label.setText("mysterious unselectable text")
+        self.label.setStyleSheet("QLabel { color : black; font-size: 20px; }")
         layout = QVBoxLayout()
         layout.addWidget(self.label)
         self.setLayout(layout)
