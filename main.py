@@ -252,7 +252,7 @@ class MainApplication(QMainWindow):
     def add_logs_viewer_tab(self):
         self.log_viewer_widget = LogViewerWidget(log_file_path=self.get_log_file_path())
         self.tab_widget.addTab(self.log_viewer_widget, "Logs Viewer")
-
+    
     def get_log_file_path(self):
         return os.path.join(os.getcwd(), 'logs', 'app.log')
 if __name__ == '__main__':

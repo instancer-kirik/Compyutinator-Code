@@ -44,12 +44,27 @@ class DiffMergerWidget(QWidget):
 
     def __init__(self):
         super().__init__()
+               # Make the diff merger full screen
+        screen_width = QApplication.instance().primaryScreen().size().width()
+        screen_height = QApplication.instance().primaryScreen().size().height() # Get the screen size
 
+        self.move(0, 0)  # Move to the top-left corner
+        self.resize(screen_width, screen_height)
+        self.setMinimumSize(2200, 1800)
+        self.isFullScreen = True
         self.diff_data = {}
         self.current_diff_index = -1
         self.current_line_index = 0
 
         self.initUI()
+    def toggle_fullscreen(self):
+        main_window = self.window()
+        if main_window.isFullScreen():
+            main_window.showNormal()
+            self.fullscreen_button.setText("Fullscreen")
+        else:
+            main_window.showFullScreen()
+            self.fullscreen_button.setText("Exit Fullscreen")
 
     def initUI(self):
         self.setMinimumSize(1200, 800)
@@ -60,7 +75,13 @@ class DiffMergerWidget(QWidget):
         self.x_box = CompEditor()
         self.y_box = CompEditor()
         self.result_box = CompEditor()
+ # Create a fullscreen button
+        self.fullscreen_button = QPushButton("Fullscreen", self)
+        self.fullscreen_button.setMaximumWidth(100)
+        self.fullscreen_button.clicked.connect(self.toggle_fullscreen)
 
+        # Add the button to the layout
+        main_layout.addWidget(self.fullscreen_button)
         # Scroll synchronization
         self.x_box.text_edit.verticalScrollBar().valueChanged.connect(self.sync_scrolls)
         self.y_box.text_edit.verticalScrollBar().valueChanged.connect(self.sync_scrolls)
@@ -273,8 +294,16 @@ class DiffMergerWidget(QWidget):
         container.setLayout(layout)
         return container
 
-    
-        
+    def show(self):
+        super().show()
+        self.set_full_screen()
+    def set_full_screen(self):
+        # Make the diff merger full screen
+        screen_width = QApplication.desktop().availableGeometry().width()
+        screen_height = QApplication.desktop().availableGeometry().height()
+
+        self.move(0, 0)  # Move to the top-left corner
+        self.resize(screen_width, screen_height)    
     def extract_code_blocks(self, text):
         blocks = {}
         lines = text.split('\n')

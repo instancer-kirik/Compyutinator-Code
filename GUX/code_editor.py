@@ -1,8 +1,8 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QTabWidget, QTextEdit, QFileDialog,
                              QMessageBox, QInputDialog, QApplication, QWidget, QPlainTextEdit, QTreeWidget, QTreeWidgetItem, QListView, QTextEdit
 )
-from PyQt6.QtCore import QTimer, Qt, QSize, QRegularExpression, QEvent, QSize, QRect, pyqtSignal
-
+from PyQt6.QtCore import QTimer, Qt, QSize, QRegularExpression, QEvent, QSize, QRect, pyqtSignal, QThread
+from NITTY_GRITTY.text_workers import LineComparisonWorker
 from PyQt6.QtGui import QSyntaxHighlighter, QTextCharFormat, QBrush, QColor, QMouseEvent, QFont, QPainter, QTextCursor, QTextFormat
 import os
 import sys
@@ -223,31 +223,79 @@ class CompEditor(QWidget):
         
         # Set margins for line number area
         self.updateLineNumberAreaWidth(0)
-    
+
+# Placeholder for lines of the other file to compare
+        self.other_file_lines = []
+
+        # Placeholder for comparison results
+        self.comparison_results = []
+
+        # Create a timer for UI updates
+        self.ui_update_timer = QTimer()
+        self.ui_update_timer.setSingleShot(True)
+        self.ui_update_timer.timeout.connect(self.update_highlights)
+
+        # Initialize the worker thread
+        self.worker_thread = None
+
     def update_file_outline(self):
         text = self.text_edit.toPlainText()
         self.file_outline_widget.populate_file_outline(text)
 
     def highlightCurrentLine(self):
+        # Start comparison in a separate thread
+        self.start_comparison()
+
+    def start_comparison(self):
+        if self.worker_thread is not None:
+            # Check if the thread exists and is still running
+            if self.worker_thread.isRunning():
+                self.worker_thread.quit()
+                self.worker_thread.wait()
+
+            # Safely delete the thread object
+            self.worker_thread = None
+
+        self.worker_thread = QThread()
+        self.worker = LineComparisonWorker(self.text_edit.toPlainText(), self.other_file_lines)
+        self.worker.moveToThread(self.worker_thread)
+
+        # Connect signals
+        self.worker.finished.connect(self.on_comparison_finished)
+        self.worker_thread.started.connect(self.worker.run)
+        self.worker_thread.finished.connect(self.worker.deleteLater)
+        self.worker_thread.finished.connect(self.worker_thread.deleteLater)
+
+        self.worker_thread.start()
+
+    def on_comparison_finished(self, result):
+        self.comparison_results = result
+        self.ui_update_timer.start(0)  # Trigger UI update
+        self.worker_thread.quit()
+        self.worker_thread.wait()
+
+    def update_highlights(self):
         extraSelections = []
-        if not self.text_edit.isReadOnly():
+        cursor = QTextCursor(self.text_edit.document())
+
+        for i, status in self.comparison_results:
+            cursor.movePosition(QTextCursor.MoveOperation.Start)
+            cursor.movePosition(QTextCursor.MoveOperation.NextBlock, QTextCursor.MoveMode.MoveAnchor, i)
+
+            if status == "indentation":
+                color = QColor(Qt.GlobalColor.lightBlue).lighter(130)
+            elif status == "different":
+                color = QColor(Qt.GlobalColor.red).lighter(160)
+            elif status == "no_match":
+                color = QColor(Qt.GlobalColor.yellow).lighter(160)
+            else:
+                continue  # Skip identical lines
+
             selection = QTextEdit.ExtraSelection()
-            lineColor = QColor(Qt.GlobalColor.yellow).lighter(160)
-            selection.format.setBackground(lineColor)
-
-            # Get the cursor and its current block
-            cursor = self.text_edit.textCursor()
-            block = cursor.block()
-            block_start = block.position()  # Start position of the block
-            block_end = block_start + block.length()  # End position of the block
-
-            # Adjust the cursor to select the entire line
-            cursor.setPosition(block_start)
-            cursor.setPosition(block_end - 1, QTextCursor.MoveMode.KeepAnchor)  # Ensure we don't go out of range
             selection.cursor = cursor
-
+            selection.format.setBackground(color)
             extraSelections.append(selection)
-        
+
         self.text_edit.setExtraSelections(extraSelections)
 
     def lineNumberAreaWidth(self):
@@ -306,7 +354,6 @@ class CompEditor(QWidget):
             bottom = top + round(self.text_edit.blockBoundingRect(block).height())
             blockNumber += 1
 
-
 class LineNumberArea(QWidget):
     def __init__(self, editor):
         super().__init__(editor)
@@ -317,7 +364,6 @@ class LineNumberArea(QWidget):
 
     def paintEvent(self, event):
         self.editor.lineNumberAreaPaintEvent(event)
-
 
 class FileOutlineWidget(QTreeWidget):  # Correcting the widget type to QTreeWidget
     def __init__(self, parent=None):

@@ -140,8 +140,7 @@ class WidgetManager:
        
 
         self.diff_merger_dock = self.add_dock_widget(self.diff_merger_widget, "Diff Merger", Qt.DockWidgetArea.RightDockWidgetArea)
-     
-    
+        self.dock_widgets.append(self.diff_merger_dock)
     def add_overlay_dock(self):
         self.overlay_dock = QDockWidget("Overlay Settings", self.main_app)
         self.overlay_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
