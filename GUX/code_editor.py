@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QTabWidget, QTextEdit, QFileDialog,
                              QMessageBox, QInputDialog, QApplication, QWidget, QPlainTextEdit, QTreeWidget, QTreeWidgetItem, QListView, QTextEdit
 )
-from PyQt6.QtCore import QTimer, Qt, QSize, QRegularExpression, QEvent, QSize, QRect, pyqtSignal, QThread
+from PyQt6.QtCore import QTimer, Qt, QSize, QRegularExpression, QEvent, QSize, QRect, pyqtSignal, QThreadPool, QThread
 from NITTY_GRITTY.text_workers import LineComparisonWorker
 from PyQt6.QtGui import QSyntaxHighlighter, QTextCharFormat, QBrush, QColor, QMouseEvent, QFont, QPainter, QTextCursor, QTextFormat
 import os
@@ -234,45 +234,31 @@ class CompEditor(QWidget):
         self.ui_update_timer = QTimer()
         self.ui_update_timer.setSingleShot(True)
         self.ui_update_timer.timeout.connect(self.update_highlights)
-
-        # Initialize the worker thread
-        self.worker_thread = None
+       
+        # # Initialize QThreadPool
+        self.thread_pool = QThreadPool()
+        
 
     def update_file_outline(self):
         text = self.text_edit.toPlainText()
         self.file_outline_widget.populate_file_outline(text)
 
     def highlightCurrentLine(self):
-        # Start comparison in a separate thread
         self.start_comparison()
 
     def start_comparison(self):
-        if self.worker_thread is not None:
-            # Check if the thread exists and is still running
-            if self.worker_thread.isRunning():
-                self.worker_thread.quit()
-                self.worker_thread.wait()
-
-            # Safely delete the thread object
-            self.worker_thread = None
-
-        self.worker_thread = QThread()
-        self.worker = LineComparisonWorker(self.text_edit.toPlainText(), self.other_file_lines)
-        self.worker.moveToThread(self.worker_thread)
-
-        # Connect signals
-        self.worker.finished.connect(self.on_comparison_finished)
-        self.worker_thread.started.connect(self.worker.run)
-        self.worker_thread.finished.connect(self.worker.deleteLater)
-        self.worker_thread.finished.connect(self.worker_thread.deleteLater)
-
-        self.worker_thread.start()
+        # Create the worker
+        worker = LineComparisonWorker(self.text_edit.toPlainText(), self.other_file_lines)
+        
+        # Connect the 'finished' signal to the 'on_comparison_finished' slot
+        worker.signals.finished.connect(self.on_comparison_finished)
+        
+        # Submit the worker to the thread pool
+        self.thread_pool.start(worker)
 
     def on_comparison_finished(self, result):
         self.comparison_results = result
-        self.ui_update_timer.start(0)  # Trigger UI update
-        self.worker_thread.quit()
-        self.worker_thread.wait()
+        self.update_highlights()
 
     def update_highlights(self):
         extraSelections = []

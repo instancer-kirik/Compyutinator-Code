@@ -2,6 +2,22 @@ import threading
 import concurrent.futures
 import psutil
 import time
+import subprocess
+#maybe>?? not implmented
+class ProcessController:
+    def __init__(self):
+        self.processes = []
+
+    def launch_process(self, command):
+        process = subprocess.Popen(command, shell=True)
+        self.processes.append(process)
+        return process
+
+    def get_running_processes(self):
+        return [p for p in self.processes if p.poll() is None]
+
+    def terminate_process(self, process):
+        process.terminate()
 
 class ThreadController:
     def __init__(self, max_workers=None):
@@ -32,3 +48,23 @@ class ThreadController:
 def example_task(duration):
     time.sleep(duration)
     return f"Task with duration {duration} seconds completed"
+
+class ThreadController2:
+    def __init__(self, max_threads=None):
+        self.max_threads = max_threads or psutil.cpu_count() * 5
+        self.thread_pool = QThreadPool.globalInstance()
+        self.thread_pool.setMaxThreadCount(self.max_threads)
+        self.active_runnables = []
+
+    def submit(self, runnable: QRunnable):
+        self.thread_pool.start(runnable)
+        self.active_runnables.append(runnable)
+
+    def available_threads(self):
+        return self.max_threads - len(self.active_runnables)
+
+    def running_threads(self):
+        return [r for r in self.active_runnables if r.isFinished() == False]
+
+    def shutdown(self):
+        self.thread_pool.clear()
