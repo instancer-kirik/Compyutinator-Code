@@ -283,7 +283,26 @@ class CompEditor(QWidget):
             extraSelections.append(selection)
 
         self.text_edit.setExtraSelections(extraSelections)
-
+    def update_line_indicators(self, start_line, end_line):
+        self.text_edit.setExtraSelections([])  # Clear previous selections
+        
+        if start_line == end_line:
+            return  # No need to highlight anything
+        
+        extraSelections = []
+        
+        cursor = QTextCursor(self.text_edit.document())
+        cursor.movePosition(QTextCursor.MoveOperation.Start)
+        cursor.movePosition(QTextCursor.MoveOperation.NextBlock, QTextCursor.MoveMode.MoveAnchor, start_line)
+        cursor.movePosition(QTextCursor.MoveOperation.NextBlock, QTextCursor.MoveMode.KeepAnchor, end_line - start_line + 1)
+        
+        selection = QTextEdit.ExtraSelection()
+        selection.format.setBackground(QColor(Qt.GlobalColor.yellow).lighter(160))
+        selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
+        selection.cursor = cursor
+        extraSelections.append(selection)
+        
+        self.text_edit.setExtraSelections(extraSelections)
     def lineNumberAreaWidth(self):
         digits = 1
         count = max(1, self.text_edit.blockCount())
