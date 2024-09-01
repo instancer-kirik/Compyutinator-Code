@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QTabWidget, QTextEdit, QFileDialog,
-                             QMessageBox, QInputDialog, QApplication, QWidget, QPlainTextEdit, QTreeWidget, QTreeWidgetItem, QListView, QTextEdit
+                             QMessageBox, QInputDialog, QApplication, QWidget, QPlainTextEdit, QTreeWidget, QTreeWidgetItem, QListView, QTextEdit, QHBoxLayout
 )
 from PyQt6.QtCore import QTimer, Qt, QSize, QRegularExpression, QEvent, QSize, QRect, pyqtSignal, QThreadPool, QThread
 from NITTY_GRITTY.text_workers import LineComparisonWorker
@@ -199,52 +199,61 @@ class CompEditor(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        # Initialize the layout
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
         
-        # Line number area
-        self.lineNumberArea = LineNumberArea(self)
+        hbox = QHBoxLayout()
+        hbox.setSpacing(0)
+        layout.addLayout(hbox)
+        
+        self.line_number_area = LineNumberArea(self)
+        hbox.addWidget(self.line_number_area)
+        
+        self.text_edit = QPlainTextEdit()
+        self.text_edit.setFont(QFont("Courier", 10))
+        self.text_edit.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        hbox.addWidget(self.text_edit)
         
         # File outline widget
         self.file_outline_widget = FileOutlineWidget()
-        
-        # Text editor
-        self.text_edit = QPlainTextEdit()
-        self.text_edit.setFont(QFont("Courier", 10))
-        
-        # Connect signals
-        self.text_edit.blockCountChanged.connect(self.updateLineNumberAreaWidth)
-        self.text_edit.cursorPositionChanged.connect(self.highlightCurrentLine)
-        self.text_edit.textChanged.connect(self.update_file_outline)
-        
-        # Add widgets to the layout
-        layout.addWidget(self.text_edit)
         layout.addWidget(self.file_outline_widget)
         
-        # Set margins for line number area
-        self.updateLineNumberAreaWidth(0)
+        self.text_edit.blockCountChanged.connect(self.update_line_number_area_width)
+        self.text_edit.updateRequest.connect(self.update_line_number_area)
+        self.text_edit.cursorPositionChanged.connect(self.highlight_current_line)
+        self.text_edit.textChanged.connect(self.update_file_outline)
+        
+        self.update_line_number_area_width(0)
 
-# Placeholder for lines of the other file to compare
         self.other_file_lines = []
-
-        # Placeholder for comparison results
         self.comparison_results = []
 
-        # Create a timer for UI updates
         self.ui_update_timer = QTimer()
         self.ui_update_timer.setSingleShot(True)
         self.ui_update_timer.timeout.connect(self.update_highlights)
        
-        # # Initialize QThreadPool
         self.thread_pool = QThreadPool()
         
+        # Initialize start and end lines for highlighting
+        self.start_line = 0
+        self.end_line = 0
 
     def update_file_outline(self):
         text = self.text_edit.toPlainText()
         self.file_outline_widget.populate_file_outline(text)
 
-    def highlightCurrentLine(self):
+    def highlight_current_line(self):
         self.start_comparison()
+        extra_selections = []
+        if not self.text_edit.isReadOnly():
+            selection = QTextEdit.ExtraSelection()
+            line_color = QColor(Qt.GlobalColor.yellow).lighter(160)
+            selection.format.setBackground(line_color)
+            selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
+            selection.cursor = self.text_edit.textCursor()
+            selection.cursor.clearSelection()
+            extra_selections.append(selection)
+        self.text_edit.setExtraSelections(extra_selections)
 
     def start_comparison(self):
         # Create the worker
@@ -261,103 +270,136 @@ class CompEditor(QWidget):
         self.update_highlights()
 
     def update_highlights(self):
-        extraSelections = []
         cursor = QTextCursor(self.text_edit.document())
-
+        extra_selections = self.text_edit.extraSelections()
         for i, status in self.comparison_results:
-            cursor.movePosition(QTextCursor.MoveOperation.Start)
-            cursor.movePosition(QTextCursor.MoveOperation.NextBlock, QTextCursor.MoveMode.MoveAnchor, i)
+            cursor = QTextCursor(self.text_edit.document().findBlockByNumber(i))
+            selection = QTextEdit.ExtraSelection()
+            selection.cursor = cursor
+            selection.cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
 
             if status == "indentation":
-                color = QColor(Qt.GlobalColor.lightBlue).lighter(130)
+                color = QColor(173, 216, 230)  # Light blue
             elif status == "different":
-                color = QColor(Qt.GlobalColor.red).lighter(160)
+                color = QColor(255, 204, 203)  # Light red
             elif status == "no_match":
-                color = QColor(Qt.GlobalColor.yellow).lighter(160)
+                color = QColor(255, 255, 204)  # Light yellow
             else:
                 continue  # Skip identical lines
 
             selection = QTextEdit.ExtraSelection()
             selection.cursor = cursor
             selection.format.setBackground(color)
-            extraSelections.append(selection)
+            extra_selections.append(selection)
 
-        self.text_edit.setExtraSelections(extraSelections)
-    def update_line_indicators(self, start_line, end_line):
-        self.text_edit.setExtraSelections([])  # Clear previous selections
-        
-        if start_line == end_line:
-            return  # No need to highlight anything
-        
-        extraSelections = []
-        
-        cursor = QTextCursor(self.text_edit.document())
-        cursor.movePosition(QTextCursor.MoveOperation.Start)
-        cursor.movePosition(QTextCursor.MoveOperation.NextBlock, QTextCursor.MoveMode.MoveAnchor, start_line)
-        cursor.movePosition(QTextCursor.MoveOperation.NextBlock, QTextCursor.MoveMode.KeepAnchor, end_line - start_line + 1)
-        
+        self.text_edit.setExtraSelections(extra_selections)
+
+    def update_line_indicators(self, diff_data):
+        self.text_edit.setExtraSelections([])
+        extra_selections = []
+
+        current_line = 0
+        if isinstance(diff_data, list):
+            # If diff_data is a list, process it directly
+            for line in diff_data:
+                selection = self.create_line_selection(current_line, line)
+                if selection:
+                    extra_selections.append(selection)
+                current_line += 1
+        elif isinstance(diff_data, dict):
+            # If diff_data is a dictionary, process each block
+            for block_data in diff_data.values():
+                diff = block_data.get('diff', [])
+                for line in diff:
+                    selection = self.create_line_selection(current_line, line)
+                    if selection:
+                        extra_selections.append(selection)
+                    current_line += 1
+
+        self.text_edit.setExtraSelections(extra_selections)
+
+    def create_line_selection(self, line_number, line):
         selection = QTextEdit.ExtraSelection()
-        selection.format.setBackground(QColor(Qt.GlobalColor.yellow).lighter(160))
-        selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
+        cursor = QTextCursor(self.text_edit.document().findBlockByNumber(line_number))
+        cursor.select(QTextCursor.SelectionType.LineUnderCursor)
         selection.cursor = cursor
-        extraSelections.append(selection)
-        
-        self.text_edit.setExtraSelections(extraSelections)
-    def lineNumberAreaWidth(self):
+
+        if isinstance(line, tuple):
+            status, text = line
+        elif isinstance(line, str):
+            status = line[0] if line else ' '
+            text = line[2:] if len(line) > 2 else ''
+        else:
+            return None  # Invalid line format
+
+        if status == '+':
+            selection.format.setBackground(QColor(200, 255, 200))  # Light green for added lines
+        elif status == '-':
+            selection.format.setBackground(QColor(255, 200, 200))  # Light red for removed lines
+        elif status == ' ':
+            selection.format.setBackground(QColor(230, 230, 230))  # Light gray for matching lines
+        else:
+            return None  # Return None for lines that don't need highlighting
+
+        return selection
+
+    def line_number_area_width(self):
         digits = 1
-        count = max(1, self.text_edit.blockCount())
-        while count >= 10:
-            count //= 10
+        max_num = max(1, self.text_edit.blockCount())
+        while max_num >= 10:
+            max_num //= 10
             digits += 1
-        space = 3 + self.text_edit.fontMetrics().horizontalAdvance('9') * digits
+        space = 3 + self.fontMetrics().horizontalAdvance('9') * digits
         return space
 
-    def updateLineNumberAreaWidth(self, _):
-        self.text_edit.setViewportMargins(self.lineNumberAreaWidth(), 0, 0, 0)
+    def update_line_number_area_width(self, _):
+        self.text_edit.setViewportMargins(self.line_number_area_width(), 0, 0, 0)
 
-    def updateLineNumberArea(self, rect, dy):
+    def update_line_number_area(self, rect, dy):
         if dy:
-            self.lineNumberArea.scroll(0, dy)
+            self.line_number_area.scroll(0, dy)
         else:
-            self.lineNumberArea.update(0, rect.y(), self.lineNumberArea.width(), rect.height())
+            self.line_number_area.update(0, rect.y(), self.line_number_area.width(), rect.height())
         if rect.contains(self.text_edit.viewport().rect()):
-            self.updateLineNumberAreaWidth(0)
+            self.update_line_number_area_width(0)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        cr = self.contentsRect()
-        self.lineNumberArea.setGeometry(QRect(cr.left(), cr.top(), self.lineNumberAreaWidth(), cr.height()))
+        cr = self.text_edit.contentsRect()
+        self.line_number_area.setGeometry(QRect(cr.left(), cr.top(), self.line_number_area_width(), cr.height()))
 
     def get_line_numbers(self):
         text = self.text_edit.toPlainText()
         return text.splitlines(keepends=True)  # Keeps newline characters
 
     def lineNumberAreaPaintEvent(self, event):
-        painter = QPainter(self.lineNumberArea)
+        painter = QPainter(self.line_number_area)
         painter.fillRect(event.rect(), Qt.GlobalColor.lightGray)
 
         block = self.text_edit.firstVisibleBlock()
-        blockNumber = block.blockNumber()
+        block_number = block.blockNumber()
         top = round(self.text_edit.blockBoundingGeometry(block).translated(self.text_edit.contentOffset()).top())
         bottom = top + round(self.text_edit.blockBoundingRect(block).height())
 
         while block.isValid() and top <= event.rect().bottom():
             if block.isVisible() and bottom >= event.rect().top():
-                number = str(blockNumber + 1)
+                number = str(block_number + 1)
                 painter.setPen(Qt.GlobalColor.black)
-                painter.drawText(
-                    0,  # x
-                    top,  # y
-                    self.lineNumberArea.width(),  # width
-                    self.text_edit.fontMetrics().height(),  # height
-                    Qt.AlignmentFlag.AlignRight,  # flags
-                    number  # text
-                )
+                painter.drawText(0, top, self.line_number_area.width(), self.fontMetrics().height(),
+                                 Qt.AlignmentFlag.AlignRight, number)
 
             block = block.next()
             top = bottom
             bottom = top + round(self.text_edit.blockBoundingRect(block).height())
-            blockNumber += 1
+            block_number += 1
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setOpacity(0.2)
+        painter.fillRect(QRect(0, self.start_line * self.fontMetrics().height(),
+                               self.width(), (self.end_line - self.start_line + 1) * self.fontMetrics().height()),
+                         QColor(255, 255, 0))  # Light yellow background
 
 class LineNumberArea(QWidget):
     def __init__(self, editor):
@@ -365,7 +407,7 @@ class LineNumberArea(QWidget):
         self.editor = editor
 
     def sizeHint(self):
-        return QSize(self.editor.lineNumberAreaWidth(), 0)
+        return QSize(self.editor.line_number_area_width(), 0)
 
     def paintEvent(self, event):
         self.editor.lineNumberAreaPaintEvent(event)
