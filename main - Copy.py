@@ -8,7 +8,7 @@ from PyQt6.QtCore import QSettings, QByteArray, QUrl
 from HMC.widget_manager import WidgetManager
 from HMC.transcriptor_live_widget import VoiceTypingWidget
 from GUX.overlay import CompositeOverlay, Flashlight
-from GUX.log_viewer_widget import LogViewerWidget
+from GUX.log_viewer_widget i2mport LogViewerWidget
 from NITTY_GRITTY.database import DatabaseManager, setup_local_database
 log_directory = os.path.join(os.getcwd(), 'logs')
 if not os.path.exists(log_directory):
@@ -18,10 +18,7 @@ log_file_path = os.path.join(log_directory, 'app.log')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.FileHandler(log_file_path, 'a'), logging.StreamHandler()])
 logging.info("Application started")
-# Create AuraText directory if it doesn't exist
-auratext_dir = os.path.join(os.path.dirname(__file__), 'AuraText')
-if not os.path.exists(auratext_dir):
-    os.makedirs(auratext_dir)
+
 default_theme = {
     "main_window_color": "#2E3440",
     "window_color": "#3B4252",
@@ -99,7 +96,7 @@ class MainApplication(QMainWindow):
         if new is not None and isinstance(new, QWidget):
             for widget in self.widget_manager.dock_widgets:
                 if widget.isAncestorOf(new):
-                    self.last_focused_widget = widget
+                    self.last_f1ocused_widget = widget
                     self.update_tab_color(self.tab_widget.indexOf(self.last_focused_widget))
                     break
 
@@ -207,7 +204,7 @@ class MainApplication(QMainWindow):
             background: {theme["scrollbar_color"]};
         }}
         QScrollBar:horizontal {{
-            background: {theme["scrollbar_color"]};
+            background: {theme["scr1ollbar_color"]};
             height: 15px;
         }}
         QScrollBar::handle:horizontal {{

@@ -1,5 +1,5 @@
-from PyQt6.QtWidgets import QTreeView, QMenu, QFileDialog, QHBoxLayout, QMessageBox, QInputDialog, QStyle, QAbstractItemView, QDialog, QVBoxLayout, QListWidget,QListWidgetItem, QPushButton, QApplication
-from PyQt6.QtCore import Qt, QMimeData, QTimer, QEvent, QUrl, QIODevice
+from PyQt6.QtWidgets import QTreeView, QMenu, QFileDialog, QHBoxLayout, QMessageBox, QInputDialog, QStyle, QAbstractItemView, QDialog, QVBoxLayout, QListWidget, QListWidgetItem, QPushButton, QApplication
+from PyQt6.QtCore import Qt, QMimeData, QTimer, QEvent, QUrl, QIODevice, QDir, QFileInfo
 from PyQt6.QtGui import QDrag, QCursor, QAction, QPixmap, QKeySequence
 import os
 import shutil
@@ -20,6 +20,28 @@ class CustomTreeView(QTreeView):
         self.auto_scroll_timer.timeout.connect(self.auto_scroll)
         self.installEventFilter(self)
         self.ctrl_pressed = False
+
+        # Add toggle view action
+        self.toggle_view_action = QAction("Toggle List/Tree View", self)
+        self.toggle_view_action.triggered.connect(self.toggle_view)
+        self.addAction(self.toggle_view_action)
+
+        # Add sort by last modified action
+        self.sort_by_modified_action = QAction("Sort by Last Modified", self)
+        self.sort_by_modified_action.triggered.connect(self.sort_by_last_modified)
+        self.addAction(self.sort_by_modified_action)
+
+        # Set up the file system model
+        self.file_system_model = self.model()
+
+        # Add keyboard shortcuts
+        self.toggle_view_action.setShortcut(QKeySequence("Ctrl+T"))
+        self.sort_by_modified_action.setShortcut(QKeySequence("Ctrl+M"))
+
+        # If you have a toolbar, you can add these actions to it
+        if hasattr(self.file_explorer, 'toolbar'):
+            self.file_explorer.toolbar.addAction(self.toggle_view_action)
+            self.file_explorer.toolbar.addAction(self.sort_by_modified_action)
 
     def open_context_menu(self, position):
         index = self.indexAt(position)
@@ -55,6 +77,12 @@ class CustomTreeView(QTreeView):
         provide_as_context_action = QAction("Provide as Context", self)
         provide_as_context_action.triggered.connect(self.provide_as_context)
         menu.addAction(provide_as_context_action)
+
+        # Add toggle view action to the context menu
+        menu.addAction(self.toggle_view_action)
+
+        # Add sort by last modified action to the context menu
+        menu.addAction(self.sort_by_modified_action)
 
         menu.exec(self.viewport().mapToGlobal(position))
 
@@ -267,3 +295,12 @@ class CustomTreeView(QTreeView):
         elif cursor_pos.y() > self.viewport().height() - 30:
             new_value = self.verticalScrollBar().value() + 10
             self.verticalScrollBar().setValue(new_value)
+
+    def toggle_view(self):
+        if self.isTreePosition():
+            self.setRootIndex(self.file_system_model.index(self.file_system_model.rootPath()))
+        else:
+            self.setRootIndex(self.file_system_model.index(""))
+
+    def sort_by_last_modified(self):
+        self.file_system_model.sort(3, Qt.SortOrder.DescendingOrder)  # 3 is the column index for "Date Modified"
