@@ -5,11 +5,19 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget, QListWidget, 
 from PyQt6.QtGui import QAction, QDesktopServices
 from PyQt6.QtWidgets import QMenu
 from PyQt6.QtCore import QSettings, QByteArray, QUrl
+
+
+# Create AuraText directory if it doesn't exist
+auratext_dir = os.path.join(os.path.dirname(__file__), 'AuraText')
+if not os.path.exists(auratext_dir):
+    os.makedirs(auratext_dir)
+
 from HMC.widget_manager import WidgetManager
 from HMC.transcriptor_live_widget import VoiceTypingWidget
 from GUX.overlay import CompositeOverlay, Flashlight
 from GUX.log_viewer_widget import LogViewerWidget
 from NITTY_GRITTY.database import DatabaseManager, setup_local_database
+
 log_directory = os.path.join(os.getcwd(), 'logs')
 if not os.path.exists(log_directory):
     os.makedirs(log_directory)
@@ -18,10 +26,7 @@ log_file_path = os.path.join(log_directory, 'app.log')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.FileHandler(log_file_path, 'a'), logging.StreamHandler()])
 logging.info("Application started")
-# Create AuraText directory if it doesn't exist
-auratext_dir = os.path.join(os.path.dirname(__file__), 'AuraText')
-if not os.path.exists(auratext_dir):
-    os.makedirs(auratext_dir)
+
 default_theme = {
     "main_window_color": "#2E3440",
     "window_color": "#3B4252",
@@ -144,6 +149,7 @@ class MainApplication(QMainWindow):
         self.add_toggle_view_action(view_menu, "Sticky Notes", self.widget_manager.sticky_note_manager_dock)
         self.add_toggle_view_action(view_menu, "Overlay", self.widget_manager.overlay_dock)
         self.add_toggle_view_action(view_menu, "Diff Merger", self.widget_manager.diff_merger_dock)
+        self.add_toggle_view_action(view_menu, "AuraText", self.widget_manager.auratext_dock)
        #its on the main content, not a dockable self.add_toggle_view_action(view_menu, "Transcriptor", self.widget_manager.transcriptor_live_dock)
     def add_toggle_view_action(self, menu, title, dock_widget):
         action = QAction(title, self, checkable=True)

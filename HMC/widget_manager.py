@@ -1,3 +1,10 @@
+import sys
+import os
+
+# Add the AuraText directory to the Python path
+auratext_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'AuraText')
+sys.path.append(auratext_dir)
+
 from PyQt6.QtWidgets import  QVBoxLayout, QDockWidget, QWidget, QSlider, QComboBox, QLabel, QTabWidget, QSizePolicy
 
 from PyQt6.QtGui import QAction
@@ -15,13 +22,11 @@ from GUX.media_player import MediaPlayer
 from GUX.diff_merger import DiffMergerWidget
 from HMC.sticky_note_manager import StickyNoteManager
 from HMC.download_manager import DownloadManager, DownloadManagerUI
-import sys
-from PyQt6.QtCore import Qt, QSettings, QByteArray
-from GUX.overlay import Flashlight
 import serial
 import serial.tools.list_ports
 
 from GUX.diff_merger import DiffMergerWidget
+from auratext.Core.window import AuraTextWindow
 
 
 class WidgetManager:
@@ -34,6 +39,8 @@ class WidgetManager:
         self.serial_port_picker = None
         self.create_widgets()
         
+        self.add_auratext_dock()
+
     def add_dock_widget(self, widget, title, area):
         dock_widget = QDockWidget(title, self.main_app)
         dock_widget.setObjectName(f"{title.replace(' ', '')}DockWidget")
@@ -191,3 +198,14 @@ class WidgetManager:
 
     def update_flashlight_power(self, value):
         self.flashlight.set_power(value / 100)
+
+    def add_auratext_dock(self):
+        self.auratext_dock = self.create_auratext_dock()
+        self.dock_widgets.append(self.auratext_dock)
+
+    def create_auratext_dock(self):
+        auratext_widget = AuraTextWindow()
+        dock = QDockWidget("AuraText", self.main_app)
+        dock.setWidget(auratext_widget)
+        self.main_app.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+        return dock
