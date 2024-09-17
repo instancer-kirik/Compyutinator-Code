@@ -1,0 +1,9 @@
+{
+    "anakinls": {
+        "completion_fuzzy": true,
+        "diagnostic_on_open": true,
+        "diagnostic_on_save": true,
+        "pyflakes_errors": ["UndefinedName", "UnusedVariable"],
+        "yapf_style_config": "pep8"
+    }
+}

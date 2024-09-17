@@ -25,7 +25,7 @@ class DiffHighlighter(QSyntaxHighlighter):
 class DiffMergerWidget(QWidget):
     key_symbols = ['def', 'class', 'import']
 
-    def __init__(self):
+    def __init__(self, original_text="", suggested_text=""):
         super().__init__()
         self.isFullScreen = True
         self.diff_data = {}
@@ -33,6 +33,10 @@ class DiffMergerWidget(QWidget):
         self.current_line_index = 0
         
         self.initUI()
+        
+        # Set initial content
+        self.x_box.text_edit.setPlainText(original_text)
+        self.y_box.text_edit.setPlainText(suggested_text)
 
     def initUI(self):
         self.setMinimumSize(1200, 800)
