@@ -24,11 +24,6 @@ import time
 import subprocess
 from PyQt6.QtCore import QObject
 from HMC.ai_model_manager import ModelManager
-from PyQt6.QtCore import QSettings
-
-from HMC.download_manager import DownloadManager
-from requests.exceptions import RequestException
-import requests
 
 class CollapsibleSection(QWidget):
     def __init__(self, title, parent=None):
@@ -51,13 +46,6 @@ class CollapsibleSection(QWidget):
     def toggle_content(self):
         self.content.setVisible(not self.content.isVisible())
     
-    def setContentLayout(self, layout):
-        # Remove any existing layout
-        if self.content.layout():
-            QWidget().setLayout(self.content.layout())
-        # Set the new layout
-        self.content.setLayout(layout)
-
     def add_widget(self, widget):
         self.content_layout.addWidget(widget)
 
@@ -117,46 +105,57 @@ class ModelFetchWorker(QObject):
         self.finished.emit(models)
 
 class AIChatWidget(QWidget):
-    def __init__(self, parent=None, settings=None, model_manager=None, download_manager=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        logging.info("Initializing AIChatWidget")
-        self.settings = settings if settings else QSettings("instance.select", "Computinator Code")
-        self.download_manager = download_manager if download_manager else DownloadManager()
-        self.model_manager = model_manager if model_manager else ModelManager(self.settings, self.download_manager)
-        self.context_manager = ContextManager()
+        self.ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        self.client = OllamaClient.get_instance(base_url=self.ollama_base_url)
+        self.context_manager = ContextManager(max_tokens=4000)
         self.novelty_detector = NoveltyDetector()
-        
+        self.model_path = None
         self.current_file_path = None
         self.current_file_content = None
         self.recent_files = []  # Initialize this with your recent files list
         self.lsp_client = LSPClient()
         self.instructions = self.set_default_instructions()
-        self.model_path = None
-        self.model_manager.download_manager.download_complete.connect(self.on_model_downloaded)
-        self.model_manager.model_loaded.connect(self.on_model_served)
-        self.model_manager.model_error.connect(self.on_model_error)
+        self.model_manager = ModelManager()
+        self.model_manager.download_complete.connect(self.on_model_downloaded)
+        self.model_manager.model_served.connect(self.on_model_served)
+        self.model_manager.model_download_error.connect(self.on_model_error)
         
         self.current_model = None
         self.initUI()
         
-       
         # Connect signals
-        self.model_manager.download_manager.download_preparing.connect(self.on_download_preparing)
-        self.model_manager.download_manager.download_progress.connect(self.on_download_progress)
+        self.client.status_update.connect(self.update_status)
+        self.client.models_loaded.connect(self.update_model_dropdown)
+        self.client.initialization_finished.connect(self.on_ollama_initialized)
+        self.client.server_ready.connect(self.on_server_ready)
+        self.client.status_update.connect(self.client.output_window.append_output)
+
+        # Initialize server in a separate thread
+        self.init_thread = QThread()
+        self.init_worker = OllamaInitWorker(self.client)
+        self.init_worker.moveToThread(self.init_thread)
+        self.init_thread.started.connect(self.init_worker.run)
+        self.init_worker.finished.connect(self.init_thread.quit)
+        self.init_worker.finished.connect(self.init_worker.deleteLater)
+        self.init_thread.finished.connect(self.init_thread.deleteLater)
+        self.init_worker.log_message.connect(self.log_message)
+        self.init_thread.start()
+        
+        # Connect signals
+        self.client.status_update.connect(self.update_status)
+        self.client.models_loaded.connect(self.update_model_dropdown)
+        self.client.initialization_finished.connect(self.on_ollama_initialized)
+        self.model_manager.start_ollama_signal.connect(self.show_ollama_starting_dialog)
+        self.model_manager.ollama_started_signal.connect(self.hide_ollama_starting_dialog)
+        self.model_manager.download_preparing.connect(self.on_download_preparing)
+        self.model_manager.download_progress.connect(self.on_download_progress)
         
         # Connect signals after initialization
         self.model_dropdown.currentTextChanged.connect(self.on_model_changed)
-        self.model_manager.model_loaded.connect(self.on_model_loaded)
-        self.model_manager.model_unloaded.connect(self.on_model_unloaded)
-        self.model_manager.model_error.connect(self.on_model_error)
-        self.model_manager.models_list_updated.connect(self.update_model_dropdown)
-        self.model_manager.model_download_started.connect(self.on_download_started)
-        self.model_manager.model_download_progress.connect(self.on_download_progress)
-        self.model_manager.model_download_complete.connect(self.on_download_complete)
-        self.model_manager.model_download_error.connect(self.on_download_error)
-        self.model_manager.model_path_changed.connect(self.on_model_path_changed)
-
-        self.connect_signals()
+        self.model_manager.model_changed.connect(self.on_model_change_success)
+        self.model_manager.model_unavailable.connect(self.on_model_change_failure)
 
     def set_default_instructions(self):
         return """
@@ -187,7 +186,6 @@ class AIChatWidget(QWidget):
 
     def initUI(self):
         layout = QVBoxLayout()
-        self.setLayout(layout)
         
         # Status label
         self.status_label = QLabel("Initializing...")
@@ -227,32 +225,50 @@ class AIChatWidget(QWidget):
         self.send_button.clicked.connect(self.send_message)
         layout.addWidget(self.send_button)
         
+        self.progress_bar = QProgressBar(self)
+        self.progress_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.progress_bar.setVisible(False)
+        layout.addWidget(self.progress_bar)
+
+        self.progress_label = QLabel(self)
+        self.progress_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.progress_label.setVisible(False)
+        layout.addWidget(self.progress_label)
+        
         # Collapsible Model Section
         self.model_section = CollapsibleSection("Model Controls")
         layout.addWidget(self.model_section)
+        
+        self.model_button = QPushButton("Download Model")
+        self.model_button.clicked.connect(self.download_model)
+        self.model_section.add_widget(self.model_button)
+        
+        self.change_path_button = QPushButton("Change Download Path")
+        self.change_path_button.clicked.connect(self.change_download_path)
+        self.model_section.add_widget(self.change_path_button)
+        
+        self.serve_button = QPushButton("Serve Model")
+        self.serve_button.clicked.connect(self.serve_model)
+        self.model_section.add_widget(self.serve_button)
+        
+        self.edit_instructions_button = QPushButton("Edit AI Instructions")
+        self.edit_instructions_button.clicked.connect(self.edit_instructions)
+        self.model_section.add_widget(self.edit_instructions_button)
 
-        # Change Model Directory button
-        change_dir_button = QPushButton("Change Model Directory")
-        change_dir_button.clicked.connect(self.change_download_path)
-        self.model_section.add_widget(change_dir_button)
+        # Add a button to show/hide Ollama output window
+        self.show_ollama_output_button = QPushButton("Show Ollama Output")
+        self.show_ollama_output_button.clicked.connect(self.toggle_ollama_output)
+        layout.addWidget(self.show_ollama_output_button)
+        
+        self.setLayout(layout)
 
-        # Download Model section
-        self.download_url_input = QLineEdit()
-        self.download_url_input.setPlaceholderText("Enter model URL or leave blank for default")
-        self.model_section.add_widget(QLabel("Download hf-ggufModel:"))
-        self.model_section.add_widget(self.download_url_input)
-
-        self.download_model_button = QPushButton("Download Model")
-        self.download_model_button.clicked.connect(self.download_model)
-        self.model_section.add_widget(self.download_model_button)
-
-        # Set default model URL hint
-        self.set_default_model_url_hint()
-
-    def set_default_model_url_hint(self):
-        default_model_name = "Llama-3.1-SuperNova-Lite-8.0B-OF32.EF32.IQ6_K.gguf"
-        default_model_url = f"https://huggingface.co/Joseph717171/Llama-3.1-SuperNova-Lite-8.0B-OQ8_0.EF32.IQ4_K-Q8_0-GGUF/resolve/main/{default_model_name}"
-        self.download_url_input.setPlaceholderText(f"Default: {default_model_url}")
+    def toggle_ollama_output(self):
+        if self.client.output_window.isVisible():
+            self.client.hide_output_window()
+            self.show_ollama_output_button.setText("Show Ollama Output")
+        else:
+            self.client.show_output_window()
+            self.show_ollama_output_button.setText("Hide Ollama Output")
 
     def update_status(self, message):
         self.status_label.setText(message)
@@ -261,40 +277,27 @@ class AIChatWidget(QWidget):
     def on_model_changed(self, new_model):
         self.model_manager.change_model(new_model)
 
-    def on_model_loaded(self, model_name):
-        self.status_label.setText(f"Model loaded: {model_name}")
-        self.model_dropdown.setCurrentText(model_name)
+    def on_model_change_success(self, new_model):
+        self.current_model = new_model
+        self.status_label.setText(f"Model changed to: {new_model}")
+        self.status_label.setStyleSheet("color: green")
 
-    def on_model_unloaded(self):
-        self.status_label.setText("No model loaded")
-        self.model_dropdown.setCurrentIndex(-1)
-
-    def on_model_error(self, error_message):
-        self.status_label.setText(f"Model error: {error_message}")
-        QMessageBox.critical(self, "Model Error", error_message)
+    def on_model_change_failure(self, error_message):
+        self.status_label.setText(f"Failed to change model: {error_message}")
+        self.status_label.setStyleSheet("color: red")
+        # Revert the dropdown to the current model
+        self.model_dropdown.setCurrentText(self.current_model)
 
     def update_model_dropdown(self, models):
         self.model_dropdown.clear()
+        self.model_dropdown.addItems(models)
         if models:
-            self.model_dropdown.addItems(models)
             self.current_model = models[0]
             self.model_dropdown.setCurrentText(self.current_model)
-        else:
-            self.model_dropdown.addItem("No models available")
-        logging.info(f"Updated model dropdown with models: {models}")
-
-    def load_selected_model(self):
-        selected_model = self.model_dropdown.currentText()
-        if selected_model:
-            self.status_label.setText(f"Loading model: {selected_model}")
-            self.model_manager.load_model(selected_model)
-        else:
-            self.status_label.setText("No model selected")
-            self.model_manager.unload_model()
 
     def on_model_downloaded(self):
-        self.download_button.setText("Model Downloaded")
-        self.download_button.setEnabled(False)
+        self.model_button.setText("Model Downloaded")
+        self.model_button.setEnabled(False)
         self.progress_bar.setVisible(False)
 
     def on_model_served(self):
@@ -303,45 +306,65 @@ class AIChatWidget(QWidget):
 
     def on_model_error(self, error):
         SelectableMessageBox("AAAAAAAAA", error, self).exec()
-        self.download_button.setText("Download Model")
-        self.download_button.setEnabled(True)
+        self.model_button.setText("Download Model")
+        self.model_button.setEnabled(True)
         self.serve_button.setEnabled(False)
         self.progress_bar.setVisible(False)
 
     def on_download_progress(self, bytes_downloaded, total_bytes):
         logging.info(f"AIChatWidget: Progress {bytes_downloaded}/{total_bytes} bytes")
+        self.progress_bar.setVisible(True)
+        self.progress_label.setVisible(True)
+
+        # Ensure total_bytes is treated as unsigned
+        total_bytes = int(total_bytes) & 0xFFFFFFFF
+
+        if total_bytes > 0:
+            progress = int((bytes_downloaded / total_bytes) * 100)
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(progress)
+            
+            downloaded_size = self.format_size(bytes_downloaded)
+            total_size = self.format_size(total_bytes)
+            
+            self.progress_bar.setFormat(f"{progress}%")
+            self.progress_label.setText(f"Downloaded {downloaded_size} of {total_size}")
+        else:
+            self.progress_bar.setRange(0, 0)
+            downloaded_size = self.format_size(bytes_downloaded)
+            self.progress_label.setText(f"Downloaded {downloaded_size}")
+
+        # Update the status dialog
+        if hasattr(self, 'status_dialog'):
+            self.status_dialog.update_progress(progress, f"Downloaded {downloaded_size} of {total_size}")
+
+        # Force the UI to update
+        QApplication.processEvents()
+
+    def format_size(self, size_bytes):
+        # Convert bytes to human-readable format
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.2f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.2f} PB"
 
     def change_download_path(self):
-        base_dir = QFileDialog.getExistingDirectory(self, "Select Base Directory for Models")
-        if base_dir:
-            models_dir = os.path.join(base_dir, "_Models")
-            ai_models_dir = os.path.join(models_dir, "AI")
-            os.makedirs(ai_models_dir, exist_ok=True)
-            try:
-                self.model_manager.set_model_path(ai_models_dir)
-                self.status_label.setText(f"Models directory changed to: {ai_models_dir}")
-            except ValueError as e:
-                QMessageBox.critical(self, "Invalid Directory", str(e))
+        new_path = QFileDialog.getExistingDirectory(self, "Select Download Directory")
+        if new_path:
+            self.model_manager.set_model_path(new_path)
+            SelectableMessageBox.information(self, "Path Changed", f"Download path changed to:\n{new_path}").exec()
 
     def download_model(self):
-        url = self.download_url_input.text() or self.download_url_input.placeholderText().split("Default: ")[1]
-        model_name = os.path.basename(url)
-        model_path = os.path.join(self.model_manager.get_model_path(), model_name)
-        
-        if os.path.exists(model_path):
-            reply = QMessageBox.question(self, 'File Exists', f"The file {model_name} already exists. Do you want to replace it?",
-                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                         QMessageBox.StandardButton.No)
-            if reply == QMessageBox.StandardButton.No:
-                return
-            os.remove(model_path)
+        model_size = self.model_manager.get_model_size()
+        model_path = self.model_manager.model_path
         
         confirm_message = (
-            f"Are you sure you want to download the model?(3.7GB)\n\n"
-            f"Model: {model_name}\n"
-            f"URL: {url}\n"
-            f"Save to: {model_path}\n\n"
-            f"The download progress will be shown in the Download Manager."
+            f"Are you sure you want to download the model?\n\n"
+            f"Model: {self.model_manager.model_name}\n"
+            f"Size: {humanize.naturalsize(model_size)}\n"
+            f"Location: {model_path}\n\n"
+            f"If disk space is an issue, consider using BigLinks to create a symlink and free up space, or edit path; untested"
         )
         
         reply = QMessageBox.question(self, 'Confirm Download', confirm_message,
@@ -349,55 +372,56 @@ class AIChatWidget(QWidget):
                                      QMessageBox.StandardButton.No)
         
         if reply == QMessageBox.StandardButton.Yes:
-            try:
-                # Check if the URL is accessible
-                response = requests.head(url, timeout=10)
-                response.raise_for_status()
-                
-                download_id = self.model_manager.download_model(url, model_name)
-                self.status_label.setText(f"Download started for model: {model_name}")
-                logging.info(f"Download started for model: {model_name} from URL: {url}")
-            except RequestException as e:
-                error_message = f"Error accessing URL: {str(e)}"
-                logging.error(error_message)
-                QMessageBox.critical(self, "Download Error", error_message)
+            self.model_button.setEnabled(False)
+            self.model_button.setText("Downloading...")
+            self.progress_bar.setValue(0)
+            self.progress_bar.setVisible(True)
+            self.model_manager.download_model()
         else:
-            QMessageBox.information(self, "Download Cancelled", "Model download was cancelled.")
+            self.chat_display.append("Model download cancelled by user.")
 
     def serve_model(self):
         self.model_manager.serve_model()
 
     def send_message(self):
-        message = self.user_input.toPlainText()
-        self.user_input.clear()
-        self.chat_display.append(f"You: {message}")
+        user_message = self.user_input.toPlainText()
+        if user_message:
+            self.chat_display.append(f"User: {user_message}")
+            self.user_input.clear()
+            
+            context = self.context_manager.get_context()
+            novel_parts = self.novelty_detector.get_novel_parts(context)
+            novel_content = "\n".join(novel_parts) if novel_parts else "No novel content detected."
 
-        context = self.context_manager.get_most_relevant_context(message)
-        system_prompt = "You are a helpful AI assistant."
-        full_prompt = f"{system_prompt}\n\nInstructions:\n{self.instructions}\n\nContext:\n{context}\n\nHuman: {message}\nAI:"
+            system_prompt = f"""
+            Instructions for AI:
+            {self.instructions}
 
-        self.model_manager.generate(full_prompt)
-        self.status_label.setText("Generating response...")
-        self.send_button.setEnabled(False)
+            Novel parts of current context:
+            ```
+            {novel_content}
+            ```
 
-    def on_generation_finished(self, response):
-        self.display_response(response)
-        self.status_label.setText("Response generated")
-        self.send_button.setEnabled(True)
+            Full Context:
+            {context}
+            """
 
-    def on_generation_error(self, error):
-        self.chat_display.append(f"Error: {error}")
-        self.status_label.setText("Generation error")
-        self.send_button.setEnabled(True)
+            if self.client.is_initialized:
+                self.status_label.setText("Generating response...")
+                response = self.client.generate(user_message, system_prompt, self.current_model)
+                self.chat_display.append(f"AI: {response}")
+                self.status_label.setText("Response generated")
+            else:
+                self.chat_display.append("Error: Ollama server is not initialized. Please wait for initialization to complete.")
+                self.status_label.setText("Ollama server not initialized")
 
     def display_response(self, response):
         formatted_response = self.format_response_with_file_references(response)
         self.chat_display.append(f"AI: {formatted_response}")
-        
-        novel_parts = self.novelty_detector.get_novel_parts(response, self.context_manager.contexts)
-        
-        for part in novel_parts:
-            self.context_manager.add_context(part, "AI Response")
+
+        diff_blocks = self.extract_diff_blocks(response)
+        if diff_blocks:
+            self.show_diff_merger(diff_blocks)
 
     def display_error(self, error):
         self.chat_display.append(f"Error: {error}")
@@ -557,18 +581,27 @@ class AIChatWidget(QWidget):
             self.model_manager.edit_modelfile(new_instructions)
 
     def on_download_preparing(self):
-        pass
+        self.progress_bar.setRange(0, 0)  # Indeterminate progress
+        self.progress_bar.setFormat("Preparing download...")
+        self.progress_bar.setVisible(True)
 
-    def on_download_started(self, download_id):
-        self.status_label.setText(f"Download started: {download_id}")
+    def on_ollama_initialized(self, success):
+        if success:
+            self.status_label.setText("Ollama server initialized and ready")
+            self.load_installed_models()
+        else:
+            self.status_label.setText("Failed to initialize Ollama server. Please check the logs and try again.")
+        self.init_thread.quit()
+        self.init_thread.wait()
 
-    def on_download_complete(self, download_id):
-        self.status_label.setText("Model download complete")
-        QMessageBox.information(self, "Download Complete", "Model download is complete.")
+    def load_installed_models(self):
+        models = self.client.get_installed_models()
+        self.update_model_dropdown(models)
 
-    def on_download_error(self, download_id, error_message):
-        self.status_label.setText("Model download failed")
-        QMessageBox.critical(self, "Download Error", f"Model download failed: {error_message}")
+    def on_server_ready(self):
+        logging.info("Server is ready, performing post-initialization tasks...")
+        self.client.output_window.append_output("Server is ready, loading models...")
+        self.fetch_models()
 
     def fetch_models(self):
         self.model_fetch_thread = QThread()
@@ -591,23 +624,21 @@ class AIChatWidget(QWidget):
     def hide_ollama_starting_dialog(self):
         self.client.hide_output_window()
         self.show_ollama_output_button.setText("Show Ollama Output")
+        # You can also update your UI here if needed
 
-    def load_model(self):
-        model_path, _ = QFileDialog.getOpenFileName(self, "Select Model File", "", "GGUF Files (*.gguf)")
-        if model_path:
-            self.status_label.setText("Loading model...")
-            self.model_manager.load_model(model_path)
+class OllamaInitWorker(QObject):
+    finished = pyqtSignal()
+    log_message = pyqtSignal(str)
 
-    def connect_signals(self):
-        self.model_manager.model_loaded.connect(self.on_model_loaded)
-        self.model_manager.model_error.connect(self.on_model_error)
-        self.model_manager.models_list_updated.connect(self.update_model_dropdown)
-        self.model_manager.model_download_started.connect(self.on_download_started)
-        self.model_manager.model_download_progress.connect(self.on_download_progress)
-        self.model_manager.model_download_complete.connect(self.on_download_complete)
-        self.model_manager.model_download_error.connect(self.on_download_error)
-        self.model_manager.model_path_changed.connect(self.on_model_path_changed)
+    def __init__(self, client):
+        super().__init__()
+        self.client = client
 
-    def on_model_path_changed(self, new_path):
-        self.status_label.setText(f"Model path changed to: {new_path}")
-        # You might want to update other UI elements here if necessary
+    def run(self):
+        self.log_message.emit("Starting Ollama initialization...")
+        self.client.initialize_server()
+        self.log_message.emit("Ollama initialization finished.")
+        self.finished.emit()
+
+
+    

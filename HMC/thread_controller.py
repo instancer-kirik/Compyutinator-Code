@@ -3,10 +3,12 @@ import concurrent.futures
 import psutil
 import time
 import subprocess
+from PyQt6.QtCore import QRunnable, QThreadPool
 #maybe>?? not implmented
 class ProcessController:
     def __init__(self):
         self.processes = []
+        self.ollama_process = None
 
     def launch_process(self, command):
         process = subprocess.Popen(command, shell=True)
@@ -18,6 +20,11 @@ class ProcessController:
 
     def terminate_process(self, process):
         process.terminate()
+
+    def launch_ollama(self, command="ollama serve"):
+        if self.ollama_process is None or self.ollama_process.poll() is not None:
+            self.ollama_process = subprocess.Popen(command, shell=True)
+        return self.ollama_process
 
 class ThreadController:
     def __init__(self, max_workers=None):

@@ -11,12 +11,13 @@ from PyQt6.QtCore import QSettings, QByteArray, QUrl
 auratext_dir = os.path.join(os.path.dirname(__file__), 'AuraText')
 if not os.path.exists(auratext_dir):
     os.makedirs(auratext_dir)
-
+from HMC.download_manager import DownloadManager
 from HMC.widget_manager import WidgetManager
 from HMC.transcriptor_live_widget import VoiceTypingWidget
 from GUX.overlay import CompositeOverlay, Flashlight
 from GUX.log_viewer_widget import LogViewerWidget
 from NITTY_GRITTY.database import DatabaseManager, setup_local_database
+from GUX.ai_chat import AIChatWidget
 
 log_directory = os.path.join(os.getcwd(), 'logs')
 if not os.path.exists(log_directory):
@@ -62,11 +63,20 @@ class MainApplication(QMainWindow):
         self.overlay.show()
         
         self.db_manager = DatabaseManager('local')
-        # Pass DatabaseManager to WidgetManager
-        self.widget_manager = WidgetManager(self, self.db_manager)
+        self.download_manager = DownloadManager()
+        self.settings = QSettings("instance.select", "Computinator Code")
+        
+        from HMC.ai_model_manager import ModelManager
+        self.model_manager = ModelManager(self.settings, self.download_manager)
+        
+        # Pass DatabaseManager, DownloadManager, and settings to WidgetManager
+        self.widget_manager = WidgetManager(self, self.db_manager, self.download_manager, self.settings, self.model_manager)
         
         self.initUI()
         self.load_settings()
+
+    def get_settings(self):
+        return self.settings
 
     def initUI(self):
         self.tab_widget = QTabWidget()
@@ -78,6 +88,7 @@ class MainApplication(QMainWindow):
         self.add_support_box()
         self.add_transcriptor_live_tab()
         self.add_logs_viewer_tab()
+
     def add_history_tab(self):
         self.history_widget = QListWidget()
         self.tab_widget.addTab(self.history_widget, "Action History")
@@ -151,6 +162,7 @@ class MainApplication(QMainWindow):
         self.add_toggle_view_action(view_menu, "Diff Merger", self.widget_manager.diff_merger_dock)
         self.add_toggle_view_action(view_menu, "AuraText", self.widget_manager.auratext_dock)
        #its on the main content, not a dockable self.add_toggle_view_action(view_menu, "Transcriptor", self.widget_manager.transcriptor_live_dock)
+
     def add_toggle_view_action(self, menu, title, dock_widget):
         action = QAction(title, self, checkable=True)
         action.setChecked(True)
@@ -159,12 +171,12 @@ class MainApplication(QMainWindow):
         menu.addAction(action)
 
     def save_layout(self):
-        settings = QSettings("instance.select", "Computinator Code")
+        settings = self.get_settings()
         settings.setValue("geometry", self.saveGeometry())
         settings.setValue("windowState", self.saveState())
 
     def load_layout(self):
-        settings = QSettings("instance.select", "Computinator Code")
+        settings = self.get_settings()
         geometry = settings.value("geometry")
         windowState = settings.value("windowState")
         if geometry:
@@ -242,7 +254,7 @@ class MainApplication(QMainWindow):
     def add_support_box(self):
         support_box = QWidget()
         support_layout = QVBoxLayout()
-        support_label = QLabel("Support Me")
+        support_label = QLabel("Support Me - links on github")
         github_button = QPushButton("https://github.com/instancer-kirik/BigLinks")
         github_button.clicked.connect(self.open_github)
 

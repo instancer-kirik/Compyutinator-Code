@@ -26,32 +26,38 @@ import serial
 import serial.tools.list_ports
 
 from GUX.diff_merger import DiffMergerWidget
-from auratext.Core.window import AuraTextWindow
+from AuraText.auratext.Core.window import AuraTextWindow
 
 
 class WidgetManager:
-    def __init__(self, main_app, db_manager):
-        self.main_app = main_app
+    def __init__(self, main_window, db_manager, download_manager, settings, model_manager):
+        self.main_window = main_window
         self.db_manager = db_manager
+        self.download_manager = download_manager
+        self.settings = settings
+        self.model_manager = model_manager
         self.dock_widgets = []
         self.tab_widget = QTabWidget()
         self.overlay_dock = None
         self.serial_port_picker = None
+        self.ai_chat_widget = None
+        self.ai_chat_dock = None
+        self.auratext_window = None
         self.create_widgets()
         
         self.add_auratext_dock()
 
     def add_dock_widget(self, widget, title, area):
-        dock_widget = QDockWidget(title, self.main_app)
+        dock_widget = QDockWidget(title, self.main_window)
         dock_widget.setObjectName(f"{title.replace(' ', '')}DockWidget")
         widget.setMinimumWidth(300)
         dock_widget.setWidget(widget)
-        self.main_app.addDockWidget(area, dock_widget)
+        self.main_window.addDockWidget(area, dock_widget)
         self.dock_widgets.append(dock_widget)
         
-        widget.installEventFilter(self.main_app)
+        widget.installEventFilter(self.main_window)
         if len(self.dock_widgets) > 1:
-            self.main_app.tabifyDockWidget(self.dock_widgets[-2], dock_widget)
+            self.main_window.tabifyDockWidget(self.dock_widgets[-2], dock_widget)
 
         return dock_widget
 
@@ -77,7 +83,7 @@ class WidgetManager:
         self.symbolic_linker_dock = self.add_dock_widget(self.symbolic_linker_widget, "BigLinks", Qt.DockWidgetArea.LeftDockWidgetArea)
 
     def add_file_explorer_dock(self):
-        self.file_explorer_widget = FileExplorerWidget(self.main_app)
+        self.file_explorer_widget = FileExplorerWidget(self.main_window)
         self.file_explorer_dock = self.add_dock_widget(self.file_explorer_widget, "File Explorer", Qt.DockWidgetArea.LeftDockWidgetArea)
 
     def add_code_editor_dock(self):
@@ -85,21 +91,20 @@ class WidgetManager:
         self.code_editor_dock = self.add_dock_widget(self.code_editor_widget, "Code Editor", Qt.DockWidgetArea.RightDockWidgetArea)
 
     def add_process_manager_dock(self):
-        self.process_manager_widget = ProcessManagerWidget(self.main_app)
+        self.process_manager_widget = ProcessManagerWidget(self.main_window)
         self.process_manager_dock = self.add_dock_widget(self.process_manager_widget, "Process Manager", Qt.DockWidgetArea.BottomDockWidgetArea)
 
     def add_action_pad_dock(self):
         # Pass the db_manager to ActionPadWidget
-        self.action_pad_widget = ActionPadWidget(self.db_manager, self.main_app)
+        self.action_pad_widget = ActionPadWidget(self.db_manager, self.main_window)
         self.action_pad_dock = self.add_dock_widget(self.action_pad_widget, "Action Pad", Qt.DockWidgetArea.BottomDockWidgetArea)
-       
         
     def add_terminal_dock(self):
         self.terminal_widget = TerminalWidget()
         self.terminal_dock = self.add_dock_widget(self.terminal_widget, "Terminal", Qt.DockWidgetArea.BottomDockWidgetArea)
 
     def add_theme_manager_dock(self):
-        self.theme_manager_widget = ThemeManagerWidget(self.main_app)
+        self.theme_manager_widget = ThemeManagerWidget(self.main_window)
         self.theme_manager_dock = self.add_dock_widget(self.theme_manager_widget, "Theme Manager", Qt.DockWidgetArea.RightDockWidgetArea)
 
     def add_html_viewer_dock(self):
@@ -107,8 +112,11 @@ class WidgetManager:
         self.html_viewer_dock = self.add_dock_widget(self.html_viewer_widget, "HTML Viewer", Qt.DockWidgetArea.RightDockWidgetArea)
 
     def add_ai_chat_dock(self):
-        self.ai_chat_widget = AIChatWidget()
-        self.ai_chat_dock = self.add_dock_widget(self.ai_chat_widget, "AI Chat", Qt.DockWidgetArea.RightDockWidgetArea)
+        self.ai_chat_widget = AIChatWidget(settings=self.settings, model_manager=self.model_manager, download_manager=self.download_manager)
+        self.ai_chat_dock = QDockWidget("AI Chat", self.main_window)
+        self.ai_chat_dock.setWidget(self.ai_chat_widget)
+        self.main_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.ai_chat_dock)
+        self.dock_widgets.append(self.ai_chat_dock)
 
     def add_media_player_dock(self):
         self.media_player_widget = MediaPlayer()
@@ -128,15 +136,15 @@ class WidgetManager:
    
     
     def add_brightness_dock(self):
-        self.brightness_dock = QDockWidget("Brightness Control", self.main_app)
+        self.brightness_dock = QDockWidget("Brightness Control", self.main_window)
         self.brightness_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
         slider = QSlider(Qt.Orientation.Horizontal)
         slider.setMinimum(0)
         slider.setMaximum(100)
-        slider.setValue(int(self.main_app.flashlight.power * 100))
-        slider.valueChanged.connect(lambda value: self.main_app.flashlight.set_power(value / 100.0))
+        slider.setValue(int(self.main_window.flashlight.power * 100))
+        slider.valueChanged.connect(lambda value: self.main_window.flashlight.set_power(value / 100.0))
         self.brightness_dock.setWidget(slider)
-        self.main_app.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.brightness_dock)
+        self.main_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.brightness_dock)
         self.dock_widgets.append(self.brightness_dock)
 
     
@@ -149,9 +157,9 @@ class WidgetManager:
         self.diff_merger_dock = self.add_dock_widget(self.diff_merger_widget, "Diff Merger", Qt.DockWidgetArea.RightDockWidgetArea)
         self.dock_widgets.append(self.diff_merger_dock)
     def add_overlay_dock(self):
-        self.overlay_dock = QDockWidget("Overlay Settings", self.main_app)
+        self.overlay_dock = QDockWidget("Overlay Settings", self.main_window)
         self.overlay_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
-        self.main_app.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.overlay_dock)
+        self.main_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.overlay_dock)
 
         layout = QVBoxLayout()
         
@@ -159,7 +167,7 @@ class WidgetManager:
         slider = QSlider(Qt.Orientation.Horizontal)
         slider.setMinimum(0)
         slider.setMaximum(100)
-        slider.setValue(int(self.main_app.overlay.flashlight_overlay.power * 100))
+        slider.setValue(int(self.main_window.overlay.flashlight_overlay.power * 100))
         slider.valueChanged.connect(self.update_flashlight_settings)
         layout.addWidget(slider)
 
@@ -177,10 +185,10 @@ class WidgetManager:
 
     def update_flashlight_settings(self, value):
         power = value / 100.0
-        self.main_app.overlay.flashlight_overlay.set_power(power)
+        self.main_window.overlay.flashlight_overlay.set_power(power)
         if power > 0.42:
             new_size = int(200 * (power / 0.42))
-            self.main_app.overlay.flashlight_overlay.set_size(new_size)
+            self.main_window.overlay.flashlight_overlay.set_size(new_size)
     def update_serial_ports(self):
         ports = serial.tools.list_ports.comports()
         self.serial_port_picker.clear()
@@ -188,7 +196,7 @@ class WidgetManager:
 
     def on_serial_port_selected(self, index):
         selected_port = self.serial_port_picker.currentText()
-        self.main_app.set_serial_port(selected_port)
+        self.main_window.set_serial_port(selected_port)
 
     def refresh_serial_ports(self):
         ports = serial.tools.list_ports.comports()
@@ -204,8 +212,28 @@ class WidgetManager:
         self.dock_widgets.append(self.auratext_dock)
 
     def create_auratext_dock(self):
-        auratext_widget = AuraTextWindow()
-        dock = QDockWidget("AuraText", self.main_app)
-        dock.setWidget(auratext_widget)
-        self.main_app.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+        self.auratext_window = AuraTextWindow(settings=self.settings, download_manager=self.download_manager, model_manager=self.model_manager, diff_merger_widget=self.diff_merger_widget)
+        dock = QDockWidget("AuraText", self.main_window)
+        dock.setWidget(self.auratext_window)
+        self.main_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+        
+        # Add action to move AI Chat dock
+        move_ai_chat_action = QAction("Move AI Chat to/from AuraText", self.main_window)
+        move_ai_chat_action.triggered.connect(self.move_ai_chat_dock)
+        self.main_window.addAction(move_ai_chat_action)
+        
         return dock
+
+    def move_ai_chat_dock(self):
+        if self.ai_chat_dock.parent() == self.main_window:
+            # Move to AuraText window
+            self.main_window.removeDockWidget(self.ai_chat_dock)
+            self.auratext_window.layout.addWidget(self.ai_chat_widget)
+            self.ai_chat_widget.show()
+            self.auratext_window.toggle_ai_chat_button.hide()
+        else:
+            # Move back to main window
+            self.auratext_window.layout.removeWidget(self.ai_chat_widget)
+            self.ai_chat_dock.setWidget(self.ai_chat_widget)
+            self.main_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.ai_chat_dock)
+            self.auratext_window.toggle_ai_chat_button.show()
