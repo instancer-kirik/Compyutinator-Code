@@ -67,6 +67,7 @@ class ModelManager(QObject):
         self.download_manager = download_manager
         self.model = None
         self.current_model_name = None
+       
         self.models_dir = self.load_models_directory()
         os.makedirs(self.models_dir, exist_ok=True)
         self.connect_download_signals()

@@ -29,14 +29,13 @@ class DownloadThread(QThread):
                     if chunk:
                         size = f.write(chunk)
                         written += size
-                        if total_size > 0:
-                            self.progress.emit(written, total_size)
-                        else:
-                            self.progress.emit(written, written)  # Use written as total if total_size is unknown
+                        self.progress.emit(written, max(total_size, written))
 
             self.finished.emit()
         except Exception as e:
             self.error.emit(str(e))
+        finally:
+            logging.info(f"Download finished. Written: {written} bytes")
 
 class DownloadManager(QObject):
     download_preparing = pyqtSignal()

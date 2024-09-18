@@ -132,30 +132,10 @@ class AIChatWidget(QWidget):
         self.lsp_client = LSPClient()
         self.instructions = self.set_default_instructions()
         self.model_path = None
-        self.model_manager.download_manager.download_complete.connect(self.on_model_downloaded)
-        self.model_manager.model_loaded.connect(self.on_model_served)
-        self.model_manager.model_error.connect(self.on_model_error)
-        
+       
         self.current_model = None
         self.initUI()
         
-       
-        # Connect signals
-        self.model_manager.download_manager.download_preparing.connect(self.on_download_preparing)
-        self.model_manager.download_manager.download_progress.connect(self.on_download_progress)
-        
-        # Connect signals after initialization
-        self.model_dropdown.currentTextChanged.connect(self.on_model_changed)
-        self.model_manager.model_loaded.connect(self.on_model_loaded)
-        self.model_manager.model_unloaded.connect(self.on_model_unloaded)
-        self.model_manager.model_error.connect(self.on_model_error)
-        self.model_manager.models_list_updated.connect(self.update_model_dropdown)
-        self.model_manager.model_download_started.connect(self.on_download_started)
-        self.model_manager.model_download_progress.connect(self.on_download_progress)
-        self.model_manager.model_download_complete.connect(self.on_download_complete)
-        self.model_manager.model_download_error.connect(self.on_download_error)
-        self.model_manager.model_path_changed.connect(self.on_model_path_changed)
-
         self.connect_signals()
 
     def set_default_instructions(self):
@@ -308,9 +288,39 @@ class AIChatWidget(QWidget):
         self.serve_button.setEnabled(False)
         self.progress_bar.setVisible(False)
 
-    def on_download_progress(self, bytes_downloaded, total_bytes):
-        logging.info(f"AIChatWidget: Progress {bytes_downloaded}/{total_bytes} bytes")
-
+    def on_download_progress(self, download_id, bytes_downloaded, total_bytes):
+        if download_id in self.model_manager.active_downloads:
+            model_name = self.model_manager.active_downloads[download_id]
+            
+            # Use 3.7GB (3981927424 bytes) as the total size
+            expected_total = 3_981_927_424  # 3.7GB in bytes
+            
+            # Ensure bytes_downloaded is non-negative
+            bytes_downloaded = max(0, bytes_downloaded)
+            
+            # Use the larger of reported total_bytes and expected_total
+            total_bytes = max(total_bytes, expected_total)
+            
+            progress = min(100, int((bytes_downloaded / total_bytes) * 100))
+            downloaded_size = self.format_size(bytes_downloaded)
+            total_size = self.format_size(total_bytes)
+            
+            status_text = f"Downloading {model_name}: {progress}% ({downloaded_size} / {total_size})"
+            self.status_label.setText(status_text)
+            
+            # Detailed logging
+            logging.info(f"Download progress: ID={download_id}, "
+                         f"Bytes={bytes_downloaded}, "
+                         f"Total={total_bytes}, "
+                         f"Progress={progress}%")
+    def format_size(self, size_bytes):
+        if size_bytes < 0:
+            return "0 B"
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.2f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.2f} PB"
     def change_download_path(self):
         base_dir = QFileDialog.getExistingDirectory(self, "Select Base Directory for Models")
         if base_dir:
@@ -349,20 +359,20 @@ class AIChatWidget(QWidget):
                                      QMessageBox.StandardButton.No)
         
         if reply == QMessageBox.StandardButton.Yes:
-            try:
-                # Check if the URL is accessible
-                response = requests.head(url, timeout=10)
-                response.raise_for_status()
-                
-                download_id = self.model_manager.download_model(url, model_name)
-                self.status_label.setText(f"Download started for model: {model_name}")
-                logging.info(f"Download started for model: {model_name} from URL: {url}")
-            except RequestException as e:
-                error_message = f"Error accessing URL: {str(e)}"
-                logging.error(error_message)
-                QMessageBox.critical(self, "Download Error", error_message)
+            self.start_download(url, model_name, model_path)
         else:
             QMessageBox.information(self, "Download Cancelled", "Model download was cancelled.")
+
+    def start_download(self, url, model_name, model_path):
+        try:
+            download_id = self.download_manager.start_download(url, model_path)
+            self.model_manager.active_downloads[download_id] = model_name
+            self.status_label.setText(f"Download started for model: {model_name}")
+            logging.info(f"Download started for model: {model_name} from URL: {url}")
+        except Exception as e:
+            error_message = f"Error starting download: {str(e)}"
+            logging.error(error_message)
+            QMessageBox.critical(self, "Download Error", error_message)
 
     def serve_model(self):
         self.model_manager.serve_model()
@@ -560,11 +570,20 @@ class AIChatWidget(QWidget):
         pass
 
     def on_download_started(self, download_id):
-        self.status_label.setText(f"Download started: {download_id}")
+        if download_id in self.model_manager.active_downloads:
+            model_name = self.model_manager.active_downloads[download_id]
+            self.status_label.setText(f"Starting download for model: {model_name}")
+            logging.info(f"Download started for model: {model_name}")
 
     def on_download_complete(self, download_id):
-        self.status_label.setText("Model download complete")
-        QMessageBox.information(self, "Download Complete", "Model download is complete.")
+        if download_id in self.model_manager.active_downloads:
+            model_name = self.model_manager.active_downloads[download_id]
+            del self.model_manager.active_downloads[download_id]
+            self.status_label.setText(f"Download completed for model: {model_name}")
+            self.model_manager.update_models_list()
+            QMessageBox.information(self, "Download Complete", f"Model {model_name} has been successfully downloaded.")
+        else:
+            self.status_label.setText("Download completed?")
 
     def on_download_error(self, download_id, error_message):
         self.status_label.setText("Model download failed")
@@ -597,17 +616,26 @@ class AIChatWidget(QWidget):
         if model_path:
             self.status_label.setText("Loading model...")
             self.model_manager.load_model(model_path)
-
     def connect_signals(self):
         self.model_manager.model_loaded.connect(self.on_model_loaded)
         self.model_manager.model_error.connect(self.on_model_error)
+        
+        self.model_manager.download_manager.download_preparing.connect(self.on_download_preparing)
+        self.model_manager.download_manager.download_progress.connect(self.on_download_progress)
+        
+        
+        self.model_manager.model_unloaded.connect(self.on_model_unloaded)
         self.model_manager.models_list_updated.connect(self.update_model_dropdown)
         self.model_manager.model_download_started.connect(self.on_download_started)
-        self.model_manager.model_download_progress.connect(self.on_download_progress)
         self.model_manager.model_download_complete.connect(self.on_download_complete)
         self.model_manager.model_download_error.connect(self.on_download_error)
         self.model_manager.model_path_changed.connect(self.on_model_path_changed)
+        
+        self.model_dropdown.currentTextChanged.connect(self.on_model_changed)
 
     def on_model_path_changed(self, new_path):
         self.status_label.setText(f"Model path changed to: {new_path}")
+        self.model_path_label.setText(f"Current model path: {new_path}")  # Add this label to your UI
+        self.model_manager.update_models_list()  # Refresh the list of available models
         # You might want to update other UI elements here if necessary
+
