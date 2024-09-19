@@ -122,7 +122,7 @@ class AIChatWidget(QWidget):
         logging.info("Initializing AIChatWidget")
         self.settings = settings if settings else QSettings("instance.select", "Computinator Code")
         self.download_manager = download_manager if download_manager else DownloadManager()
-        self.model_manager = model_manager if model_manager else ModelManager(self.settings, self.download_manager)
+        self.model_manager = model_manager if model_manager else ModelManager(self.settings)
         self.context_manager = ContextManager()
         self.novelty_detector = NoveltyDetector()
         
@@ -169,17 +169,17 @@ class AIChatWidget(QWidget):
         layout = QVBoxLayout()
         self.setLayout(layout)
         
-        # Status label
-        self.status_label = QLabel("Initializing...")
+        self.status_label = QLabel("Model not loaded")
         layout.addWidget(self.status_label)
 
-        # Model selection dropdown
-        model_layout = QHBoxLayout()
-        model_label = QLabel("Select Model:")
-        self.model_dropdown = QComboBox()
-        model_layout.addWidget(model_label)
-        model_layout.addWidget(self.model_dropdown)
-        layout.addLayout(model_layout)
+        self.load_button = QPushButton("Load Model")
+        layout.addWidget(self.load_button)
+
+        self.progress_display = QTextEdit()
+        self.progress_display.setReadOnly(True)
+        self.progress_display.setFixedHeight(100)  # Adjust as needed
+        self.progress_display.setVisible(False)
+        layout.addWidget(self.progress_display)
         
         # Add References button and context display
         ref_layout = QHBoxLayout()
@@ -219,7 +219,7 @@ class AIChatWidget(QWidget):
         # Download Model section
         self.download_url_input = QLineEdit()
         self.download_url_input.setPlaceholderText("Enter model URL or leave blank for default")
-        self.model_section.add_widget(QLabel("Download hf-ggufModel:"))
+        self.model_section.add_widget(QLabel("Download Model:"))
         self.model_section.add_widget(self.download_url_input)
 
         self.download_model_button = QPushButton("Download Model")
@@ -243,15 +243,18 @@ class AIChatWidget(QWidget):
 
     def on_model_loaded(self, model_name):
         self.status_label.setText(f"Model loaded: {model_name}")
-        self.model_dropdown.setCurrentText(model_name)
+        self.load_button.setEnabled(True)
+        self.progress_display.setVisible(False)
+        self.context_manager.load_tokenizer(model_name)
 
     def on_model_unloaded(self):
         self.status_label.setText("No model loaded")
-        self.model_dropdown.setCurrentIndex(-1)
 
-    def on_model_error(self, error_message):
-        self.status_label.setText(f"Model error: {error_message}")
-        QMessageBox.critical(self, "Model Error", error_message)
+    def on_model_error(self, error):
+        self.status_label.setText(f"Model error: {error}")
+        QMessageBox.critical(self, "Model Error", error)
+        self.load_button.setEnabled(True)
+        self.progress_display.setVisible(False)
 
     def update_model_dropdown(self, models):
         self.model_dropdown.clear()
@@ -263,64 +266,27 @@ class AIChatWidget(QWidget):
             self.model_dropdown.addItem("No models available")
         logging.info(f"Updated model dropdown with models: {models}")
 
-    def load_selected_model(self):
-        selected_model = self.model_dropdown.currentText()
-        if selected_model:
-            self.status_label.setText(f"Loading model: {selected_model}")
-            self.model_manager.load_model(selected_model)
-        else:
-            self.status_label.setText("No model selected")
-            self.model_manager.unload_model()
+    def load_model(self):
+        repo_id = "Joseph717171/Llama-3.1-SuperNova-Lite-8.0B-OQ8_0.EF32.IQ4_K-Q8_0-GGUF"
+        filename = "Llama-3.1-SuperNova-Lite-8.0B-OF32.EF32.IQ4_K_M.gguf"
+        self.model_manager.load_model(repo_id, filename)
+        self.load_button.setEnabled(False)
+        self.progress_display.setVisible(True)
+        self.progress_display.clear()
 
-    def on_model_downloaded(self):
-        self.download_button.setText("Model Downloaded")
-        self.download_button.setEnabled(False)
-        self.progress_bar.setVisible(False)
+    def on_model_loading(self):
+        self.status_label.setText("Loading model...")
 
-    def on_model_served(self):
-        self.serve_button.setText("Model Served")
-        self.serve_button.setEnabled(False)
+    def on_download_progress(self, bytes_downloaded, total_bytes):
+        progress = int((bytes_downloaded / total_bytes) * 100)
+        file_size = total_bytes / (1024 * 1024 * 1024)  # Convert to GB
+        downloaded = bytes_downloaded / (1024 * 1024 * 1024)  # Convert to GB
+        
+        progress_text = f"\rLlama-3.1-SuperNova-Lite-8.0B-OF32.EF32.IQ4_K_M.gguf: {progress}%|{'█' * (progress // 2)}{' ' * (50 - (progress // 2))}| {downloaded:.2f}GB/{file_size:.2f}GB"
+        
+        self.progress_display.setPlainText(progress_text)
+        self.progress_display.moveCursor(Qt.TextCursor.MoveOperation.End)
 
-    def on_model_error(self, error):
-        SelectableMessageBox("AAAAAAAAA", error, self).exec()
-        self.download_button.setText("Download Model")
-        self.download_button.setEnabled(True)
-        self.serve_button.setEnabled(False)
-        self.progress_bar.setVisible(False)
-
-    def on_download_progress(self, download_id, bytes_downloaded, total_bytes):
-        if download_id in self.model_manager.active_downloads:
-            model_name = self.model_manager.active_downloads[download_id]
-            
-            # Use 3.7GB (3981927424 bytes) as the total size
-            expected_total = 3_981_927_424  # 3.7GB in bytes
-            
-            # Ensure bytes_downloaded is non-negative
-            bytes_downloaded = max(0, bytes_downloaded)
-            
-            # Use the larger of reported total_bytes and expected_total
-            total_bytes = max(total_bytes, expected_total)
-            
-            progress = min(100, int((bytes_downloaded / total_bytes) * 100))
-            downloaded_size = self.format_size(bytes_downloaded)
-            total_size = self.format_size(total_bytes)
-            
-            status_text = f"Downloading {model_name}: {progress}% ({downloaded_size} / {total_size})"
-            self.status_label.setText(status_text)
-            
-            # Detailed logging
-            logging.info(f"Download progress: ID={download_id}, "
-                         f"Bytes={bytes_downloaded}, "
-                         f"Total={total_bytes}, "
-                         f"Progress={progress}%")
-    def format_size(self, size_bytes):
-        if size_bytes < 0:
-            return "0 B"
-        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-            if size_bytes < 1024.0:
-                return f"{size_bytes:.2f} {unit}"
-            size_bytes /= 1024.0
-        return f"{size_bytes:.2f} PB"
     def change_download_path(self):
         base_dir = QFileDialog.getExistingDirectory(self, "Select Base Directory for Models")
         if base_dir:
@@ -374,31 +340,65 @@ class AIChatWidget(QWidget):
             logging.error(error_message)
             QMessageBox.critical(self, "Download Error", error_message)
 
-    def serve_model(self):
-        self.model_manager.serve_model()
+    def connect_signals(self):
+        self.load_button.clicked.connect(self.load_model)
+        self.send_button.clicked.connect(self.send_message)
+        self.model_manager.model_loading.connect(self.on_model_loading)
+        self.model_manager.model_loaded.connect(self.on_model_loaded)
+        self.model_manager.model_error.connect(self.on_model_error)
+        self.model_manager.model_download_progress.connect(self.on_download_progress)
+        self.model_manager.generation_finished.connect(self.on_generation_finished)
+        self.model_manager.generation_error.connect(self.on_generation_error)
+
+    def on_model_path_changed(self, new_path):
+        self.status_label.setText(f"Model path changed to: {new_path}")
+        self.model_manager.update_models_list()  # Refresh the list of available models
 
     def send_message(self):
-        message = self.user_input.toPlainText()
+        user_input = self.user_input.toPlainText()
+        if not user_input.strip():
+            return  # Don't send empty messages
+
+        self.chat_display.append(f"You: {user_input}")
         self.user_input.clear()
-        self.chat_display.append(f"You: {message}")
 
-        context = self.context_manager.get_most_relevant_context(message)
-        system_prompt = "You are a helpful AI assistant."
-        full_prompt = f"{system_prompt}\n\nInstructions:\n{self.instructions}\n\nContext:\n{context}\n\nHuman: {message}\nAI:"
+        if not self.model_manager.model:
+            self.chat_display.append("AI: Model not loaded. Please load a model first.")
+            return
 
-        self.model_manager.generate(full_prompt)
-        self.status_label.setText("Generating response...")
+        # Get relevant context
+        relevant_context = self.context_manager.get_most_relevant_context(user_input)
+        
+        # Prepare the full prompt with context
+        messages = [
+            {"role": "system", "content": f"Context:\n{relevant_context}"},
+            {"role": "user", "content": user_input}
+        ]
+
         self.send_button.setEnabled(False)
+        self.chat_display.append("AI is thinking...")
+        self.model_manager.generate(messages)
 
     def on_generation_finished(self, response):
-        self.display_response(response)
-        self.status_label.setText("Response generated")
+        self.chat_display.append(f"AI: {response}")
+        
+        # Detect novel parts in the response
+        novel_parts = self.novelty_detector.get_novel_parts(response)
+        
+        # Add novel parts to context
+        for part in novel_parts:
+            self.context_manager.add_context(part, "AI Response")
+
         self.send_button.setEnabled(True)
+        # Scroll to the bottom of the chat display
+        self.chat_display.verticalScrollBar().setValue(
+            self.chat_display.verticalScrollBar().maximum()
+        )
 
     def on_generation_error(self, error):
         self.chat_display.append(f"Error: {error}")
-        self.status_label.setText("Generation error")
         self.send_button.setEnabled(True)
+        logging.error(f"Generation error: {error}")
 
     def display_response(self, response):
         formatted_response = self.format_response_with_file_references(response)
@@ -589,53 +589,6 @@ class AIChatWidget(QWidget):
         self.status_label.setText("Model download failed")
         QMessageBox.critical(self, "Download Error", f"Model download failed: {error_message}")
 
-    def fetch_models(self):
-        self.model_fetch_thread = QThread()
-        self.model_fetch_worker = ModelFetchWorker(self.client)
-        self.model_fetch_worker.moveToThread(self.model_fetch_thread)
-        self.model_fetch_thread.started.connect(self.model_fetch_worker.run)
-        self.model_fetch_worker.finished.connect(self.update_model_dropdown)
-        self.model_fetch_worker.finished.connect(self.model_fetch_thread.quit)
-        self.model_fetch_worker.finished.connect(self.model_fetch_worker.deleteLater)
-        self.model_fetch_thread.finished.connect(self.model_fetch_thread.deleteLater)
-        self.model_fetch_thread.start()
-
     def log_message(self, message):
         logging.info(message)
-
-    def show_ollama_starting_dialog(self):
-        self.client.show_output_window()
-        self.show_ollama_output_button.setText("Hide Ollama Output")
-
-    def hide_ollama_starting_dialog(self):
-        self.client.hide_output_window()
-        self.show_ollama_output_button.setText("Show Ollama Output")
-
-    def load_model(self):
-        model_path, _ = QFileDialog.getOpenFileName(self, "Select Model File", "", "GGUF Files (*.gguf)")
-        if model_path:
-            self.status_label.setText("Loading model...")
-            self.model_manager.load_model(model_path)
-    def connect_signals(self):
-        self.model_manager.model_loaded.connect(self.on_model_loaded)
-        self.model_manager.model_error.connect(self.on_model_error)
-        
-        self.model_manager.download_manager.download_preparing.connect(self.on_download_preparing)
-        self.model_manager.download_manager.download_progress.connect(self.on_download_progress)
-        
-        
-        self.model_manager.model_unloaded.connect(self.on_model_unloaded)
-        self.model_manager.models_list_updated.connect(self.update_model_dropdown)
-        self.model_manager.model_download_started.connect(self.on_download_started)
-        self.model_manager.model_download_complete.connect(self.on_download_complete)
-        self.model_manager.model_download_error.connect(self.on_download_error)
-        self.model_manager.model_path_changed.connect(self.on_model_path_changed)
-        
-        self.model_dropdown.currentTextChanged.connect(self.on_model_changed)
-
-    def on_model_path_changed(self, new_path):
-        self.status_label.setText(f"Model path changed to: {new_path}")
-        self.model_path_label.setText(f"Current model path: {new_path}")  # Add this label to your UI
-        self.model_manager.update_models_list()  # Refresh the list of available models
-        # You might want to update other UI elements here if necessary
 

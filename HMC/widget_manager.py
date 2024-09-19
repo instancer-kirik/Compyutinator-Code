@@ -8,7 +8,7 @@ sys.path.append(auratext_dir)
 from PyQt6.QtWidgets import  QVBoxLayout, QDockWidget, QWidget, QSlider, QComboBox, QLabel, QTabWidget, QSizePolicy
 
 from PyQt6.QtGui import QAction
-from PyQt6.QtCore import Qt, QSettings, QByteArray
+from PyQt6.QtCore import Qt, QSettings, QByteArray, QTimer
 from NITTY_GRITTY.big_links import SymbolicLinkerWidget
 from GUX.file_explorer import FileExplorerWidget
 from GUX.code_editor import CodeEditorWidget
@@ -28,14 +28,15 @@ import serial.tools.list_ports
 from GUX.diff_merger import DiffMergerWidget
 from AuraText.auratext.Core.window import AuraTextWindow
 
-
+import logging
 class WidgetManager:
-    def __init__(self, main_window, db_manager, download_manager, settings, model_manager):
+    def __init__(self, main_window, db_manager, download_manager, settings, model_manager, theme_manager):
         self.main_window = main_window
         self.db_manager = db_manager
         self.download_manager = download_manager
         self.settings = settings
         self.model_manager = model_manager
+        self.theme_manager = theme_manager
         self.dock_widgets = []
         self.tab_widget = QTabWidget()
         self.overlay_dock = None
@@ -44,7 +45,7 @@ class WidgetManager:
         self.ai_chat_dock = None
         self.auratext_window = None
         self.create_widgets()
-        
+        logging.info("WA")
         self.add_auratext_dock()
 
     def add_dock_widget(self, widget, title, area):
@@ -104,7 +105,7 @@ class WidgetManager:
         self.terminal_dock = self.add_dock_widget(self.terminal_widget, "Terminal", Qt.DockWidgetArea.BottomDockWidgetArea)
 
     def add_theme_manager_dock(self):
-        self.theme_manager_widget = ThemeManagerWidget(self.main_window)
+        self.theme_manager_widget = ThemeManagerWidget(self.theme_manager)
         self.theme_manager_dock = self.add_dock_widget(self.theme_manager_widget, "Theme Manager", Qt.DockWidgetArea.RightDockWidgetArea)
 
     def add_html_viewer_dock(self):
@@ -210,9 +211,16 @@ class WidgetManager:
     def add_auratext_dock(self):
         self.auratext_dock = self.create_auratext_dock()
         self.dock_widgets.append(self.auratext_dock)
+        logging.info("AuraText dock added")
 
     def create_auratext_dock(self):
-        self.auratext_window = AuraTextWindow(settings=self.settings, download_manager=self.download_manager, model_manager=self.model_manager, diff_merger_widget=self.diff_merger_widget)
+        self.auratext_window = AuraTextWindow(
+            settings=self.settings, 
+            download_manager=self.download_manager, 
+            model_manager=self.model_manager, 
+            diff_merger_widget=self.diff_merger_widget,
+            theme_manager=self.theme_manager
+        )
         dock = QDockWidget("AuraText", self.main_window)
         dock.setWidget(self.auratext_window)
         self.main_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
@@ -237,3 +245,10 @@ class WidgetManager:
             self.ai_chat_dock.setWidget(self.ai_chat_widget)
             self.main_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.ai_chat_dock)
             self.auratext_window.toggle_ai_chat_button.show()
+
+    def apply_theme_to_all_widgets(self):
+        logging.info("Applying theme to all widgets")
+        for dock in self.dock_widgets:
+            if hasattr(dock.widget(), 'apply_theme'):
+                dock.widget().apply_theme()
+        logging.info("Theme applied to all widgets")

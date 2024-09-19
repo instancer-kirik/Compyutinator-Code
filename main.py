@@ -18,6 +18,7 @@ from GUX.overlay import CompositeOverlay, Flashlight
 from GUX.log_viewer_widget import LogViewerWidget
 from NITTY_GRITTY.database import DatabaseManager, setup_local_database
 from GUX.ai_chat import AIChatWidget
+from HMC.theme_manager import ThemeManager
 
 log_directory = os.path.join(os.getcwd(), 'logs')
 if not os.path.exists(log_directory):
@@ -67,13 +68,21 @@ class MainApplication(QMainWindow):
         self.settings = QSettings("instance.select", "Computinator Code")
         
         from HMC.ai_model_manager import ModelManager
-        self.model_manager = ModelManager(self.settings, self.download_manager)
+        self.model_manager = ModelManager(self.settings)
+        
+        # Initialize ThemeManager
+        self.theme_manager = ThemeManager(self.settings)
+        self.theme_manager.theme_changed.connect(self.on_theme_changed)
         
         # Pass DatabaseManager, DownloadManager, and settings to WidgetManager
-        self.widget_manager = WidgetManager(self, self.db_manager, self.download_manager, self.settings, self.model_manager)
+        self.widget_manager = WidgetManager(self, self.db_manager, self.download_manager, self.settings, self.model_manager, self.theme_manager)
+        self.auratext_window = self.widget_manager.auratext_window  # Make sure this attribute exists
         
         self.initUI()
         self.load_settings()
+
+        # Apply theme once after all widgets are created
+        self.theme_manager.apply_theme(self)
 
     def get_settings(self):
         return self.settings
@@ -120,7 +129,8 @@ class MainApplication(QMainWindow):
                     break
 
     def update_tab_color(self, index):
-        tab_color = self.widget_manager.theme_manager_widget.current_theme["tab_colors"].get(index, self.widget_manager.theme_manager_widget.current_theme["last_focused_tab_color"])
+        tab_color = self.theme_manager.current_theme.get("tab_colors", {}).get(index, 
+                    self.theme_manager.current_theme.get("last_focused_tab_color", "#81A1C1"))
         self.apply_tab_color(tab_color, index)
 
     def apply_tab_color(self, color, index):
@@ -130,7 +140,7 @@ class MainApplication(QMainWindow):
         }}
         """
         self.tab_widget.setStyleSheet(stylesheet)
-        self.widget_manager.theme_manager_widget.current_theme["last_focused_tab_color"] = color
+        self.theme_manager.current_theme["last_focused_tab_color"] = color
 
     def create_menu_bar(self):
         menubar = self.menuBar()
@@ -189,61 +199,24 @@ class MainApplication(QMainWindow):
 
     def save_settings(self):
         self.save_layout()
-
-    def apply_theme(self, theme):
-        merged_theme = merge_themes(default_theme, theme)
-        stylesheet = f"""
-        QMainWindow {{
-            background-color: {theme["main_window_color"]};
-            color: {theme["text_color"]};
-        }}
-        QTreeView {{
-            background-color: {theme["window_color"]};
-            alternate-background-color: {theme["header_color"]};
-            color: {theme["text_color"]};
-            selection-background-color: {theme["theme_color"]};
-            selection-color: {theme["text_color"]};
-        }}
-        QTreeView::item:hover {{
-            background-color: {theme["theme_color"]};
-        }}
-        QTreeView::item:selected {{
-            background-color: {theme["theme_color"]};
-        }}
-        QHeaderView::section {{
-            background-color: {theme["header_color"]};
-            color: {theme["text_color"]};
-        }}
-        QScrollBar:vertical {{
-            background: {theme["scrollbar_color"]};
-            width: 15px;
-        }}
-        QScrollBar::handle:vertical {{
-            background: {theme["scrollbar_foreground_color"]};
-        }}
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-            background: {theme["scrollbar_color"]};
-        }}
-        QScrollBar:horizontal {{
-            background: {theme["scrollbar_color"]};
-            height: 15px;
-        }}
-        QScrollBar::handle:horizontal {{
-            background: {theme["scrollbar_foreground_color"]};
-        }}
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
-            background: {theme["scrollbar_color"]};
-        }}
-        QHeaderView::section {{
-            background-color: {theme["header_color"]};
-            color: {theme["text_color"]};
-        }}
-        """
-        self.setStyleSheet(stylesheet)
-        self.widget_manager.theme_manager_widget.current_theme = merged_theme
+    
+    def on_theme_changed(self, theme):
+        # Apply the new theme to all widgets
+        self.theme_manager.apply_theme(self)
+        
+        # Update tab colors
+        default_tab_color = theme.get("last_focused_tab_color", "#81A1C1")
+        tab_colors = theme.get("tab_colors", {})
+        
         for index in range(self.tab_widget.count()):
-            tab_color = theme["tab_colors"].get(index, theme["last_focused_tab_color"])
+            tab_color = tab_colors.get(str(index), default_tab_color)
             self.apply_tab_color(tab_color, index)
+        
+        # You might need to update other widgets or elements that are not automatically styled
+
+        # This method should update the AuraTextWindow when the theme changes
+        if hasattr(self, 'auratext_window'):
+            self.auratext_window.apply_theme(theme)
 
     def set_serial_port(self, port):
         self.serial_port = port

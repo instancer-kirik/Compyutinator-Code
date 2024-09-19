@@ -6,7 +6,8 @@ from NITTY_GRITTY.text_workers import LineComparisonWorker
 from PyQt6.QtGui import QSyntaxHighlighter, QTextCharFormat, QBrush, QColor, QMouseEvent, QFont, QPainter, QTextCursor, QTextFormat
 import os
 import sys
-
+import logging
+import time
 class PythonHighlighter(QSyntaxHighlighter):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -101,15 +102,15 @@ class CodeEditorWidget(QWidget):
         cursor.insertText(text)
 
     def add_tab(self, title, content=""):
-        new_tab = QTextEdit()
-        new_tab.setPlainText(content)
-        new_tab.textChanged.connect(lambda: self.prompt_file_name(new_tab))
+        new_tab = CompEditor()  # Use CompEditor instead of QTextEdit
+        new_tab.text_edit.setPlainText(content)
+        new_tab.text_edit.textChanged.connect(lambda: self.prompt_file_name(new_tab))
         new_tab.setProperty("file_path", None)
         self.tab_widget.addTab(new_tab, title)
 
     def close_tab(self, index):
         editor = self.tab_widget.widget(index)
-        if editor.document().isModified():
+        if editor.text_edit.document().isModified():
             reply = QMessageBox.question(self, 'Save Changes', "The document has been modified. Do you want to save your changes?",
                                          QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
             if reply == QMessageBox.StandardButton.Yes:
@@ -120,33 +121,30 @@ class CodeEditorWidget(QWidget):
 
     def check_for_unsaved_changes(self):
         current_editor = self.tab_widget.currentWidget()
-        if current_editor and current_editor.document().isModified():
+        if current_editor and current_editor.text_edit.document().isModified():
             self.save_file(current_editor)
 
-    def save_file(self, editor=None):
-        if not editor:
-            editor = self.tab_widget.currentWidget()
-
+    def save_file(self, editor):
         file_path = editor.property("file_path")
         if not file_path:
             file_path, _ = QFileDialog.getSaveFileName(self, "Save File")
             if not file_path:
                 return
             editor.setProperty("file_path", file_path)
-
-        with open(file_path, 'w') as file:
-            file.write(editor.toPlainText())
-        editor.document().setModified(False)
+        
+        with open(file_path, 'w') as f:
+            f.write(editor.text_edit.toPlainText())
+        editor.text_edit.document().setModified(False)
         self.tab_widget.setTabText(self.tab_widget.indexOf(editor), os.path.basename(file_path))
 
     def auto_save(self):
         for i in range(self.tab_widget.count()):
             editor = self.tab_widget.widget(i)
-            if editor.document().isModified():
+            if editor.text_edit.document().isModified():
                 self.save_file(editor)
 
     def prompt_file_name(self, editor):
-        if not editor.property("file_path") and editor.toPlainText():
+        if not editor.property("file_path") and editor.text_edit.toPlainText():
             file_path, _ = QFileDialog.getSaveFileName(self, "Save File As")
             if file_path:
                 editor.setProperty("file_path", file_path)
@@ -237,6 +235,9 @@ class CompEditor(QWidget):
         # Initialize start and end lines for highlighting
         self.start_line = 0
         self.end_line = 0
+
+        self.last_update_time = 0
+        self.update_interval = 100  # milliseconds
 
     def update_file_outline(self):
         text = self.text_edit.toPlainText()
@@ -356,10 +357,17 @@ class CompEditor(QWidget):
         self.text_edit.setViewportMargins(self.line_number_area_width(), 0, 0, 0)
 
     def update_line_number_area(self, rect, dy):
+        current_time = time.time() * 1000  # Convert to milliseconds
+        if current_time - self.last_update_time < self.update_interval:
+            return
+        
+        self.last_update_time = current_time
+
         if dy:
             self.line_number_area.scroll(0, dy)
         else:
             self.line_number_area.update(0, rect.y(), self.line_number_area.width(), rect.height())
+
         if rect.contains(self.text_edit.viewport().rect()):
             self.update_line_number_area_width(0)
 
