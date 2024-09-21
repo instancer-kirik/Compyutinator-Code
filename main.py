@@ -4,10 +4,11 @@ import logging
 from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget, QListWidget, QVBoxLayout, QWidget, QLabel, QPushButton
 from PyQt6.QtGui import QAction, QDesktopServices
 from PyQt6.QtWidgets import QMenu
-from PyQt6.QtCore import QSettings, QByteArray, QUrl
-
-
+from PyQt6.QtCore import QSettings, QByteArray, QUrl, QTimer, Qt
+from GUX.splash_screen import TransparentSplashScreen
+import subprocess
 # Create AuraText directory if it doesn't exist
+
 auratext_dir = os.path.join(os.path.dirname(__file__), 'AuraText')
 if not os.path.exists(auratext_dir):
     os.makedirs(auratext_dir)
@@ -19,9 +20,12 @@ from GUX.log_viewer_widget import LogViewerWidget
 from NITTY_GRITTY.database import DatabaseManager, setup_local_database
 from GUX.ai_chat import AIChatWidget
 from HMC.theme_manager import ThemeManager
-
+from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtGui import QPalette, QColor
 log_directory = os.path.join(os.getcwd(), 'logs')
 if not os.path.exists(log_directory):
+
+
     os.makedirs(log_directory)
 
 log_file_path = os.path.join(log_directory, 'app.log')
@@ -53,39 +57,23 @@ def merge_themes(default_theme, custom_theme):
 class MainApplication(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.settings = QSettings("instance.select", "Computinator Code")
+        self.set_dark_background()
+        # Minimal setup in __init__
+        self.theme_manager = ThemeManager(self.settings)
+        self.setStyleSheet(f"background-color: {self.theme_manager.current_theme['main_window_color']};")
         self.setWindowTitle('Computinator Code')
         self.setGeometry(300, 100, 800, 600)
-        self.child_processes = {}
-        self.history = []
-        self.max_history_length = 10
-        self.last_focused_widget = None
-        self.flashlight = Flashlight(size=200)
-        self.overlay = CompositeOverlay(flashlight_size=200, flashlight_power=0.069, serial_port=None)
-        self.overlay.show()
-        
-        self.db_manager = DatabaseManager('local')
-        self.download_manager = DownloadManager()
-        self.settings = QSettings("instance.select", "Computinator Code")
-        
-        from HMC.ai_model_manager import ModelManager
-        self.model_manager = ModelManager(self.settings)
-        
-        # Initialize ThemeManager
-        self.theme_manager = ThemeManager(self.settings)
-        self.theme_manager.theme_changed.connect(self.on_theme_changed)
-        
-        # Pass DatabaseManager, DownloadManager, and settings to WidgetManager
-        self.widget_manager = WidgetManager(self, self.db_manager, self.download_manager, self.settings, self.model_manager, self.theme_manager)
-        self.auratext_window = self.widget_manager.auratext_window  # Make sure this attribute exists
-        
-        self.initUI()
-        self.load_settings()
 
-        # Apply theme once after all widgets are created
-        self.theme_manager.apply_theme(self)
+        
 
     def get_settings(self):
         return self.settings
+    def set_dark_background(self):
+        dark_palette = QPalette()
+        dark_palette.setColor(QPalette.ColorRole.Window, QColor(46, 52, 64))  # Nord theme dark color
+        dark_palette.setColor(QPalette.ColorRole.WindowText, QColor(236, 239, 244))  # Nord theme light color
+        self.setPalette(dark_palette)
 
     def initUI(self):
         self.tab_widget = QTabWidget()
@@ -249,9 +237,58 @@ class MainApplication(QMainWindow):
     
     def get_log_file_path(self):
         return os.path.join(os.getcwd(), 'logs', 'app.log')
+
+    def initialize(self):
+        # Initialize non-GUI components
+        self.theme_manager = ThemeManager(self.settings)
+        self.db_manager = DatabaseManager('local')
+        self.download_manager = DownloadManager()
+        from HMC.ai_model_manager import ModelManager
+        self.model_manager = ModelManager(self.settings)
+
+        # Initialize GUI components
+        self.theme_manager.theme_changed.connect(self.on_theme_changed)
+        self.setStyleSheet(f"background-color: {self.theme_manager.current_theme['main_window_color']};")
+        self.setWindowTitle('Computinator Code')
+        self.setGeometry(300, 100, 800, 600)
+
+        self.child_processes = {}
+        self.history = []
+        self.max_history_length = 10
+        self.last_focused_widget = None
+        self.flashlight = Flashlight(size=200)
+        self.overlay = CompositeOverlay(flashlight_size=200, flashlight_power=0.069, serial_port=None)
+        self.overlay.show()
+
+        self.widget_manager = WidgetManager(self, self.db_manager, self.download_manager, self.settings, self.model_manager, self.theme_manager)
+        self.auratext_window = self.widget_manager.auratext_window
+        self.initUI()
+        self.load_settings()
+        self.theme_manager.apply_theme(self)
 if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    main_app = MainApplication()
-    QApplication.instance().focusChanged.connect(main_app.focus_changed_event)
-    main_app.show()
-    sys.exit(app.exec())
+    def main():
+        # Start the splash screen process
+        splash_process = subprocess.Popen([sys.executable, 'GUX/splash_process.py'])
+        
+        app = QApplication(sys.argv)
+
+        
+        # Create the main application instance
+        main_app = MainApplication()
+
+        # Function to initialize the application
+        def initialize_app():
+            main_app.initialize()
+            main_app.show()
+            
+            # Terminate the splash screen process
+            splash_process.terminate()
+
+            QApplication.instance().focusChanged.connect(main_app.focus_changed_event)
+
+        # Start the initialization process
+        QTimer.singleShot(0, initialize_app)
+
+        sys.exit(app.exec())
+
+    main()

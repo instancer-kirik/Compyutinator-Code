@@ -4,7 +4,7 @@ import logging
 from PyQt6.QtCore import QObject, pyqtSignal, QThread
 from GUX.status_dialog import StatusDialog
 from HMC.download_manager import DownloadManager
-from NITTY_GRITTY.ollama_client import OllamaClient
+from SPARE_PARTS.ollama_client import OllamaClient
 from HMC.thread_controller import ProcessController
 import time
 import psutil

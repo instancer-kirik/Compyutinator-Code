@@ -7,12 +7,12 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QMessageBox,
                              QTextEdit, QLineEdit, QInputDialog, QFileDialog, 
                              QDialog, QScrollArea, QComboBox, QProgressBar, QApplication)
 from PyQt6.QtCore import QThread, pyqtSignal, QObject
-from NITTY_GRITTY.ollama_client import OllamaClient, OllamaOutputWindow
+from SPARE_PARTS.ollama_client import OllamaClient, OllamaOutputWindow
 from HMC.context_manager import ContextManager, NoveltyDetector
 from GUX.context_picker_dialog import ContextPickerDialog
 from GUX.diff_merger import DiffMergerWidget
 from NITTY_GRITTY.LSPClient import LSPClient
-from NITTY_GRITTY.aModel import AModel
+from SPARE_PARTS.aModel import AModel
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QFrame
 from GUX.status_dialog import StatusDialog
 from PyQt6.QtCore import Qt

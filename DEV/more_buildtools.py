@@ -51,7 +51,7 @@ def generate_file_structure(start_path, ignore_dirs=None, ignore_files=None, sor
 
     return structure
 
-def tokenize_for_ai(structure):
+def tokenize_for_ai(structure):#naive, not for the chat, yet? only one ref, down below
     tokens = []
     for item in structure:
         path_parts = item["path"].strip().split('/')

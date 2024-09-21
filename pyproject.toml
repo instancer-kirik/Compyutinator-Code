@@ -1,0 +1,47 @@
+[tool.poetry]
+name = "biglinks"
+version = "0.1.0"
+description = "computinator-code-toolbox-and-ide"
+authors = ["instancer-kirik <106033356+instancer-kirik@users.noreply.github.com>"]
+license = "GPL-3"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.10,<4.0"
+jinja2 = "^3.1.4"
+markupsafe = "^2.1.5"
+qt-material = "^2.14"
+requests = "^2.32.3"
+numpy = "^2.1.1"
+openai = "^1.46.0"
+psutil = "^6.0.0"
+pyaudio = "^0.2.14"
+pyautogui = "^0.9.54"
+pyogg = "^0.6.14a1"
+pyttsx3 = "^2.97"
+sqlalchemy = "^2.0.35"
+tiktoken = "^0.7.0"
+transformers = "^4.44.2"
+vosk = "^0.3.45"
+lupa = "^2.2"
+humanize = "^4.10.0"
+gitpython = "^3.1.43"
+llama-cpp-python = "^0.2.90"
+autopep8 = "^2.3.1"
+python-dotenv = "^1.0.1"
+pywin32 = {version = "^306", platform = "win32"}
+art = "^6.2"
+keyboard = "^0.13.5"
+pyqt6 = "^6.7.1"
+pyqtconsole = "^1.2.3"
+pyjokes = "^0.8.3"
+pyte = "^0.8.2"
+scikit-learn = "^1.5.2"
+sounddevice = "^0.5.0"
+pyserial = "^3.5"
+pywinpty = {version = "^2.0.13", platform = "win32"}
+ptyprocess = "^0.7.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -103,7 +103,19 @@ class ThemeManager(QObject):
             "editor_theme": "#2E3440",
             "editor_fg": "#D8DEE9",
             "font": "Courier",
-            # Add other default theme settings here
+            "main_window_color": "#2E3440",  # Add this line
+            "window_color": "#3B4252",
+            "header_color": "#4C566A",
+            "theme_color": "#81A1C1",
+            "scrollbar_color": "#4C566A",
+            "scrollbar_foreground_color": "#D8DEE9",
+            "text_color": "#ECEFF4",
+            "tab_colors": {
+                "0": "#81A1C1",
+                "1": "#88C0D0",
+                "2": "#5E81AC",
+            },
+            "last_focused_tab_color": "#81A1C1"
         }
 
     def apply_theme(self, widget):
