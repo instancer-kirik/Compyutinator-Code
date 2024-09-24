@@ -1,0 +1,18 @@
+{
+    "window_title": "Computinator Code",
+    "window_geometry": [100, 100, 800, 600],
+    "max_history_length": 10,
+    
+    "default_docks": [
+        "File Explorer",
+        "Code Editor",
+        "Terminal",
+        "AI Chat"
+    ],
+    "layout": {
+        "left": ["File Explorer", "Symbolic Linker"],
+        "right": ["AuraText, Code Editor", "Sticky Notes"],
+        "bottom": ["Terminal", "Process Manager"]
+    }
+      
+}

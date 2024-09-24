@@ -77,14 +77,14 @@ class ThemeManagerWidget(QWidget):
 class ThemeManager(QObject):
     theme_changed = pyqtSignal(dict)
 
-    def __init__(self, settings):
+    def __init__(self, cccore):
         super().__init__()
-        self.settings = settings
+        self.settings_manager = cccore.settings_manager
         self.current_theme = self.load_theme()
         self.is_applying_theme = False
 
     def load_theme(self):
-        theme = self.settings.value("theme", defaultValue={})
+        theme = self.settings_manager.get_value("theme", default={})
         default_theme = self.get_default_theme()
         # Merge the loaded theme with default theme to ensure all keys exist
         for key, value in default_theme.items():
@@ -94,8 +94,9 @@ class ThemeManager(QObject):
                 theme.setdefault(key, value)
         return theme
 
-    def save_theme(self):
-        self.settings.setValue("theme", self.current_theme)
+    def save_theme(self, theme):
+        self.settings_manager.set_value("theme", theme)
+        self.current_theme = theme
 
     def get_default_theme(self):
         return {
@@ -150,7 +151,7 @@ class ThemeManager(QObject):
 
     def update_theme(self, new_theme):
         self.current_theme.update(new_theme)
-        self.save_theme()
+        self.save_theme(self.current_theme)
         self.apply_theme()
 
     def get_available_themes(self):
@@ -161,10 +162,10 @@ class ThemeManager(QObject):
 
     def set_tab_color(self, index, color):
         self.current_theme["tab_colors"][index] = color
-        self.save_theme()
+        self.save_theme(self.current_theme)
         self.theme_changed.emit(self.current_theme)
 
     def set_last_focused_tab_color(self, color):
         self.current_theme["last_focused_tab_color"] = color
-        self.save_theme()
+        self.save_theme(self.current_theme)
         self.theme_changed.emit(self.current_theme)

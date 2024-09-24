@@ -43,8 +43,9 @@ class DownloadManager(QObject):
     download_complete = pyqtSignal(str)  # id
     download_error = pyqtSignal(str, str)  # id, error_message
 
-    def __init__(self):
+    def __init__(self, cccore=None):
         super().__init__()
+        self.cccore = cccore
         self.downloads = {}
         self.threads = []  # Keep track of active threads
 

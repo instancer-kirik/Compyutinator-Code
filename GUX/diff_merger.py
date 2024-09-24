@@ -7,7 +7,7 @@ from PyQt6.QtGui import QTextCharFormat, QSyntaxHighlighter, QColor, QKeySequenc
 from PyQt6.QtCore import Qt, QRegularExpression, QEvent, QSize, QRect, pyqtSignal
 import re
 from GUX.code_editor import CompEditor
-
+import logging
 class DiffHighlighter(QSyntaxHighlighter):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -31,7 +31,8 @@ class DiffMergerWidget(QWidget):
         self.diff_data = {}
         self.current_diff_index = -1
         self.current_line_index = 0
-        
+        self.diff_layout = QVBoxLayout()
+        self.setLayout(self.diff_layout)
         self.initUI()
         
         # Set initial content
@@ -371,7 +372,10 @@ class DiffMergerWidget(QWidget):
         """Clear the layout and reset the diff data."""
         for i in reversed(range(self.diff_layout.count())):
             widget_to_remove = self.diff_layout.itemAt(i).widget()
-            self.diff_layout.removeWidget(widget_to_remove)
+            logging.info(f"Removing widget: {widget_to_remove}")
+            if widget_to_remove is not None and widget_to_remove in self.diff_layout.children():
+                self.diff_layout.removeWidget(widget_to_remove)
+                widget_to_remove.deleteLater()
             
         self.diff_data.clear()
 

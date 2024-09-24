@@ -1,6 +1,8 @@
 from PyQt6.QtWidgets import QWidget, QDockWidget, QVBoxLayout, QListWidget, QListWidgetItem, QPushButton
 from PyQt6.QtCore import Qt
 from GUX.sticky_note import StickyNoteWidget
+import logging
+
 class StickyNoteManager(QDockWidget):
     def __init__(self, parent=None):
         super().__init__("Sticky Notes", parent)
@@ -24,9 +26,9 @@ class StickyNoteManager(QDockWidget):
 
         self.setWidget(self.container)
 
-    def add_sticky_note(self):
+    def add_sticky_note(self, content=""):
         note_id = self.sticky_note_list.count() + 1
-        note_widget = StickyNoteWidget(note_id, parent=self)
+        note_widget = StickyNoteWidget(note_id, note_content=content, parent=self)
         item = QListWidgetItem(f"Sticky Note {note_id}")
         item.setData(Qt.ItemDataRole.UserRole, note_widget)
         self.sticky_note_list.addItem(item)
@@ -38,14 +40,20 @@ class StickyNoteManager(QDockWidget):
 
     def set_current_note_widget(self, note_widget):
         if self.current_note_widget is not None:
+            logging.debug(f"Removing current note widget: {self.current_note_widget}")
             self.layout.removeWidget(self.current_note_widget)
             self.current_note_widget.hide()
 
         self.current_note_widget = note_widget
-        self.layout.insertWidget(1, self.current_note_widget)
-        self.current_note_widget.show()
+        if self.current_note_widget is not None:
+            logging.debug(f"Setting new current note widget: {self.current_note_widget}")
+            self.layout.insertWidget(1, self.current_note_widget)
+            self.current_note_widget.show()
 
     def remove_sticky_note_widget(self, note_widget):
+        if note_widget is not None and self.layout.count() > 1:
+            logging.debug(f"Removing note widget: {note_widget}")
+            self.layout.removeWidget(note_widget)
+            note_widget.hide()
         self.sticky_note_list.clear()
         self.current_note_widget = None
-        note_widget.hide()

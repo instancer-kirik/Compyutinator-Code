@@ -6,7 +6,7 @@ auratext_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'AuraTex
 sys.path.append(auratext_dir)
 
 from PyQt6.QtWidgets import  QVBoxLayout, QDockWidget, QWidget, QSlider, QComboBox, QLabel, QTabWidget, QSizePolicy
-
+import json
 from PyQt6.QtGui import QAction
 from PyQt6.QtCore import Qt, QSettings, QByteArray, QTimer
 from NITTY_GRITTY.big_links import SymbolicLinkerWidget
@@ -17,7 +17,7 @@ from GUX.action_pad import ActionPadWidget
 from GUX.terminal_widget import TerminalWidget
 from HMC.theme_manager import ThemeManagerWidget
 from GUX.html_viewer import HTMLViewerWidget
-from GUX.ai_chat import AIChatWidget
+# from GUX.ai_chat import AIChatWidget
 from GUX.media_player import MediaPlayer
 from GUX.diff_merger import DiffMergerWidget
 from HMC.sticky_note_manager import StickyNoteManager
@@ -29,71 +29,165 @@ from GUX.diff_merger import DiffMergerWidget
 from AuraText.auratext.Core.window import AuraTextWindow
 
 import logging
+import traceback
+
+
 class WidgetManager:
-    def __init__(self, main_window, db_manager, download_manager, settings, model_manager, theme_manager):
-        self.main_window = main_window
-        self.db_manager = db_manager
-        self.download_manager = download_manager
-        self.settings = settings
-        self.model_manager = model_manager
-        self.theme_manager = theme_manager
-        self.dock_widgets = []
+    def __init__(self, cccore, overlay):
+        self.cccore = cccore
+        self.overlay = overlay
+        self.main_window = None
+        self.auratext_window = None
+        self.auratext_dock = None
+        self.dock_widgets = {}
+        self.all_dock_widgets = {}  # This will store all dock widgets, including those not in config
+        self.db_manager = cccore.db_manager
+        self.download_manager = self.cccore.download_manager
+        self.settings = cccore.settings_manager.settings
+        self.model_manager = cccore.model_manager
+        self.theme_manager = cccore.theme_manager
         self.tab_widget = QTabWidget()
-        self.overlay_dock = None
+       
         self.serial_port_picker = None
         self.ai_chat_widget = None
-        self.ai_chat_dock = None
-        self.auratext_window = None
-        self.create_widgets()
-        logging.info("WA")
-        self.add_auratext_dock()
+        
+        self.sticky_note_manager = None
+        self.symbolic_linker_widget = None
+        
+        self.dock_map = {
+            "Symbolic Linker": self.add_symbolic_linker_dock,
+            "File Explorer": self.add_file_explorer_dock,
+            "Code Editor": self.add_code_editor_dock,
+            "Process Manager": self.add_process_manager_dock,
+            "Action Pad": self.add_action_pad_dock,
+            "Terminal": self.add_terminal_dock,
+            "Theme Manager": self.add_theme_manager_dock,
+            "HTML Viewer": self.add_html_viewer_dock,
+            "AI Chat": self.add_ai_chat_dock,
+            "Media Player": self.add_media_player_dock,
+            "Download Manager": self.add_download_manager_dock,
+            "Sticky Notes": self.add_sticky_notes_dock,
+            "Overlay": self.add_overlay_dock,
+            "Diff Merger": self.add_diff_merger_dock,
+            "AuraText": self.create_auratext_dock
+        }
+        self.workspace_manager = cccore.workspace_manager
+        self.startup_docks = ['File Explorer', 'Code Editor', 'Terminal', 'AI Chat', 'AuraText']
+        self.startup_config = {
+            'layout': {
+                'left': ['File Explorer', 'Symbolic Linker','Sticky Notes'],
+                'right': [ 'AuraText'],
+                'bottom': ['Terminal', 'Process Manager']
+            }
+        }
+        self.load_startup_config()
+        self.create_auratext_dock()  # Call this in the init method
+
+    def load_startup_config(self):
+        config_path = os.path.join(os.path.dirname(__file__), '..', 'config.json')
+        with open(config_path, 'r') as f:
+            self.startup_config = json.load(f)
+
+    def create_startup_docks(self):
+        logging.info("Creating startup docks")
+        for dock_name in self.startup_docks:
+            logging.info(f"Creating dock: {dock_name}")
+            dock = self.get_or_create_dock(dock_name)
+            if dock:
+                logging.info(f"Dock '{dock_name}' created successfully")
+            else:
+                logging.warning(f"Failed to create dock: {dock_name}")
+        logging.info("Finished create_startup_docks method")
+
+    def apply_layout(self):
+        logging.info("Applying layout")
+        for area, dock_names in self.startup_config['layout'].items():
+            for dock_name in dock_names:
+                dock = self.get_or_create_dock(dock_name)
+                if dock:
+                    logging.info(f"Adding {dock_name} to {area} area")
+                    if area == 'left':
+                        self.main_window.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
+                    elif area == 'right':
+                        self.main_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+                    elif area == 'bottom':
+                        self.main_window.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
+                else:
+                    logging.warning(f"Failed to create or retrieve dock: {dock_name}")
+        logging.info("Layout applied")
+
+    def set_main_window_and_create_docks(self, main_window):
+        logging.info("Starting set_main_window_and_create_docks method")
+        self.main_window = main_window
+        logging.info("Main window set")
+        
+        try:
+            logging.info("Creating startup docks")
+            self.create_startup_docks()
+            logging.info("Startup docks created successfully")
+        except Exception as e:
+            logging.error(f"Error creating startup docks: {str(e)}")
+            logging.error(traceback.format_exc())
+        
+        try:
+            logging.info("Applying layout")
+            self.apply_layout()
+            logging.info("Layout applied successfully")
+        except Exception as e:
+            logging.error(f"Error applying layout: {str(e)}")
+            logging.error(traceback.format_exc())
+        
+        self.create_auratext_dock()  # Ensure AuraText dock is created
+        
+        logging.info("set_main_window_and_create_docks method completed")
 
     def add_dock_widget(self, widget, title, area):
-        dock_widget = QDockWidget(title, self.main_window)
-        dock_widget.setObjectName(f"{title.replace(' ', '')}DockWidget")
+        dock = QDockWidget(title, self.main_window)
+        dock.setObjectName(f"{title.replace(' ', '')}DockWidget")
         widget.setMinimumWidth(300)
-        dock_widget.setWidget(widget)
-        self.main_window.addDockWidget(area, dock_widget)
-        self.dock_widgets.append(dock_widget)
+        dock.setWidget(widget)
+        self.main_window.addDockWidget(area, dock)
+        self.dock_widgets[title] = dock
+        self.all_dock_widgets[title] = dock  # Add to all_dock_widgets
         
         widget.installEventFilter(self.main_window)
         if len(self.dock_widgets) > 1:
-            self.main_window.tabifyDockWidget(self.dock_widgets[-2], dock_widget)
+            self.main_window.tabifyDockWidget(list(self.dock_widgets.values())[-2], dock)
 
-        return dock_widget
+        return dock
 
-    def create_widgets(self):
-        self.add_symbolic_linker_dock()
-        self.add_file_explorer_dock()
-        self.add_code_editor_dock()
-        self.add_process_manager_dock()
-        self.add_action_pad_dock()
-        self.add_terminal_dock()
-        self.add_theme_manager_dock()
-        self.add_html_viewer_dock()
-        self.add_ai_chat_dock()
-        self.add_media_player_dock()
-        self.add_download_manager_dock()
-        self.add_sticky_note_manager_dock()
-        self.add_overlay_dock()
-        self.add_brightness_dock()
-        self.add_diff_merger_dock()
-        #self.add_transcriptor_live_dock()
     def add_symbolic_linker_dock(self):
-        self.symbolic_linker_widget = SymbolicLinkerWidget()
-        self.symbolic_linker_dock = self.add_dock_widget(self.symbolic_linker_widget, "BigLinks", Qt.DockWidgetArea.LeftDockWidgetArea)
+        if self.symbolic_linker_widget is None:
+            self.symbolic_linker_widget = SymbolicLinkerWidget()
+            self.symbolic_linker_dock = self.add_dock_widget(self.symbolic_linker_widget, "BigLinks", Qt.DockWidgetArea.LeftDockWidgetArea)
+        return self.symbolic_linker_dock
 
     def add_file_explorer_dock(self):
-        self.file_explorer_widget = FileExplorerWidget(self.main_window)
-        self.file_explorer_dock = self.add_dock_widget(self.file_explorer_widget, "File Explorer", Qt.DockWidgetArea.LeftDockWidgetArea)
+        try:
+            self.file_explorer_widget = FileExplorerWidget(self.main_window)
+            self.file_explorer_dock = self.add_dock_widget(self.file_explorer_widget, "File Explorer", Qt.DockWidgetArea.LeftDockWidgetArea)
+            return self.file_explorer_dock
+        except Exception as e:
+            logging.error(f"Error creating File Explorer dock: {str(e)}")
+            return None
 
     def add_code_editor_dock(self):
-        self.code_editor_widget = CodeEditorWidget()
-        self.code_editor_dock = self.add_dock_widget(self.code_editor_widget, "Code Editor", Qt.DockWidgetArea.RightDockWidgetArea)
+        try:
+            self.code_editor_widget = CodeEditorWidget()
+            self.code_editor_dock = self.add_dock_widget(self.code_editor_widget, "Code Editor", Qt.DockWidgetArea.RightDockWidgetArea)
+            return self.code_editor_dock
+        except Exception as e:
+            logging.error(f"Error creating Code Editor dock: {str(e)}")
+            return None
 
     def add_process_manager_dock(self):
-        self.process_manager_widget = ProcessManagerWidget(self.main_window)
-        self.process_manager_dock = self.add_dock_widget(self.process_manager_widget, "Process Manager", Qt.DockWidgetArea.BottomDockWidgetArea)
+        try:
+            self.process_manager_widget = ProcessManagerWidget(self.main_window)
+            self.process_manager_dock = self.add_dock_widget(self.process_manager_widget, "Process Manager", Qt.DockWidgetArea.BottomDockWidgetArea)
+            return self.process_manager_dock
+        except Exception as e:
+            logging.error(f"Error creating Process Manager dock: {str(e)}")
+            return None
 
     def add_action_pad_dock(self):
         # Pass the db_manager to ActionPadWidget
@@ -101,8 +195,13 @@ class WidgetManager:
         self.action_pad_dock = self.add_dock_widget(self.action_pad_widget, "Action Pad", Qt.DockWidgetArea.BottomDockWidgetArea)
         
     def add_terminal_dock(self):
-        self.terminal_widget = TerminalWidget()
-        self.terminal_dock = self.add_dock_widget(self.terminal_widget, "Terminal", Qt.DockWidgetArea.BottomDockWidgetArea)
+        try:
+            self.terminal_widget = TerminalWidget()
+            self.terminal_dock = self.add_dock_widget(self.terminal_widget, "Terminal", Qt.DockWidgetArea.BottomDockWidgetArea)
+            return self.terminal_dock
+        except Exception as e:
+            logging.error(f"Error creating Terminal dock: {str(e)}")
+            return None
 
     def add_theme_manager_dock(self):
         self.theme_manager_widget = ThemeManagerWidget(self.theme_manager)
@@ -113,11 +212,23 @@ class WidgetManager:
         self.html_viewer_dock = self.add_dock_widget(self.html_viewer_widget, "HTML Viewer", Qt.DockWidgetArea.RightDockWidgetArea)
 
     def add_ai_chat_dock(self):
-        self.ai_chat_widget = AIChatWidget(settings=self.settings, model_manager=self.model_manager, download_manager=self.download_manager)
-        self.ai_chat_dock = QDockWidget("AI Chat", self.main_window)
-        self.ai_chat_dock.setWidget(self.ai_chat_widget)
-        self.main_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.ai_chat_dock)
-        self.dock_widgets.append(self.ai_chat_dock)
+        try:
+            box = QVBoxLayout()
+            label = QLabel("Disabled, debugging")
+            box.addWidget(label)
+            self.ai_chat_widget = QWidget()
+            self.ai_chat_widget.setLayout(box)
+            # self.ai_chat_widget = AIChatWidget(
+            #     parent=self.main_window,
+            #     model_manager=self.model_manager,
+            #     download_manager=self.download_manager,
+            #     settings_manager=self.cccore.settings_manager
+            # )
+            self.ai_chat_dock = self.add_dock_widget(self.ai_chat_widget, "AI Chat", Qt.DockWidgetArea.RightDockWidgetArea)
+            return self.ai_chat_dock
+        except Exception as e:
+            logging.error(f"Error creating AI Chat dock: {str(e)}")
+            return None
 
     def add_media_player_dock(self):
         self.media_player_widget = MediaPlayer()
@@ -131,32 +242,29 @@ class WidgetManager:
         self.download_manager_ui = DownloadManagerUI(self.download_manager)
         self.download_manager_dock = self.add_dock_widget(self.download_manager_ui, "Download Manager", Qt.DockWidgetArea.RightDockWidgetArea)
 
-    def add_sticky_note_manager_dock(self):
-        self.sticky_note_manager = StickyNoteManager()
-        self.sticky_note_manager_dock = self.add_dock_widget(self.sticky_note_manager, "Sticky Notes", Qt.DockWidgetArea.RightDockWidgetArea)
-   
-    
+    def add_sticky_notes_dock(self):
+        if self.sticky_note_manager is None:
+            self.sticky_note_manager = StickyNoteManager(self.main_window)
+            self.main_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.sticky_note_manager)
+        return self.sticky_note_manager
+
     def add_brightness_dock(self):
         self.brightness_dock = QDockWidget("Brightness Control", self.main_window)
         self.brightness_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
         slider = QSlider(Qt.Orientation.Horizontal)
         slider.setMinimum(0)
         slider.setMaximum(100)
-        slider.setValue(int(self.main_window.flashlight.power * 100))
-        slider.valueChanged.connect(lambda value: self.main_window.flashlight.set_power(value / 100.0))
+        slider.setValue(int(self.overlay.flashlight_overlay.power * 100))
+        slider.valueChanged.connect(lambda value: self.overlay.flashlight_overlay.set_power(value / 100.0))
         self.brightness_dock.setWidget(slider)
         self.main_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.brightness_dock)
-        self.dock_widgets.append(self.brightness_dock)
+        self.all_dock_widgets["Brightness Control"] = self.brightness_dock
 
-    
-   
     def add_diff_merger_dock(self):
         self.diff_merger_widget = DiffMergerWidget()
         self.diff_merger_widget.setMinimumSize(600, 300)
-       
-
         self.diff_merger_dock = self.add_dock_widget(self.diff_merger_widget, "Diff Merger", Qt.DockWidgetArea.RightDockWidgetArea)
-        self.dock_widgets.append(self.diff_merger_dock)
+
     def add_overlay_dock(self):
         self.overlay_dock = QDockWidget("Overlay Settings", self.main_window)
         self.overlay_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
@@ -168,7 +276,7 @@ class WidgetManager:
         slider = QSlider(Qt.Orientation.Horizontal)
         slider.setMinimum(0)
         slider.setMaximum(100)
-        slider.setValue(int(self.main_window.overlay.flashlight_overlay.power * 100))
+        slider.setValue(int(self.overlay.flashlight_overlay.power * 100))
         slider.valueChanged.connect(self.update_flashlight_settings)
         layout.addWidget(slider)
 
@@ -182,14 +290,15 @@ class WidgetManager:
         widget.setLayout(layout)
         self.overlay_dock.setWidget(widget)
 
-        self.dock_widgets.append(self.overlay_dock)
+        self.all_dock_widgets["Overlay Settings"] = self.overlay_dock
 
     def update_flashlight_settings(self, value):
         power = value / 100.0
-        self.main_window.overlay.flashlight_overlay.set_power(power)
+        self.overlay.flashlight_overlay.set_power(power)
         if power > 0.42:
             new_size = int(200 * (power / 0.42))
-            self.main_window.overlay.flashlight_overlay.set_size(new_size)
+            self.overlay.flashlight_overlay.set_size(new_size)
+
     def update_serial_ports(self):
         ports = serial.tools.list_ports.comports()
         self.serial_port_picker.clear()
@@ -208,47 +317,83 @@ class WidgetManager:
     def update_flashlight_power(self, value):
         self.flashlight.set_power(value / 100)
 
-    def add_auratext_dock(self):
-        self.auratext_dock = self.create_auratext_dock()
-        self.dock_widgets.append(self.auratext_dock)
-        logging.info("AuraText dock added")
-
     def create_auratext_dock(self):
-        self.auratext_window = AuraTextWindow(
-            settings=self.settings, 
-            download_manager=self.download_manager, 
-            model_manager=self.model_manager, 
-            diff_merger_widget=self.diff_merger_widget,
-            theme_manager=self.theme_manager
-        )
-        dock = QDockWidget("AuraText", self.main_window)
-        dock.setWidget(self.auratext_window)
-        self.main_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
-        
-        # Add action to move AI Chat dock
-        move_ai_chat_action = QAction("Move AI Chat to/from AuraText", self.main_window)
-        move_ai_chat_action.triggered.connect(self.move_ai_chat_dock)
-        self.main_window.addAction(move_ai_chat_action)
-        
-        return dock
+        logging.info("Starting create_auratext_dock method")
+        if 'AuraText' not in self.all_dock_widgets:
+            logging.info("Creating AuraText dock")
+            from AuraText.auratext.Core.window import AuraTextWindow
+            self.auratext_window = AuraTextWindow(self.cccore)
+            self.auratext_dock = QDockWidget("AuraText", self.main_window)
+            self.auratext_dock.setWidget(self.auratext_window)
+            self.auratext_dock.setObjectName("AuraTextDock")
+            self.all_dock_widgets['AuraText'] = self.auratext_dock
+            logging.info("AuraText dock created")
+        return self.all_dock_widgets['AuraText']
 
     def move_ai_chat_dock(self):
+        logging.info("Starting move_ai_chat_dock method")
         if self.ai_chat_dock.parent() == self.main_window:
-            # Move to AuraText window
+            logging.info("Moving AI chat dock to AuraText window")
             self.main_window.removeDockWidget(self.ai_chat_dock)
-            self.auratext_window.layout.addWidget(self.ai_chat_widget)
-            self.ai_chat_widget.show()
-            self.auratext_window.toggle_ai_chat_button.hide()
+            if self.auratext_window and hasattr(self.auratext_window, 'layout'):
+                self.auratext_window.layout.addWidget(self.ai_chat_widget)
+                self.ai_chat_widget.show()
+                if hasattr(self.auratext_window, 'toggle_ai_chat_button'):
+                    self.auratext_window.toggle_ai_chat_button.hide()
+            else:
+                logging.error("AuraText window or its layout is not properly initialized")
         else:
-            # Move back to main window
-            self.auratext_window.layout.removeWidget(self.ai_chat_widget)
-            self.ai_chat_dock.setWidget(self.ai_chat_widget)
-            self.main_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.ai_chat_dock)
-            self.auratext_window.toggle_ai_chat_button.show()
+            logging.info("Moving AI chat dock back to main window")
+            if self.ai_chat_widget is not None:
+                if self.auratext_window and hasattr(self.auratext_window, 'layout'):
+                    self.auratext_window.layout.removeWidget(self.ai_chat_widget)
+                self.ai_chat_dock.setWidget(self.ai_chat_widget)
+                self.main_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.ai_chat_dock)
+                if hasattr(self.auratext_window, 'toggle_ai_chat_button'):
+                    self.auratext_window.toggle_ai_chat_button.show()
+            else:
+                logging.error("AI chat widget is None")
 
     def apply_theme_to_all_widgets(self):
         logging.info("Applying theme to all widgets")
-        for dock in self.dock_widgets:
+        for dock in self.all_dock_widgets.values():
             if hasattr(dock.widget(), 'apply_theme'):
                 dock.widget().apply_theme()
         logging.info("Theme applied to all widgets")
+
+    def get_or_create_dock(self, dock_name):
+        logging.info(f"Getting or creating dock: {dock_name}")
+        if dock_name not in self.all_dock_widgets:
+            if dock_name in self.dock_map:
+                try:
+                    create_method = self.dock_map[dock_name]
+                    dock = create_method()
+                    if dock is None:
+                        logging.warning(f"Creation method for '{dock_name}' returned None")
+                        return None
+                    self.all_dock_widgets[dock_name] = dock
+                    logging.info(f"Dock '{dock_name}' created successfully")
+                except Exception as e:
+                    logging.error(f"Error creating dock '{dock_name}': {str(e)}")
+                    logging.error(traceback.format_exc())
+                    return None
+            else:
+                logging.error(f"No method found to create dock: {dock_name}")
+                return None
+        return self.all_dock_widgets.get(dock_name)
+
+    def apply_workspace(self, workspace_name):
+        self.workspace_manager.load_workspace_layout(workspace_name)
+
+    def get_all_dock_widgets(self):
+        return self.all_dock_widgets
+
+    def save_current_workspace(self):
+        active_workspace = self.workspace_manager.get_active_workspace()
+        if active_workspace:
+            self.workspace_manager.save_workspace_layout(active_workspace.name)
+
+    def get_all_dock_widgets(self):
+        return self.all_dock_widgets
+  
+  

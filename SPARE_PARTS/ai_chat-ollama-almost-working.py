@@ -11,7 +11,7 @@ from SPARE_PARTS.ollama_client import OllamaClient, OllamaOutputWindow
 from HMC.context_manager import ContextManager, NoveltyDetector
 from GUX.context_picker_dialog import ContextPickerDialog
 from GUX.diff_merger import DiffMergerWidget
-from NITTY_GRITTY.LSPClient import LSPClient
+from HMC.LSP_manager import LSPClient
 from SPARE_PARTS.aModel import AModel
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QFrame
 from GUX.status_dialog import StatusDialog
@@ -71,7 +71,9 @@ class ChatReferenceWidget(QWidget):
 
     def remove_reference(self, reference):
         self.references.remove(reference)
-        self.scroll_layout.removeWidget(reference)
+        logging.info(f"AAAAARemoving reference: {reference}")
+        if reference is not None and reference in self.scroll_layout.children():
+            self.scroll_layout.removeWidget(reference)
         reference.deleteLater()
 
 class ReferenceItem(QWidget):

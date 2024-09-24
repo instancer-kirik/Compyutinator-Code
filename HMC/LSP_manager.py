@@ -1,12 +1,13 @@
 import json
-import subprocess
+
 from PyQt6.QtCore import QObject, pyqtSignal, QProcess
 
-class LSPClient(QObject):
+class LSPManager(QObject):
     completionsReceived = pyqtSignal(list)
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, cccore, parent=None):
+        super().__init__(parent)
+        self.cccore = cccore
         self.process = QProcess()
         self.process.readyReadStandardOutput.connect(self.handle_stdout)
         self.process.start("anakinls")

@@ -7,11 +7,11 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QMessageBox,
                              QTextEdit, QLineEdit, QInputDialog, QFileDialog, 
                              QDialog, QScrollArea, QComboBox, QProgressBar, QApplication)
 from PyQt6.QtCore import QThread, pyqtSignal, QObject
-from SPARE_PARTS.ollama_client import OllamaClient, OllamaOutputWindow
+
 from HMC.context_manager import ContextManager, NoveltyDetector
 from GUX.context_picker_dialog import ContextPickerDialog
 from GUX.diff_merger import DiffMergerWidget
-from NITTY_GRITTY.LSPClient import LSPClient
+from HMC.LSP_manager import LSPManager
 from SPARE_PARTS.aModel import AModel
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QFrame
 from GUX.status_dialog import StatusDialog
@@ -29,7 +29,7 @@ from PyQt6.QtCore import QSettings
 from HMC.download_manager import DownloadManager
 from requests.exceptions import RequestException
 import requests
-
+    
 class CollapsibleSection(QWidget):
     def __init__(self, title, parent=None):
         super().__init__(parent)
@@ -62,6 +62,7 @@ class CollapsibleSection(QWidget):
         self.content_layout.addWidget(widget)
 
 
+
 class ChatReferenceWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -83,7 +84,10 @@ class ChatReferenceWidget(QWidget):
 
     def remove_reference(self, reference):
         self.references.remove(reference)
-        self.scroll_layout.removeWidget(reference)
+        logging.info(f"Removing reference: {reference}")
+        if reference is not None and reference in self.scroll_layout.children():
+            logging.debug(f"Removing reference widget: {reference}")
+            self.scroll_layout.removeWidget(reference)
         reference.deleteLater()
 
 class ReferenceItem(QWidget):
@@ -105,31 +109,21 @@ class ReferenceItem(QWidget):
     def remove(self):
         self.parent.remove_reference(self)
 
-class ModelFetchWorker(QObject):
-    finished = pyqtSignal(list)
-
-    def __init__(self, client):
-        super().__init__()
-        self.client = client
-
-    def run(self):
-        models = self.client.get_installed_models()
-        self.finished.emit(models)
-
 class AIChatWidget(QWidget):
-    def __init__(self, parent=None, settings=None, model_manager=None, download_manager=None):
+    def __init__(self, parent=None, model_manager=None, download_manager=None, settings_manager=None):
         super().__init__(parent)
         logging.info("Initializing AIChatWidget")
-        self.settings = settings if settings else QSettings("instance.select", "Computinator Code")
-        self.download_manager = download_manager if download_manager else DownloadManager()
+        self.settings = settings_manager.settings if settings_manager else QSettings("NEWCOMPANY", "OTHERAPPLICATION")
+        self.download_manager = download_manager if download_manager else DownloadManager(self.settings)
         self.model_manager = model_manager if model_manager else ModelManager(self.settings)
+        self.settings_manager = settings_manager
         self.context_manager = ContextManager()
         self.novelty_detector = NoveltyDetector()
         
         self.current_file_path = None
         self.current_file_content = None
         self.recent_files = []  # Initialize this with your recent files list
-        self.lsp_client = LSPClient()
+      
         self.instructions = self.set_default_instructions()
         self.model_path = None
        
@@ -137,7 +131,7 @@ class AIChatWidget(QWidget):
         self.initUI()
         
         self.connect_signals()
-
+        logging.info("AIChatWidget initialized")
     def set_default_instructions(self):
         return """
         Please follow these instructions in your response:

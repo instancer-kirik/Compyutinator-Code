@@ -34,7 +34,7 @@ class TransparentSplashScreen(QSplashScreen):
         self.movie = QMovie(gif_path)
         self.movie.setScaledSize(QSize(400, 400))  # Adjust size as needed
         self.movie.frameChanged.connect(self.update_frame)
-        self.movie.start()
+        QTimer.singleShot(0, self.movie.start)  # Start the movie in the next event loop iteration
         logging.info("Splash screen initialized")
 
     def update_frame(self):
