@@ -64,7 +64,7 @@ class WorkerThread(QThread):
             self.finalize_operation.emit(f"Operation failed: {e}", False)
 
 class SymbolicLinkerWidget(QWidget):
-    def __init__(self):
+    def __init__(self, cccore):
         super().__init__()
         self.source_path = None
         self.target_path = None

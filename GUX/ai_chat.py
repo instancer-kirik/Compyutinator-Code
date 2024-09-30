@@ -29,7 +29,7 @@ from PyQt6.QtCore import QSettings
 from HMC.download_manager import DownloadManager
 from requests.exceptions import RequestException
 import requests
-    
+import traceback
 class CollapsibleSection(QWidget):
     def __init__(self, title, parent=None):
         super().__init__(parent)
@@ -110,15 +110,44 @@ class ReferenceItem(QWidget):
         self.parent.remove_reference(self)
 
 class AIChatWidget(QWidget):
-    def __init__(self, parent=None, model_manager=None, download_manager=None, settings_manager=None):
+    def __init__(self, parent=None, context_manager=None, editor_manager=None, model_manager=None, download_manager=None, settings_manager=None):
         super().__init__(parent)
         logging.info("Initializing AIChatWidget")
-        self.settings = settings_manager.settings if settings_manager else QSettings("NEWCOMPANY", "OTHERAPPLICATION")
-        self.download_manager = download_manager if download_manager else DownloadManager(self.settings)
-        self.model_manager = model_manager if model_manager else ModelManager(self.settings)
-        self.settings_manager = settings_manager
-        self.context_manager = ContextManager()
-        self.novelty_detector = NoveltyDetector()
+        
+        try:
+            logging.info(f"Parent: {parent}")
+            logging.info(f"Context manager: {context_manager}")
+            logging.info(f"Editor manager: {editor_manager}")
+            logging.info(f"Model manager: {model_manager}")
+            logging.info(f"Download manager: {download_manager}")
+            logging.info(f"Settings manager: {settings_manager}")
+          
+            self.settings = settings_manager.settings if settings_manager else QSettings("NEWCOMPANY", "OTHERAPPLICATION")
+            self.download_manager = download_manager if download_manager else DownloadManager(self.settings)
+            self.model_manager = model_manager if model_manager else ModelManager(self.settings)
+            self.editor_manager = editor_manager    
+            self.settings_manager = settings_manager
+            self.context_manager = context_manager if context_manager else ContextManager()
+            
+            
+            logging.info("Creating NoveltyDetector")
+            self.novelty_detector = NoveltyDetector()
+            
+            logging.info("Creating ChatReferenceWidget")
+            self.chat_reference_widget = ChatReferenceWidget()
+         
+            self.current_model = None
+            logging.info("Initializing UI")
+            self.initUI()
+            
+            logging.info("Connecting signals")
+            self.connect_signals()
+            
+            logging.info("AIChatWidget initialized successfully")
+        except Exception as e:
+            logging.error(f"Error initializing AIChatWidget: {str(e)}")
+            logging.error(traceback.format_exc())
+            raise
         
         self.current_file_path = None
         self.current_file_content = None
@@ -127,11 +156,6 @@ class AIChatWidget(QWidget):
         self.instructions = self.set_default_instructions()
         self.model_path = None
        
-        self.current_model = None
-        self.initUI()
-        
-        self.connect_signals()
-        logging.info("AIChatWidget initialized")
     def set_default_instructions(self):
         return """
         Please follow these instructions in your response:
@@ -160,6 +184,7 @@ class AIChatWidget(QWidget):
         self.instructions = instructions
 
     def initUI(self):
+        logging.info("Initializing UI")
         layout = QVBoxLayout()
         self.setLayout(layout)
         
@@ -222,7 +247,7 @@ class AIChatWidget(QWidget):
 
         # Set default model URL hint
         self.set_default_model_url_hint()
-
+        logging.info("UI initialized successfully")
     def set_default_model_url_hint(self):
         default_model_name = "Llama-3.1-SuperNova-Lite-8.0B-OF32.EF32.IQ6_K.gguf"
         default_model_url = f"https://huggingface.co/Joseph717171/Llama-3.1-SuperNova-Lite-8.0B-OQ8_0.EF32.IQ4_K-Q8_0-GGUF/resolve/main/{default_model_name}"
@@ -485,7 +510,7 @@ class AIChatWidget(QWidget):
         return '\n'.join(lines)
 
     def add_references(self):
-        dialog = ContextPickerDialog(self, recent_files=self.recent_files, open_files=self.parent().get_open_files(), existing_contexts=[desc for desc, _ in self.context_manager.contexts])
+        dialog = ContextPickerDialog(self, recent_files=self.recent_files, open_files=self.editor_manager.get_open_files(), existing_contexts=[desc for desc, _ in self.context_manager.contexts])
         if dialog.exec():
             selected_items = dialog.get_selected_items()
             for item in selected_items:

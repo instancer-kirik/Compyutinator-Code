@@ -7,6 +7,7 @@ from PyQt6.QtGui import QTextCharFormat, QSyntaxHighlighter, QColor, QKeySequenc
 from PyQt6.QtCore import Qt, QRegularExpression, QEvent, QSize, QRect, pyqtSignal
 import re
 from GUX.code_editor import CompEditor
+from AuraText.auratext.Core.CodeEditor import CodeEditor
 import logging
 class DiffHighlighter(QSyntaxHighlighter):
     def __init__(self, parent=None):
@@ -25,8 +26,9 @@ class DiffHighlighter(QSyntaxHighlighter):
 class DiffMergerWidget(QWidget):
     key_symbols = ['def', 'class', 'import']
 
-    def __init__(self, original_text="", suggested_text=""):
+    def __init__(self, mm, original_text="", suggested_text=""):
         super().__init__()
+        self.mm = mm
         self.isFullScreen = True
         self.diff_data = {}
         self.current_diff_index = -1
@@ -45,9 +47,9 @@ class DiffMergerWidget(QWidget):
         main_layout.setSpacing(10)
 
         # Initialize text editors
-        self.x_box = CompEditor()
-        self.y_box = CompEditor()
-        self.result_box = CompEditor()
+        self.x_box = CodeEditor(self.mm)
+        self.y_box = CodeEditor(self.mm)
+        self.result_box = CodeEditor(self.mm)
 
         # Add these lines to set a minimum width for the text editors
         self.x_box.setMinimumWidth(400)
@@ -337,7 +339,7 @@ class DiffMergerWidget(QWidget):
         # If there's a newline, remove everything from the last newline to the end
         if last_newline_index != -1:
             new_text = text[:last_newline_index]
-            self.result_box.text_edit.setPlainText(new_text)
+            self.result_box.text_edit.setText(new_text)
 
     def add_block(self, key):
         block = self.new_blocks.get(key) or self.original_blocks.get(key)

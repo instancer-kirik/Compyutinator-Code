@@ -65,15 +65,25 @@ class MenuManager:
 
     def create_tools_menu(self):
         tools_menu = QMenu("&Tools", self.main_window)
-        tools_menu.addAction("Plugin Manager", self.action_handlers.show_plugin_manager)
-        tools_menu.addAction("Settings", self.action_handlers.show_settings)
-        tools_menu.addAction("Theme Manager", self.action_handlers.show_theme_manager)
-        tools_menu.addAction("Workspace Manager", self.action_handlers.show_workspace_manager)
-        tools_menu.addAction("Model Manager", self.action_handlers.show_model_manager)
-        tools_menu.addAction("Download Manager", self.action_handlers.show_download_manager)
-        tools_menu.addAction("Load Layout", self.action_handlers.load_layout)
+        actions = [
+            ("Plugin Manager", self.action_handlers.show_plugin_manager),
+            ("Settings", self.action_handlers.show_settings),
+            ("Theme Manager", self.action_handlers.show_theme_manager),
+            ("Workspace Manager", self.action_handlers.show_workspace_manager),
+            ("Model Manager", self.action_handlers.show_model_manager),
+            ("Download Manager", self.action_handlers.show_download_manager),
+            ("Load Layout", self.action_handlers.load_layout)
+        ]
+        
+        for action_name, handler in actions:
+            action = tools_menu.addAction(action_name)
+            if callable(handler):
+                action.triggered.connect(handler)
+                logging.debug(f"Connected {action_name} to {handler.__name__}")
+            else:
+                logging.error(f"Handler for {action_name} is not callable")
+        
         return tools_menu
-
     def create_vault_menu(self):
         vault_menu = QMenu("&Vault", self.main_window)
         vault_menu.addAction("Add Vault Directory", self.action_handlers.add_vault_directory)

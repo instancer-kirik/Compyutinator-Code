@@ -7,7 +7,6 @@ from PyQt6.QtGui import QTextCharFormat, QSyntaxHighlighter, QColor, QKeySequenc
 from PyQt6.QtCore import Qt, QRegularExpression, QEvent, QSize, QRect, pyqtSignal
 import re
 from GUX.code_editor import CompEditor
-
 class DiffMergerWidget(QWidget):
     key_symbols = ['def', 'class', 'import']
 
@@ -60,9 +59,9 @@ class DiffMergerWidget(QWidget):
         top_layout.addWidget(self.create_text_input_area("X", self.x_box))
         top_layout.addWidget(self.create_text_input_area("Y", self.y_box))
 
-        self.x_box.highlighter = PythonHighlighter(self.x_box.text_edit.document())
-        self.y_box.highlighter = PythonHighlighter(self.y_box.text_edit.document())
-        self.result_box.highlighter = PythonHighlighter(self.result_box.text_edit.document())
+        # self.x_box.highlighter = PythonHighlighter(self.x_box.text_edit.document())
+        # self.y_box.highlighter = PythonHighlighter(self.y_box.text_edit.document())
+        # self.result_box.highlighter = PythonHighlighter(self.result_box.text_edit.document())
 
         button_layout = QVBoxLayout()
         button_layout.setSpacing(10)
@@ -634,7 +633,7 @@ class DiffMergerWidget(QWidget):
             cursor.select(QTextCursor.SelectionType.LineUnderCursor)
             selection = QTextEdit.ExtraSelection()
             selection.format.setBackground(color)
-            selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
+          # selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
             selection.cursor = cursor
             editor.setExtraSelections([selection])
             

@@ -1,3 +1,7 @@
+import logging
+import os
+from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
+
 class ActionHandlers:
     def __init__(self, cccore):
         self.cccore = cccore
@@ -6,40 +10,79 @@ class ActionHandlers:
         self.cccore.editor_manager.new_document()
 
     def open_file(self):
-        self.cccore.file_manager.open_file()
+        file_path, _ = QFileDialog.getOpenFileName(self.cccore.main_window, "Open File")
+        if file_path:
+            self.cccore.editor_manager.open_file(file_path)
+
+    def open_file(self, path, file_path=None):
+        path = file_path if file_path else path#refactored lol
+        if hasattr(self.cccore, 'file_manager') and self.cccore.file_manager:
+            self.cccore.file_manager.open_file(path)
+        else:
+            logging.error("File manager not properly initialized")
+   
 
     def save_file(self):
-        self.cccore.file_manager.save_file()
+        current_editor = self.cccore.editor_manager.current_editor
+        if current_editor:
+            if current_editor.file_path:
+                current_editor.save_file()
+            else:
+                self.save_file_as()
 
     def save_file_as(self):
-        self.cccore.file_manager.save_file_as()
+        current_editor = self.cccore.editor_manager.current_editor
+        if current_editor:
+            file_path, _ = QFileDialog.getSaveFileName(self.cccore.main_window, "Save File As")
+            if file_path:
+                current_editor.save_file(file_path)
 
     def close_file(self):
-        self.cccore.editor_manager.close_tab(self.cccore.auratext_window.tab_widget.currentIndex())
+        self.cccore.editor_manager.close_current_tab()
 
     def close_all_files(self):
         while self.cccore.auratext_window.tab_widget.count() > 0:
             self.cccore.editor_manager.close_tab(0)
 
+    def cut(self):
+        current_editor = self.cccore.editor_manager.current_editor
+        if current_editor:
+            current_editor.cut()
+
     def cut_document(self):
-        if self.cccore.editor_manager.current_editor:
-            self.cccore.editor_manager.current_editor.cut()
+        current_editor = self.cccore.editor_manager.current_editor
+        if current_editor:
+            current_editor.cut()
+
+    def copy(self):
+        current_editor = self.cccore.editor_manager.current_editor
+        if current_editor:
+            current_editor.copy()
 
     def copy_document(self):
-        if self.cccore.editor_manager.current_editor:
-            self.cccore.editor_manager.current_editor.copy()
+        current_editor = self.cccore.editor_manager.current_editor
+        if current_editor:
+            current_editor.copy()
+
+    def paste(self):
+        current_editor = self.cccore.editor_manager.current_editor
+        if current_editor:
+            current_editor.paste()
 
     def paste_document(self):
-        if self.cccore.editor_manager.current_editor:
-            self.cccore.editor_manager.current_editor.paste()
+        current_editor = self.cccore.editor_manager.current_editor
+        if current_editor:
+            current_editor.paste()
 
     def undo(self):
-        if self.cccore.editor_manager.current_editor:
-            self.cccore.editor_manager.current_editor.undo()
+        current_editor = self.cccore.editor_manager.current_editor
+        if current_editor:
+            current_editor.undo()
 
     def redo(self):
-        if self.cccore.editor_manager.current_editor:
-            self.cccore.editor_manager.current_editor.redo()
+        current_editor = self.cccore.editor_manager.current_editor
+        if current_editor:
+            current_editor.redo()
 
     def duplicate_line(self):
         self.cccore.editor_manager.duplicate_line()
@@ -60,92 +103,168 @@ class ActionHandlers:
         self.cccore.git_manager.push()
 
     def show_plugin_manager(self):
-        # Implement show plugin manager functionality
-        pass
+        if "Plugin Manager" in self.cccore.widget_manager.all_dock_widgets:
+            dock = self.cccore.widget_manager.all_dock_widgets["Plugin Manager"]
+            dock.show()
+            dock.raise_()
+        else:
+            logging.warning("Plugin Manager dock not found")
 
     def show_settings(self):
-        # Implement show settings functionality
-        pass
+        if "Settings" in self.cccore.widget_manager.all_dock_widgets:
+            dock = self.cccore.widget_manager.all_dock_widgets["Settings"]
+            dock.show()
+            dock.raise_()
+        else:
+            logging.warning("Settings dock not found")
 
     def show_theme_manager(self):
-        # Implement show theme manager functionality
-        pass
+        logging.info("Showing Theme Manager window")
+        self.cccore.widget_manager.show_theme_manager()
 
     def show_workspace_manager(self):
-        # Implement show workspace manager functionality
-        pass
+        if "Workspace Manager" in self.cccore.widget_manager.all_dock_widgets:
+            dock = self.cccore.widget_manager.all_dock_widgets["Workspace Manager"]
+            dock.show()
+            dock.raise_()
+        else:
+            logging.warning("Workspace Manager dock not found")
 
     def show_model_manager(self):
-        # Implement show model manager functionality
-        pass
+        logging.info("Showing Model Manager dock")
+        if "Model Manager" in self.cccore.widget_manager.all_dock_widgets:
+            dock = self.cccore.widget_manager.all_dock_widgets["Model Manager"]
+            dock.show()
+            dock.raise_()
+        else:
+            logging.warning("Model Manager dock not found")
 
     def show_download_manager(self):
-        # Implement show download manager functionality
-        pass
+        logging.info("Showing Download Manager dock")
+        if "Download Manager" in self.cccore.widget_manager.all_dock_widgets:
+            dock = self.cccore.widget_manager.all_dock_widgets["Download Manager"]
+            dock.show()
+            dock.raise_()
+        else:
+            logging.warning("Download Manager dock not found")
 
     def load_layout(self):
-        # Implement load layout functionality
-        pass
+        if "Layout Manager" in self.cccore.widget_manager.all_dock_widgets:
+            dock = self.cccore.widget_manager.all_dock_widgets["Layout Manager"]
+            dock.show()
+            dock.raise_()
+        else:
+            logging.warning("Layout Manager dock not found")
 
     def show_about(self):
-        # Implement show about functionality
-        pass
+        if "About" in self.cccore.widget_manager.all_dock_widgets:
+            dock = self.cccore.widget_manager.all_dock_widgets["About"]
+            dock.show()
+            dock.raise_()
+        else:
+            logging.warning("About dock not found")
 
     def add_vault_directory(self):
-        self.cccore.vault_manager.add_vault_directory()
+        path = QFileDialog.getExistingDirectory(self.cccore.main_window, "Select Vault Directory")
+        if path:
+            default_name = os.path.basename(path)
+            name, ok = QInputDialog.getText(self.cccore.main_window, "Add Vault", "Enter vault name (or leave blank for default):", text=default_name)
+            if ok:
+                if not name:  # If the user left the name blank, use None to trigger default naming
+                    name = None
+                final_name = self.cccore.add_vault_directory(path, name)
+                if final_name:
+                    QMessageBox.information(self.cccore.main_window, "Vault Added", f"Added new vault: {final_name}")
+                else:
+                    QMessageBox.warning(self.cccore.main_window, "Error", "Failed to add vault")
 
     def remove_vault_directory(self):
-        self.cccore.vault_manager.remove_vault_directory()
+        vaults = list(self.cccore.vault_manager.vaults["vaults"].keys())
+        name, ok = QInputDialog.getItem(self.cccore.main_window, "Remove Vault", "Select vault to remove:", vaults, 0, False)
+        if ok and name:
+            if self.cccore.remove_vault_directory(name):
+                QMessageBox.information(self.cccore.main_window, "Vault Removed", f"Removed vault: {name}")
+            else:
+                QMessageBox.warning(self.cccore.main_window, "Error", "Failed to remove vault")
 
     def set_default_vault(self):
-        self.cccore.vault_manager.set_default_vault()
+        vaults = list(self.cccore.vault_manager.vaults["vaults"].keys())
+        name, ok = QInputDialog.getItem(self.cccore.main_window, "Set Default Vault", "Select default vault:", vaults, 0, False)
+        if ok and name:
+            if self.cccore.set_default_vault(name):
+                QMessageBox.information(self.cccore.main_window, "Default Vault Set", f"Set default vault to: {name}")
+            else:
+                QMessageBox.warning(self.cccore.main_window, "Error", "Failed to set default vault")
+
     def setup_powershell(self):
         # Implement the setup for Powershell
         pass
+
     def create_snippet(self):
         # Implement the create snippet functionality
         pass
+
     def edit_snippet(self):
         # Implement the edit snippet functionality
         pass
+
     def delete_snippet(self):
         # Implement the delete snippet functionality
         pass
+
     def import_snippet(self):
         # Implement the import snippet functionality
         pass
+
     def boilerplates(self):
         # Implement the boilerplates functionality
         pass
+
     def show_shortcuts(self):
         # Implement the show shortcuts functionality
         pass
+
     def getting_started(self):
         # Implement the getting started functionality
         pass
+
     def bug_report(self):
         # Implement the bug report functionality
         pass
+
     def discord(self):
         # Implement the discord functionality
         pass
+
     def buymeacoffee(self):
         # Implement the buymeacoffee functionality
         pass
+
     def about_github(self):
         # Implement the about github functionality
         pass
+
     def contribute(self):
         # Implement the contribute functionality
         pass
+
     def code_jokes(self):
         # Implement the code jokes functionality
         pass
+
     def version(self):
         # Implement the version functionality
         pass
+
     def notes(self):
         self.cccore.sticky_note_manager.show()
+
     def apply_workspace(self):
-        self.cccore.widget_manager.apply_workspace() 
- 
+        self.cccore.widget_manager.apply_workspace()
+
+    def toggle_comment(self):
+        current_editor = self.cccore.editor_manager.current_editor
+        if current_editor:
+            current_editor.toggle_comment()
+
+    

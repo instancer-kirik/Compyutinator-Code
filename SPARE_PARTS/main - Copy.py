@@ -8,7 +8,7 @@ from PyQt6.QtCore import QSettings, QByteArray, QUrl
 from HMC.widget_manager import WidgetManager
 from HMC.transcriptor_live_widget import VoiceTypingWidget
 from GUX.overlay import CompositeOverlay, Flashlight
-from GUX.log_viewer_widget i2mport LogViewerWidget
+from GUX.log_viewer_widget import LogViewerWidget
 from NITTY_GRITTY.database import DatabaseManager, setup_local_database
 log_directory = os.path.join(os.getcwd(), 'logs')
 if not os.path.exists(log_directory):

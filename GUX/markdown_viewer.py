@@ -8,9 +8,12 @@ class MarkdownViewer(QTextBrowser):
         super().__init__()
         self.vault_path = vault_path
         self.image_map = {}
-        self.index_vault()
+        if self.vault_path:
+            self.index_vault()
 
     def index_vault(self):
+        if not self.vault_path:
+            return
         for root, _, files in os.walk(self.vault_path):
             for file in files:
                 if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
@@ -38,3 +41,9 @@ class MarkdownViewer(QTextBrowser):
             if not image.isNull():
                 return image
         return super().loadResource(type, name)
+
+    def set_vault_path(self, new_vault_path):
+        self.vault_path = new_vault_path
+        self.image_map = {}
+        if self.vault_path:
+            self.index_vault()

@@ -7,11 +7,12 @@ class RadialMenu(QWidget):
     optionSelected = pyqtSignal(str)
 
     def __init__(self, parent=None):
-        super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint)
         self.options = []
         self.hover_index = -1
         self.radius = 100
         self.setMouseTracking(True)
+        self.right_button_pressed = False
 
     def set_options(self, options):
         self.options = options
@@ -20,6 +21,7 @@ class RadialMenu(QWidget):
     def show_at(self, pos):
         self.move(pos - QPoint(self.radius, self.radius))
         self.show()
+        self.setFocus()  # Ensure the widget receives keyboard events
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -44,17 +46,36 @@ class RadialMenu(QWidget):
             painter.setFont(QFont("Arial", 8))
             painter.drawText(QRect(x-25, y-25, 50, 50), Qt.AlignmentFlag.AlignCenter, option)
 
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.RightButton:
+            self.right_button_pressed = True
+        self.update_hover_index(event.pos())
+
     def mouseMoveEvent(self, event):
+        self.update_hover_index(event.pos())
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.RightButton and self.right_button_pressed:
+            if 0 <= self.hover_index < len(self.options):
+                self.optionSelected.emit(self.options[self.hover_index])
+            self.right_button_pressed = False
+            self.close()
+
+    def update_hover_index(self, pos):
         center = QPoint(self.radius, self.radius)
-        pos = event.position().toPoint() - center
+        pos = pos - center
         angle = math.atan2(pos.y(), pos.x())
         if angle < 0:
             angle += 2 * math.pi
+        new_hover_index = int(angle / (2 * math.pi / len(self.options)))
+        if new_hover_index != self.hover_index:
+            self.hover_index = new_hover_index
+            self.update()
 
-        self.hover_index = int(angle / (2 * math.pi / len(self.options)))
+    def leaveEvent(self, event):
+        self.hover_index = -1
         self.update()
 
-    def mouseReleaseEvent(self, event):
-        if 0 <= self.hover_index < len(self.options):
-            self.optionSelected.emit(self.options[self.hover_index])
-        self.close()
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()

@@ -2,79 +2,118 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QLineE
 from PyQt6.QtGui import QFileSystemModel
 from PyQt6.QtCore import Qt
 import os
+from PyQt6.QtWidgets import QPushButton, QFileDialog, QMenu
+from PyQt6.QtGui import QAction
+from PyQt6.QtCore import pyqtSignal
 from GUX.custom_tree_view import CustomTreeView
 class FileExplorerWidget(QWidget):
-    def __init__(self, parent=None):
+    file_selected = pyqtSignal(str)
+
+    def __init__(self, cccore, parent=None):
         super().__init__(parent)
         self.parent = parent
+        self.setup_ui()
 
-        self.layout = QVBoxLayout()
-        self.setLayout(self.layout)
-
+    def setup_ui(self):
+        self.layout = QVBoxLayout(self)
         self.model = QFileSystemModel()
         self.model.setRootPath('')
 
-        # Splitter for split-screen functionality
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.tree1 = self.create_tree_view()
+        self.tree2 = self.create_tree_view()
 
-        # First tree view and navigation bar
-        self.tree1_layout = QVBoxLayout()
-        self.tree1_nav_bar = QToolBar()
-        self.tree1_path_label = QLabel("Path:")
-        self.tree1_path_edit = QLineEdit()
-        self.tree1_path_edit.returnPressed.connect(self.navigate_to_path_tree1)
-        self.tree1_nav_bar.addWidget(self.tree1_path_label)
-        self.tree1_nav_bar.addWidget(self.tree1_path_edit)
-        self.tree1_layout.addWidget(self.tree1_nav_bar)
-
-        self.tree1 = CustomTreeView(self)
-        self.tree1.setModel(self.model)
-        self.tree1.setRootIndex(self.model.index(''))
-        self.tree1.doubleClicked.connect(self.on_double_click)
-        self.tree1_layout.addWidget(self.tree1)
-
-        self.tree1_container = QWidget()
-        self.tree1_container.setLayout(self.tree1_layout)
-        self.splitter.addWidget(self.tree1_container)
-
-        # Second tree view and navigation bar
-        self.tree2_layout = QVBoxLayout()
-        self.tree2_nav_bar = QToolBar()
-        self.tree2_path_label = QLabel("Path:")
-        self.tree2_path_edit = QLineEdit()
-        self.tree2_path_edit.returnPressed.connect(self.navigate_to_path_tree2)
-        self.tree2_nav_bar.addWidget(self.tree2_path_label)
-        self.tree2_nav_bar.addWidget(self.tree2_path_edit)
-        self.tree2_layout.addWidget(self.tree2_nav_bar)
-
-        self.tree2 = CustomTreeView(self)
-        self.tree2.setModel(self.model)
-        self.tree2.setRootIndex(self.model.index(''))
-        self.tree2.doubleClicked.connect(self.on_double_click)
-        self.tree2_layout.addWidget(self.tree2)
-
-        self.tree2_container = QWidget()
-        self.tree2_container.setLayout(self.tree2_layout)
-        self.splitter.addWidget(self.tree2_container)
+        self.splitter.addWidget(self.create_tree_container(self.tree1, "Tree 1"))
+        self.splitter.addWidget(self.create_tree_container(self.tree2, "Tree 2"))
 
         self.layout.addWidget(self.splitter)
 
-    def navigate_to_path_tree1(self):
-        path = self.tree1_path_edit.text()
-        if os.path.exists(path):
-            index = self.model.index(path)
-            if index.isValid():
-                self.tree1.setRootIndex(index)
-                self.parent.update_history(path)
+    def create_tree_view(self):
+        tree = CustomTreeView(self)
+        tree.setModel(self.model)
+        tree.setRootIndex(self.model.index(''))
+        tree.doubleClicked.connect(self.on_double_click)
+        tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        tree.customContextMenuRequested.connect(self.show_context_menu)
+        return tree
 
-    def navigate_to_path_tree2(self):
-        path = self.tree2_path_edit.text()
+    def create_tree_container(self, tree, name):
+        container = QWidget()
+        layout = QVBoxLayout(container)
+
+        nav_bar = QToolBar()
+        path_label = QLabel("Path:")
+        path_edit = QLineEdit()
+        path_edit.returnPressed.connect(lambda: self.navigate_to_path(tree, path_edit))
+        
+        browse_button = QPushButton("Browse")
+        browse_button.clicked.connect(lambda: self.browse_directory(tree, path_edit))
+
+        nav_bar.addWidget(path_label)
+        nav_bar.addWidget(path_edit)
+        nav_bar.addWidget(browse_button)
+
+        layout.addWidget(nav_bar)
+        layout.addWidget(tree)
+
+        return container
+
+    def navigate_to_path(self, tree, path_edit):
+        path = path_edit.text()
         if os.path.exists(path):
             index = self.model.index(path)
             if index.isValid():
-                self.tree2.setRootIndex(index)
-                self.parent.update_history(path)
+                tree.setRootIndex(index)
+                self.update_history(path)
+
+    def browse_directory(self, tree, path_edit):
+        directory = QFileDialog.getExistingDirectory(self, "Select Directory")
+        if directory:
+            path_edit.setText(directory)
+            self.navigate_to_path(tree, path_edit)
 
     def on_double_click(self, index):
         file_path = self.model.filePath(index)
-        self.parent.update_history(file_path)
+        if os.path.isfile(file_path):
+            self.file_selected.emit(file_path)
+        self.update_history(file_path)
+
+    def update_history(self, path):
+        # Implement history tracking if needed
+        pass
+
+    def show_context_menu(self, position):
+        tree = self.sender()
+        index = tree.indexAt(position)
+        if not index.isValid():
+            return
+
+        menu = QMenu(self)
+        open_action = QAction("Open", self)
+        open_action.triggered.connect(lambda: self.open_item(index))
+        menu.addAction(open_action)
+
+        if os.path.isdir(self.model.filePath(index)):
+            set_as_root_action = QAction("Set as Root", self)
+            set_as_root_action.triggered.connect(lambda: self.set_as_root(tree, index))
+            menu.addAction(set_as_root_action)
+
+        menu.exec(tree.viewport().mapToGlobal(position))
+
+    def open_item(self, index):
+        file_path = self.model.filePath(index)
+        if os.path.isfile(file_path):
+            self.file_selected.emit(file_path)
+        elif os.path.isdir(file_path):
+            self.sender().setRootIndex(index)
+
+    def set_as_root(self, tree, index):
+        tree.setRootIndex(index)
+        path = self.model.filePath(index)
+        tree.parent().findChild(QLineEdit).setText(path)
+
+    def get_selected_path(self, tree):
+        indexes = tree.selectedIndexes()
+        if indexes:
+            return self.model.filePath(indexes[0])
+        return None

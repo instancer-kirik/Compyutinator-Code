@@ -4,41 +4,71 @@ from PyQt6.QtGui import QPalette, QColor
 from qt_material import apply_stylesheet, list_themes
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtWidgets import QComboBox, QPushButton, QVBoxLayout, QInputDialog, QColorDialog
-from PyQt6.QtCore import Qt, QObject, pyqtSignal
+from PyQt6.QtWidgets import QComboBox, QPushButton, QLayout, QVBoxLayout, QInputDialog, QColorDialog
+from PyQt6.QtCore import Qt, QObject, pyqtSignal, QTimer, QThread
 import logging
+import time
+from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QWidget, QComboBox, QPushButton, QColorDialog, QInputDialog
+from PyQt6.QtWidgets import QProgressDialog, QFormLayout, QDialogButtonBox, QLineEdit, QDialog
+import traceback
+import json
+import os
+class CustomThemeDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Add Custom Theme")
+        layout = QFormLayout(self)
+        self.name_input = QLineEdit(self)
+        self.style_input = QLineEdit(self)
+        layout.addRow("Theme Name:", self.name_input)
+        layout.addRow("Style File:", self.style_input)
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
 
 class ThemeManagerWidget(QWidget):
+    theme_selected = pyqtSignal(str)
+
     def __init__(self, theme_manager):
         super().__init__()
         self.theme_manager = theme_manager
-        self.setup_ui()
+        self.init_ui()
 
-    def setup_ui(self):
+    def init_ui(self):
         layout = QVBoxLayout()
+        self.theme_combo = QComboBox()
+        self.update_theme_list()
+        self.apply_button = QPushButton("Apply Theme")
+        self.add_custom_button = QPushButton("Add Custom Theme")
+        
+        layout.addWidget(self.theme_combo)
+        layout.addWidget(self.apply_button)
+        layout.addWidget(self.add_custom_button)
         self.setLayout(layout)
 
-        # Add UI elements for theme selection
-        self.theme_combo = QComboBox()
-        self.theme_combo.addItems(self.theme_manager.get_available_themes())
-        self.theme_combo.currentTextChanged.connect(self.on_theme_changed)
-        layout.addWidget(self.theme_combo)
+        self.apply_button.clicked.connect(self.on_apply_theme)
+        self.add_custom_button.clicked.connect(self.on_add_custom_theme)
 
-        # Add color pickers for all custom colors
-        color_keys = [
-            "main_window_color", "window_color", "header_color", "theme_color",
-            "scrollbar_color", "scrollbar_foreground_color", "text_color",
-            "last_focused_tab_color"
-        ]
-        for color_key in color_keys:
-            button = QPushButton(f"Choose {color_key.replace('_', ' ').title()}")
-            button.clicked.connect(lambda _, ck=color_key: self.choose_color(ck))
-            layout.addWidget(button)
-    
-        # Add button for tab colors
-        tab_color_button = QPushButton("Set Tab Color")
-        tab_color_button.clicked.connect(self.set_tab_color)
-        layout.addWidget(tab_color_button)
+    def update_theme_list(self):
+        self.theme_combo.clear()
+        self.theme_combo.addItems(self.theme_manager.get_available_themes())
+        current_theme = self.theme_manager.get_current_theme()
+        index = self.theme_combo.findText(current_theme)
+        if index >= 0:
+            self.theme_combo.setCurrentIndex(index)
+
+    def on_apply_theme(self):
+        selected_theme = self.theme_combo.currentText()
+        self.theme_manager.apply_theme(selected_theme)
+
+    def on_add_custom_theme(self):
+        dialog = CustomThemeDialog(self)
+        if dialog.exec():
+            name = dialog.name_input.text()
+            style = dialog.style_input.text()
+            self.theme_manager.add_custom_theme(name, {'style': style})
+            self.update_theme_list()
     def on_theme_changed(self, theme_name):
         try:
             self.theme_manager.current_theme["style"] = theme_name
@@ -74,98 +104,131 @@ class ThemeManagerWidget(QWidget):
         self.theme_combo.addItems(self.theme_manager.get_available_themes())
         self.set_current_theme(current_theme)
 
+class ThemeApplier(QThread):
+    finished = pyqtSignal()
+    progress = pyqtSignal(int)
+
+    def __init__(self, theme_manager, widget, theme):
+        super().__init__()
+        self.theme_manager = theme_manager
+        self.widget = widget
+        self.theme = theme
+        self.total_widgets = 0
+        self.processed_widgets = 0
+
+    def run(self):
+        self.total_widgets = self.count_widgets(self.widget)
+        self.theme_manager.apply_theme_to_widget(self.widget, self.theme, self.update_progress)
+        self.finished.emit()
+
+    def count_widgets(self, widget):
+        count = 1
+        for child in widget.findChildren(QWidget):
+            count += self.count_widgets(child)
+        return count
+
+    def update_progress(self):
+        self.processed_widgets += 1
+        progress = int((self.processed_widgets / self.total_widgets) * 100)
+        self.progress.emit(progress)
+
 class ThemeManager(QObject):
     theme_changed = pyqtSignal(dict)
 
     def __init__(self, cccore):
         super().__init__()
-        self.settings_manager = cccore.settings_manager
-        self.current_theme = self.load_theme()
-        self.is_applying_theme = False
+        self.cccore = cccore
+        self.config_dir = os.path.dirname(os.path.abspath(__file__))
+        self.config_file = os.path.join(self.config_dir, 'theme_config.json')
+        self.custom_themes = {}
+        self.current_theme = 'dark_amber.xml'  # Default theme
+        self.load_config()
 
-    def load_theme(self):
-        theme = self.settings_manager.get_value("theme", default={})
-        default_theme = self.get_default_theme()
-        # Merge the loaded theme with default theme to ensure all keys exist
-        for key, value in default_theme.items():
-            if isinstance(value, dict):
-                theme[key] = {**value, **theme.get(key, {})}
-            else:
-                theme.setdefault(key, value)
-        return theme
-
-    def save_theme(self, theme):
-        self.settings_manager.set_value("theme", theme)
-        self.current_theme = theme
-
-    def get_default_theme(self):
-        return {
-            "style": "dark_teal.xml",
-            "editor_theme": "#2E3440",
-            "editor_fg": "#D8DEE9",
-            "font": "Courier",
-            "main_window_color": "#2E3440",  # Add this line
-            "window_color": "#3B4252",
-            "header_color": "#4C566A",
-            "theme_color": "#81A1C1",
-            "scrollbar_color": "#4C566A",
-            "scrollbar_foreground_color": "#D8DEE9",
-            "text_color": "#ECEFF4",
-            "tab_colors": {
-                "0": "#81A1C1",
-                "1": "#88C0D0",
-                "2": "#5E81AC",
-            },
-            "last_focused_tab_color": "#81A1C1"
-        }
-
-    def apply_theme(self, widget):
-        if self.is_applying_theme:
-            logging.info("Theme application already in progress. Skipping.")
-            return
-
-        self.is_applying_theme = True
-        logging.info("Applying theme...")
+    def load_config(self):
         try:
-            style = self.current_theme.get("style", "dark_teal.xml")
-            logging.info(f"Applying stylesheet: {style}")
-            apply_stylesheet(widget, theme=style, invert_secondary=True, extra={'density_scale': '-1'})
-            logging.info("Stylesheet applied successfully")
-            self.apply_custom_colors(widget)
-            logging.info("Custom colors applied successfully")
+            with open(self.config_file, 'r') as f:
+                config = json.load(f)
+                self.custom_themes = config.get('custom_themes', {})
+                self.current_theme = config.get('current_theme', self.current_theme)
+        except FileNotFoundError:
+            logging.warning("Theme config file not found. Creating a new one with default settings.")
+            self.save_config()
+        except json.JSONDecodeError:
+            logging.error("Error decoding theme config file. Using default settings.")
+            self.save_config()
 
-            # Apply theme to AuraTextWindow if it exists
-            if hasattr(widget, 'auratext_window'):
-                widget.auratext_window.apply_theme(self.current_theme)
+    def save_config(self):
+        config = {
+            'current_theme': self.current_theme,
+            'custom_themes': self.custom_themes
+        }
+        os.makedirs(self.config_dir, exist_ok=True)
+        with open(self.config_file, 'w') as f:
+            json.dump(config, f, indent=2)
 
-            self.theme_changed.emit(self.current_theme)
+    def apply_theme(self, theme_name):
+        if theme_name in self.custom_themes:
+            theme = self.custom_themes[theme_name]
+        elif theme_name in list_themes():
+            theme = {'style': theme_name}
+        else:
+            logging.error(f"Theme {theme_name} not found. Using default theme.")
+            theme = {'style': 'dark_amber.xml'}
+
+        logging.info(f"Applying theme: {theme_name}")
+        try:
+            apply_stylesheet(QApplication.instance(), theme=theme['style'])
+            self.current_theme = theme_name
+            self.save_config()
+            self.theme_changed.emit(theme)
+            logging.info("Theme applied successfully")
         except Exception as e:
             logging.error(f"Error applying theme: {e}")
-        finally:
-            self.is_applying_theme = False
-            logging.info("Theme application complete")
-
-    def apply_custom_colors(self, widget):
-        # Apply custom colors here if needed
-        pass
-
-    def update_theme(self, new_theme):
-        self.current_theme.update(new_theme)
-        self.save_theme(self.current_theme)
-        self.apply_theme()
 
     def get_available_themes(self):
-        return list_themes()
+        return list(self.custom_themes.keys()) + list_themes()
 
-    def get_tab_color(self, index):
-        return self.current_theme["tab_colors"].get(index, self.current_theme["last_focused_tab_color"])
+    def add_custom_theme(self, name, theme_data):
+        self.custom_themes[name] = theme_data
+        self.save_config()
+
+    def remove_custom_theme(self, name):
+        if name in self.custom_themes:
+            del self.custom_themes[name]
+            self.save_config()
+
+    def get_current_theme(self):
+        return self.current_theme
+
+    def update_theme(self, theme_data):
+        self.current_theme.update(theme_data)
+        self.save_config()
+
+    def apply_theme_to_widget(self, widget, theme, update_progress):
+        # Apply theme to the widget
+        widget.setStyleSheet(f"""
+            background-color: {theme.get('main_window_color', '#2E3440')};
+            color: {theme.get('text_color', '#ECEFF4')};
+            font-family: {theme.get('font', 'Courier')};
+        """)
+
+        # Update progress
+        update_progress()
 
     def set_tab_color(self, index, color):
         self.current_theme["tab_colors"][index] = color
-        self.save_theme(self.current_theme)
+        self.save_config()
         self.theme_changed.emit(self.current_theme)
 
     def set_last_focused_tab_color(self, color):
         self.current_theme["last_focused_tab_color"] = color
-        self.save_theme(self.current_theme)
+        self.save_config()
         self.theme_changed.emit(self.current_theme)
+
+    def apply_theme_to_editor(self, editor):
+        # Apply theme to the editor
+        editor.setStyleSheet(f"""
+            background-color: {self.current_theme["editor_theme"]};
+            color: {self.current_theme["editor_fg"]};
+            font-family: {self.current_theme["font"]};
+        """)

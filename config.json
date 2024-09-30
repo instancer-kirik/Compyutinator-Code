@@ -11,7 +11,7 @@
     ],
     "layout": {
         "left": ["File Explorer", "Symbolic Linker"],
-        "right": ["AuraText, Code Editor", "Sticky Notes"],
+        "right": ["AuraText", "Code Editor", "Sticky Notes"],
         "bottom": ["Terminal", "Process Manager"]
     }
       

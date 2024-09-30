@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QTreeWidget, QPushButton, QFi
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 import os
-
+from PyQt6.QtWidgets import QInputDialog
 class ContextPickerDialog(QDialog):
     context_added = pyqtSignal(str, str)  # context_type, context_content
 

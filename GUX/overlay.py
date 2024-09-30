@@ -3,9 +3,10 @@ import threading
 from ctypes import windll, c_void_p
 from PyQt6.QtWidgets import QWidget, QApplication, QVBoxLayout, QLabel
 from PyQt6.QtCore import Qt, QTimer, QEvent, QPointF
-from PyQt6.QtGui import QPainter, QCursor, QRadialGradient, QBrush, QColor, QGuiApplication, QImage, QColorSpace
+from PyQt6.QtGui import QPainter, QCursor, QRadialGradient, QBrush, QColor, QGuiApplication, QImage, QColorSpace, QPixmap
 import serial
 import serial.tools.list_ports
+from HMC.cursor_manager import CursorManager
 
 class Overlay(QWidget):
     def __init__(self):
@@ -32,15 +33,16 @@ class Overlay(QWidget):
             return False
         return super().event(event)
 class Flashlight(Overlay):
-    def __init__(self, size=200, power=0.5):
+    def __init__(self, cccore, size=200, power=0.5):
         super().__init__()
         self.size = size
         self.power = power
+        self.cursor_manager = cccore.cursor_manager
 
         self.cursor_effect_timer = QTimer(self)
         self.cursor_effect_timer.timeout.connect(self.update_cursor_effect)
         self.cursor_effect_timer.start(30)
-        self.cursor_pos = QCursor.pos()
+        self.cursor_pos = self.cursor_manager.get_current_cursor_pos()
 
     def set_power(self, power):
         self.power = power
@@ -49,7 +51,7 @@ class Flashlight(Overlay):
         self.size = size
 
     def update_cursor_effect(self):
-        self.cursor_pos = QCursor.pos()
+        self.cursor_pos = self.cursor_manager.get_current_cursor_pos()
         self.update()
 
     def paintEvent(self, event):
@@ -106,9 +108,11 @@ class CustomchorderOverlay(Overlay):
             self.serial_thread.start()
 
 class CompositeOverlay(Overlay):
-    def __init__(self, flashlight_size=200, flashlight_power=0.5, serial_port=None, baud_rate=115200):
+    def __init__(self, cccore, flashlight_size=200, flashlight_power=0.5, serial_port=None, baud_rate=115200):
         super().__init__()
-        self.flashlight_overlay = Flashlight(size=flashlight_size, power=flashlight_power)
+        self.cursor_manager = CursorManager(cccore)
+        
+        self.flashlight_overlay = Flashlight(cccore, size=flashlight_size, power=flashlight_power)
         self.flashlight_overlay.setParent(self)
         
         self.customchorder_overlay = CustomchorderOverlay(serial_port, baud_rate)
@@ -117,7 +121,6 @@ class CompositeOverlay(Overlay):
         self.cursor_effect_timer = QTimer(self)
         self.cursor_effect_timer.timeout.connect(self.update_cursor_effect)
         self.cursor_effect_timer.start(30)
-        self.cursor_pos = QCursor.pos()
 
         self.label = QLabel(self)
         self.label.setText("mysterious unselectable text")
@@ -126,8 +129,21 @@ class CompositeOverlay(Overlay):
         layout.addWidget(self.label)
         self.setLayout(layout)
 
+        # Enable mouse tracking
+        self.setMouseTracking(True)
+
+    def enterEvent(self, event):
+        # Set transparent cursor when mouse enters the overlay
+        self.cursor_manager.set_transparent_cursor()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        # Restore default cursor when mouse leaves the overlay
+        self.cursor_manager.restore_default_cursor()
+        super().leaveEvent(event)
+
     def update_cursor_effect(self):
-        self.cursor_pos = QCursor.pos()
+        self.cursor_pos = self.cursor_manager.get_current_cursor_pos()
         self.flashlight_overlay.cursor_pos = self.cursor_pos
         self.flashlight_overlay.update()
         self.customchorder_overlay.update()

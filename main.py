@@ -1,16 +1,29 @@
 import sys
 import os
+
+# Get the absolute path of the directory containing the script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Add the project root directory to Python path
+sys.path.insert(0, script_dir)
+
+# Now try to import from HMC
+from HMC.cccore import CCCore
+from HMC.sticky_note_manager import StickyNoteManager
+from PyQt6.QtWidgets import QWidget
+
 import logging
 from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget, QListWidget, QVBoxLayout, QWidget, QLabel, QPushButton
 from PyQt6.QtGui import QAction, QDesktopServices
 from PyQt6.QtWidgets import QMenu
 from PyQt6.QtCore import QSettings, QByteArray,QProcess,  QUrl, QTimer, Qt, QThread, pyqtSignal
-from HMC.sticky_note_manager import StickyNoteManager
+
 import subprocess
 from HMC.cccore import CCCore
+from HMC.sticky_note_manager import StickyNoteManager
 # Create AuraText directory if it doesn't exist
-
-auratext_dir = os.path.join(os.path.dirname(__file__), 'AuraText')
+from HMC.action_handlers import ActionHandlers
+auratext_dir = os.path.join(script_dir, 'AuraText')
 if not os.path.exists(auratext_dir):
     os.makedirs(auratext_dir)
 from HMC.download_manager import DownloadManager
@@ -26,7 +39,7 @@ from HMC.vault_manager import VaultManager
 from PyQt6.QtWidgets import QInputDialog
 import threading
 from HMC.workspace_manager import WorkspaceManager
-
+from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, QEvent
 log_directory = os.path.join(os.getcwd(), 'logs')
 if not os.path.exists(log_directory):
     os.makedirs(log_directory)
@@ -56,10 +69,10 @@ from HMC.workspace_manager import WorkspaceManager
 
 def initialize_managers(settings_manager):
     cccore = CCCore(settings_manager)
-    overlay = CompositeOverlay(flashlight_size=200, flashlight_power=0.069, serial_port=None)
+    overlay = CompositeOverlay(cccore, flashlight_size=200, flashlight_power=0.069, serial_port=None)
     cccore.set_overlay(overlay)
     vault_manager = VaultManager(settings_manager)
-    workspace_manager = WorkspaceManager(vault_manager)
+    workspace_manager = WorkspaceManager(vault_manager, cccore)
     return cccore, vault_manager, workspace_manager, overlay
 
 def merge_themes(default_theme, custom_theme):
@@ -80,6 +93,10 @@ def load_config(config_file):
 
 from HMC.menu_manager import MenuManager
 import tempfile
+from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel
+
+from PyQt6.QtWidgets import QTabWidget
+
 class MainApplication(QMainWindow):
     def __init__(self, settings_manager, cccore, widget_manager, vault_manager, workspace_manager):
         logging.info("Initializing MainApplication")
@@ -95,11 +112,19 @@ class MainApplication(QMainWindow):
         self.last_focused_widget = None
         self.child_processes = {}
         self.overlay = self.cccore.overlay
-        
+        self.action_handlers = ActionHandlers(self)
+        self.menu_manager = MenuManager(self)
+        self.workspace_selector = None
+      
         logging.info("Setting main window for widget_manager")
         self.widget_manager.set_main_window_and_create_docks(self)
+       
+        self.tab_widget = None  # Initialize it as None
+        self.workspace_selector = QComboBox(self)
+      
         logging.info("Initializing UI")
-        self.init_ui()
+        self.setup_ui()
+        
         logging.info("Loading settings")
         self.load_settings()
         logging.info("Setting up connections")
@@ -107,22 +132,70 @@ class MainApplication(QMainWindow):
         logging.info("Loading splash input")
         self.load_splash_input()
         logging.info("MainApplication initialization complete")
+        if not cccore.vault_manager.vault_path:
+            logging.warning("No default vault set. Some features may be unavailable.")
+            # You might want to prompt the user to set a vault here
+        
+        self.setWindowOpacity(0.0)  # Start fully transparent
+        
+        # Apply the saved theme
+        saved_theme = self.cccore.theme_manager.get_current_theme()
+        self.cccore.theme_manager.apply_theme(saved_theme)
 
-    def init_ui(self):
+    def setup_ui(self):
+        # Create a central widget
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        
+        # Create a main layout for the central widget
+        main_layout = QVBoxLayout(central_widget)
+        
+        # Create and set up the tab widget
+        self.tab_widget = QTabWidget(self)
+        main_layout.addWidget(self.tab_widget)
+        
+        # Set dark background
         self.set_dark_background()
+        
+        # Set window title and geometry
         self.setWindowTitle(self.config['window_title'])
         self.setGeometry(*self.config['window_geometry'])
+        
+        # Initialize menu bar
         self.init_menu_bar()
-        self.init_tab_widget()
+      
+        # Add other widgets or tabs
         self.add_support_box()
         self.add_transcriptor_live_tab()
         self.add_logs_viewer_tab()
-        self.flashlight = Flashlight(size=200)
+        
+        # Set up other UI components
+        self.flashlight = Flashlight(self.cccore, size=200, power=0.036)
+        self.setup_workspace_selector()
 
+    def setup_workspace_selector(self):
+        workspaces = self.workspace_manager.get_workspace_names()
+        self.workspace_selector.addItems(workspaces)
+        active_workspace = self.workspace_manager.get_active_workspace()
+        if active_workspace:
+            self.workspace_selector.setCurrentText(active_workspace.name)
+        else:
+            default_workspace = self.workspace_manager.get_default_workspace()
+            if default_workspace:
+                self.workspace_selector.setCurrentText(default_workspace.name)
+        self.workspace_selector.currentTextChanged.connect(self.on_workspace_changed)
+
+    def on_workspace_changed(self, workspace_name):
+        self.workspace_manager.set_active_workspace(workspace_name)
+        # Update any necessary UI elements or load workspace-specific content
+        active_files = self.workspace_manager.get_active_files(workspace_name)
+        self.load_files(active_files)  # Implement this method to load files into your editor
+   
     def setup_connections(self):
-        self.tab_widget.currentChanged.connect(self.handle_tab_change)
+        if self.tab_widget:
+            self.tab_widget.currentChanged.connect(self.handle_tab_change)
+        self.workspace_selector.currentTextChanged.connect(self.on_workspace_changed)
         self.cccore.theme_manager.theme_changed.connect(self.on_theme_changed)
-        QApplication.instance().focusChanged.connect(self.focus_changed_event)
 
     def load_settings(self):
         self.load_layout()
@@ -150,7 +223,8 @@ class MainApplication(QMainWindow):
             for dock_name, dock_widget in self.widget_manager.dock_widgets.items():
                 if dock_widget.isAncestorOf(new):
                     self.last_focused_widget = dock_widget
-                    self.update_tab_color(self.tab_widget.indexOf(self.last_focused_widget))
+                    if self.tab_widget:
+                        self.update_tab_color(self.tab_widget.indexOf(self.last_focused_widget))
                     break
 
     def update_tab_color(self, index):
@@ -167,24 +241,26 @@ class MainApplication(QMainWindow):
         self.tab_widget.setStyleSheet(stylesheet)
         self.cccore.theme_manager.current_theme["last_focused_tab_color"] = color
 
-    def init_tab_widget(self):
-        self.tab_widget = QTabWidget()
-        self.setCentralWidget(self.tab_widget)
-        self.add_history_tab()
-
     def add_history_tab(self):
         self.history_widget = QListWidget()
         self.tab_widget.addTab(self.history_widget, "Action History")
 
     def init_menu_bar(self):
-        menu_manager = MenuManager(self)
-        self.setMenuBar(menu_manager.create_menu_bar())
+        self.setMenuBar(self.menu_manager.create_menu_bar())
 
     def set_dark_background(self):
-        dark_palette = QPalette()
+        dark_palette = self.palette()
         dark_palette.setColor(QPalette.ColorRole.Window, QColor(46, 52, 64))  # Nord theme dark color
         dark_palette.setColor(QPalette.ColorRole.WindowText, QColor(236, 239, 244))  # Nord theme light color
         self.setPalette(dark_palette)
+
+        # Apply dark theme stylesheet
+        self.setStyleSheet("""
+            QMainWindow, QWidget {
+                background-color: #2E3440;
+                color: #D8DEE9;
+            }
+        """)
 
     def save_layout(self):
         self.settings_manager.save_layout(self)
@@ -192,25 +268,31 @@ class MainApplication(QMainWindow):
     def load_layout(self):
         self.settings_manager.load_layout(self)
 
-    def on_theme_changed(self, theme):
-        # Apply the new theme to all widgets
-        self.cccore.theme_manager.apply_theme(self)
-        
-        # Update tab colors
-        default_tab_color = theme.get("last_focused_tab_color", "#81A1C1")
-        tab_colors = theme.get("tab_colors", {})
-        
-        for index in range(self.tab_widget.count()):
-            tab_color = tab_colors.get(str(index), default_tab_color)
-            self.apply_tab_color(tab_color, index)
-        
-        # You might need to update other widgets or elements that are not automatically styled
+    def on_theme_changed(self, theme_name):
+        logging.info(f"Theme changed to: {theme_name}")
+        self.update_ui_after_theme_change()
 
-        # This method should update the AuraTextWindow when the theme changes
+    def update_ui_after_theme_change(self):
+        # Update any UI elements that need special handling after a theme change
+        self.update_tab_colors()
+        self.refresh_widgets_after_theme_change()
+
+    def refresh_widgets_after_theme_change(self):
+        for dock_name in self.widget_manager.docks:
+            dock = self.widget_manager.get_or_create_dock(dock_name, self)
+            # Apply theme changes to the dock and its contents
+            if hasattr(dock.widget(), 'apply_theme'):
+                dock.widget().apply_theme()
+        # Refresh any widgets that might need special handling
         auratext_dock = self.widget_manager.get_or_create_dock('AuraText')
         if auratext_dock:
             auratext_window = auratext_dock.widget()
-            auratext_window.apply_theme(theme)
+            if hasattr(auratext_window, 'refresh_after_theme_change'):
+                auratext_window.refresh_after_theme_change()
+        
+    def update_tab_colors(self):
+        # Update tab colors if needed
+        pass
 
     def set_serial_port(self, port):
         self.serial_port = port
@@ -322,6 +404,31 @@ class MainApplication(QMainWindow):
         # Clear the process dictionary
         self.child_processes.clear()
 
+    def fade_in(self):
+        self.fade_animation = QPropertyAnimation(self, b"windowOpacity")
+        self.fade_animation.setDuration(500)
+        self.fade_animation.setStartValue(0.0)
+        self.fade_animation.setEndValue(1.0)
+        self.fade_animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self.fade_animation.start()
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.MouseButtonPress:
+            logging.debug(f"Mouse press event on {obj}")
+        return super().eventFilter(obj, event)
+
+    def create_docks(self):
+        logging.info("Creating docks")
+        for name, config in self.widget_manager.dock_configs.items():
+            if config.get("visible", True):
+                logging.info(f"Creating dock: {name}")
+                dock = self.widget_manager.get_or_create_dock(name)
+                if dock:
+                    self.addDockWidget(config["area"], dock)
+                else:
+                    logging.warning(f"Failed to create dock: {name}")
+        logging.info("Docks creation completed")
+
 def main():
     logging.info("Starting main function")
     
@@ -332,43 +439,50 @@ def main():
     logging.info("Creating QApplication")
     app = QApplication(sys.argv)
 
+    # Set the application-wide stylesheet for dark theme
+    app.setStyleSheet("""
+        QWidget {
+            background-color: #2E3440;
+            color: #D8DEE9;
+        }
+    """)
+
     # Initialize SettingsManager in the main thread
     logging.info("Initializing SettingsManager")
     settings_manager = SettingsManager()
     
     logging.info("Initializing managers")
     cccore, vault_manager, workspace_manager, overlay = initialize_managers(settings_manager)
-
+    cccore.init_managers()
     # Set overlay for CCCore
     logging.info("Setting overlay for CCCore")
     cccore.set_overlay(overlay)
 
     # Create WidgetManager
     logging.info("Creating WidgetManager")
-    widget_manager = WidgetManager(cccore, overlay)
+    widget_manager = WidgetManager(cccore)
 
     # Set widget_manager for CCCore
     logging.info("Setting widget_manager for CCCore")
     cccore.set_widget_manager(widget_manager)
-
+    cccore.late_init()
     # Create the main application instance
     logging.info("Creating MainApplication instance")
     main_app = MainApplication(settings_manager, cccore, widget_manager, vault_manager, workspace_manager)
 
     # Set the main_window for widget_manager
     logging.info("Setting main_window for widget_manager")
-    widget_manager.set_main_window_and_create_docks(main_app)
-
-    # Function to show the application
+    cccore.set_main_window(main_app)
+    
+    # Function to show the application with fade-in effect
     def show_app():
         logging.info("Showing main application")
         main_app.show()
-        
-        # Terminate the splash screen process
         splash_process.terminate()
+        main_app.fade_in()
 
-    # Start the show process
-    QTimer.singleShot(0, show_app)
+    # Start the show process with a slight delay
+    QTimer.singleShot(0, show_app)  # 100ms delay     
 
     sys.exit(app.exec())
 

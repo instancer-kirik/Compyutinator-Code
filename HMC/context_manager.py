@@ -62,6 +62,23 @@ class ContextManager:
         
         relevant_contexts = [self.contexts[i] for i in most_similar_indices]
         return "\n\n".join([f"{desc}:\n{content}" for desc, content in relevant_contexts])
+    def get_contexts(self):
+        return self.contexts
+    def get_context_by_description(self, description):
+        for desc, content in self.contexts:
+            if desc == description:
+                return content
+        return None
+    def remove_context_by_description(self, description):
+        self.contexts = [context for context in self.contexts if context[0] != description]
+    def clear_contexts(self):
+        self.contexts = []
+    
+    def get_context_sizes(self):
+        return [len(self.tokenize(content)) for _, content in self.contexts]
+    def get_context_sizes_in_tokens(self):
+        return [len(self.tokenize(content)) for _, content in self.contexts]
+ 
 
 class NoveltyDetector:
     def __init__(self, threshold=0.3):

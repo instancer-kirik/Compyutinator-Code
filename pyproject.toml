@@ -42,6 +42,7 @@ pyserial = "^3.5"
 pywinpty = {version = "^2.0.13", platform = "win32"}
 ptyprocess = "^0.7.0"
 
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

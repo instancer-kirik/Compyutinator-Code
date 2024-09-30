@@ -11,12 +11,13 @@ from PyQt6.QtCore import QCoreApplication
 from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import QHBoxLayout
 from PyQt6.QtCore import QSize
-from PyQt6.QtCore import QTimer, Qt, QCoreApplication
+from PyQt6.QtCore import QTimer, Qt, QCoreApplication, QProcess
 from PyQt6.QtGui import QClipboard, QMovie
 from PyQt6.QtWidgets import QHBoxLayout, QLabel
 import logging
-
 import tempfile
+from PyQt6.QtCore import QPropertyAnimation, QEasingCurve
+
 class SplashWithInput(QWidget):
     def __init__(self, splash_path):
         super().__init__()
@@ -69,7 +70,7 @@ class SplashWithInput(QWidget):
         button_layout.addWidget(self.copy_button)
 
         self.close_button = QPushButton("Close", self)
-        self.close_button.clicked.connect(self.close)
+        self.close_button.clicked.connect(self.close_and_cancel)
         self.close_button.setStyleSheet("""
             QPushButton {
                 background-color: rgba(220, 53, 69, 240);
@@ -86,13 +87,25 @@ class SplashWithInput(QWidget):
 
         layout.addLayout(button_layout)
 
+        self.opacity = 1.0
+        self.setStyleSheet(f"background-color: rgba(0, 0, 0, {self.opacity});")
+
+    def fade_out(self, callback):
+        self.fade_animation = QPropertyAnimation(self, b"windowOpacity")
+        self.fade_animation.setDuration(500)
+        self.fade_animation.setStartValue(1.0)
+        self.fade_animation.setEndValue(0.0)
+        self.fade_animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self.fade_animation.finished.connect(callback)
+        self.fade_animation.start()
+
     def copy_to_clipboard(self):
         clipboard = QApplication.clipboard()
         clipboard.setText(self.text_edit.toPlainText())
 
     def close_and_cancel(self):
         self.save_content_to_file()
-        QCoreApplication.instance().quit()
+        self.fade_out(QCoreApplication.instance().quit)
 
     def save_content_to_file(self):
         content = self.text_edit.toPlainText()
@@ -100,6 +113,32 @@ class SplashWithInput(QWidget):
             with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as temp_file:
                 temp_file.write(content)
                 logging.info(f"Saved splash input to temporary file: {temp_file.name}")
+
+    def restart_application(self):
+        QApplication.quit()
+        QProcess.startDetached(sys.executable, sys.argv)
+
+def run_splash():
+    app = QApplication(sys.argv)
+    
+    splash_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'resources', 'splash.gif'))
+    logging.info(f"Attempting to load GIF from: {splash_path}")
+    
+    if not os.path.exists(splash_path):
+        logging.error(f"GIF file does not exist at {splash_path}")
+        return
+
+    splash_with_input = SplashWithInput(splash_path)
+    splash_with_input.show()
+
+    def on_timeout():
+        splash_with_input.copy_to_clipboard()
+        splash_with_input.fade_out(app.quit)
+
+    # Exit the splash screen after a timeout (adjust as needed)
+    QTimer.singleShot(30000, on_timeout)  # 30 seconds timeout
+
+    sys.exit(app.exec())
 
 def run_splash():
     app = QApplication(sys.argv)

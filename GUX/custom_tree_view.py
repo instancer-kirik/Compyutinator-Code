@@ -301,6 +301,7 @@ class CustomTreeView(QTreeView):
             self.setRootIndex(self.file_system_model.index(self.file_system_model.rootPath()))
         else:
             self.setRootIndex(self.file_system_model.index(""))
-
+    def isTreePosition(self):
+        return self.file_system_model.isDir(self.rootIndex())
     def sort_by_last_modified(self):
         self.file_system_model.sort(3, Qt.SortOrder.DescendingOrder)  # 3 is the column index for "Date Modified"
