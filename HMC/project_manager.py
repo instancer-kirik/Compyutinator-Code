@@ -2,12 +2,52 @@ import os
 import json
 import logging
 from .environment_manager import EnvironmentManager
-from PyQt6.QtWidgets import QInputDialog, QMessageBox   
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QPushButton, 
+                             QInputDialog, QMessageBox, QFileDialog, QDialog, QLabel, QLineEdit, QFormLayout)
+from PyQt6.QtCore import Qt
+
+class ProjectConfigDialog(QDialog):
+    def __init__(self, project_name, project_data, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Configure Project: {project_name}")
+        self.project_name = project_name
+        self.project_data = project_data
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QFormLayout(self)
+        
+        self.path_edit = QLineEdit(self.project_data.get('path', ''))
+        layout.addRow("Project Path:", self.path_edit)
+
+        self.build_command_edit = QLineEdit(self.project_data.get('build_command', ''))
+        layout.addRow("Build Command:", self.build_command_edit)
+
+        self.run_command_edit = QLineEdit(self.project_data.get('run_command', ''))
+        layout.addRow("Run Command:", self.run_command_edit)
+
+        buttons = QHBoxLayout()
+        save_button = QPushButton("Save")
+        save_button.clicked.connect(self.accept)
+        cancel_button = QPushButton("Cancel")
+        cancel_button.clicked.connect(self.reject)
+        buttons.addWidget(save_button)
+        buttons.addWidget(cancel_button)
+        layout.addRow(buttons)
+
+    def get_config(self):
+        return {
+            'path': self.path_edit.text(),
+            'build_command': self.build_command_edit.text(),
+            'run_command': self.run_command_edit.text()
+        }
+
 class ProjectManager:
-    def __init__(self, settings_manager,cccore):
+    def __init__(self, settings_manager, cccore):
         self.settings_manager = settings_manager
         self.cccore = cccore
         self.build_manager = cccore.build_manager
+        self.process_manager = cccore.process_manager
         self.projects = {}
         self.current_project = None
         self.recent_projects = []
@@ -16,6 +56,7 @@ class ProjectManager:
 
     def load_projects(self):
         projects_data = self.settings_manager.get_value("projects", {})
+        logging.debug(f"Projects data from settings: {projects_data}")
         if isinstance(projects_data, dict):
             self.projects = projects_data
         else:
@@ -142,28 +183,56 @@ class ProjectManager:
         else:
             logging.error(f"Failed to set current project to: {project_name}")
             return False, "Failed to set current project"
-    def build_project(self):
-        current_project = self.get_current_project()
-        if current_project:
-            if self.build_manager.build_project(current_project):
-                QMessageBox.information(self, "Build Project",
-                                        f"Successfully built project: {current_project}")
-            else:
-                QMessageBox.warning(self, "Build Failed",
-                                    f"Failed to build project: {current_project}")
-        else:
-            QMessageBox.warning(self, "Error", "No active project to build")
 
-    def run_project(self):
-        current_project = self.get_current_project()
-        if current_project:
-            if self.build_manager.run_project(current_project):
-                QMessageBox.information(self, "Run Project", f"Started project: {current_project}")
+    def build_project(self, name):
+        if name in self.projects:
+            project_data = self.projects[name]
+            build_command = project_data.get('build_command')
+            nix_expression = project_data.get('nix_expression')
+            if build_command:
+                try:
+                    if nix_expression:
+                        command = f"nix-shell {nix_expression} --run '{build_command}'"
+                    else:
+                        command = build_command
+                    
+                    process_id = self.process_manager.start_process(command, f"Build {name}", cwd=project_data['path'], capture_output=True)
+                    
+                    if process_id:
+                        return True, f"Build process started for '{name}' (PID: {process_id})"
+                    else:
+                        return False, "Failed to start build process"
+                except Exception as e:
+                    return False, str(e)
             else:
-                QMessageBox.warning(self, "Run Failed", f"Failed to run project: {current_project}")
-        else:
-            QMessageBox.warning(self, "Error", "No active project to run")
+                return False, "No build command specified"
+        return False, "Project not found"
 
+    def run_project(self, name):
+        if name in self.projects:
+            project_data = self.projects[name]
+            run_command = project_data.get('run_command')
+            nix_expression = project_data.get('nix_expression')
+            if run_command:
+                try:
+                    if nix_expression:
+                        command = f"nix-shell {nix_expression} --run '{run_command}'"
+                    else:
+                        command = run_command
+                    
+                    process_id = self.process_manager.start_process(command, f"Run {name}", cwd=project_data['path'])
+                    
+                    if process_id:
+                        return True, f"Project '{name}' is now running (PID: {process_id})"
+                    else:
+                        return False, "Failed to start run process"
+                except Exception as e:
+                    return False, str(e)
+            else:
+                return False, "No run command specified"
+        return False, "Project not found"
+
+    
     def configure_build(self):
         current_project = self.get_current_project()
         if current_project:
@@ -189,10 +258,12 @@ class ProjectManager:
                 QMessageBox.information(self, "Run Configuration", f"Run command set for project: {current_project}")
         else:
             QMessageBox.warning(self, "Error", "No active project to configure")
+
     def load_project_state(self, project_name):
         open_files = self.settings_manager.get_value(f"open_files_{project_name}", [])
         for file_path in open_files:
             self.editor_manager.open_file(file_path)
+
     def rename_project(self):
         projects = self.get_projects()
         old_name, ok = QInputDialog.getItem(self, "Rename Project", "Select project to rename:", projects, 0, False)
@@ -204,3 +275,133 @@ class ProjectManager:
                     self.update_project_selector()
                 else:
                     QMessageBox.warning(self, "Error", "Failed to rename project. New name may already exist.")
+
+class ProjectsManagerWidget(QWidget):
+    def __init__(self, parent, cccore):
+        super().__init__(parent)
+        self.cccore = cccore
+        self.setup_ui()
+        self.update_project_list()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # Project selector
+        selector_layout = QHBoxLayout()
+        selector_layout.addWidget(QLabel("Current Project:"))
+        self.project_selector = QComboBox()
+        self.project_selector.currentTextChanged.connect(self.on_project_selected)
+        selector_layout.addWidget(self.project_selector)
+        layout.addLayout(selector_layout)
+
+        # Project management buttons
+        management_layout = QHBoxLayout()
+        self.add_button = QPushButton("Add Project")
+        self.add_button.clicked.connect(self.add_project)
+        management_layout.addWidget(self.add_button)
+
+        self.remove_button = QPushButton("Remove Project")
+        self.remove_button.clicked.connect(self.remove_project)
+        management_layout.addWidget(self.remove_button)
+
+        self.rename_button = QPushButton("Rename Project")
+        self.rename_button.clicked.connect(self.rename_project)
+        management_layout.addWidget(self.rename_button)
+
+        layout.addLayout(management_layout)
+
+        # Project action buttons
+        action_layout = QHBoxLayout()
+        self.configure_button = QPushButton("Configure")
+        self.configure_button.clicked.connect(self.configure_project)
+        action_layout.addWidget(self.configure_button)
+
+        self.build_button = QPushButton("Build")
+        self.build_button.clicked.connect(self.build_project)
+        action_layout.addWidget(self.build_button)
+
+        self.run_button = QPushButton("Run")
+        self.run_button.clicked.connect(self.run_project)
+        action_layout.addWidget(self.run_button)
+
+        layout.addLayout(action_layout)
+
+        # Set the layout for the widget
+        self.setLayout(layout)
+
+    def update_project_list(self):
+        self.project_selector.clear()
+        projects = self.cccore.project_manager.get_projects()
+        self.project_selector.addItems(projects)
+        logging.debug(f"Updated project list: {projects}")
+
+    def add_project(self):
+        name, ok = QInputDialog.getText(self, "Add Project", "Enter project name:")
+        if ok and name:
+            path = QFileDialog.getExistingDirectory(self, "Select Project Directory")
+            if path:
+                language, ok = QInputDialog.getItem(self, "Select Language", "Choose project language:", 
+                                                    ["Python", "C++", "JavaScript"], 0, False)
+                if ok:
+                    version, ok = QInputDialog.getText(self, "Enter Version", "Enter language version:")
+                    if ok:
+                        if self.cccore.project_manager.add_project(name, path, language, version):
+                            self.update_project_list()
+                            QMessageBox.information(self, "Success", f"Project '{name}' added successfully.")
+                        else:
+                            QMessageBox.warning(self, "Error", f"Project '{name}' already exists.")
+
+    def remove_project(self):
+        current_project = self.project_selector.currentText()
+        if current_project:
+            reply = QMessageBox.question(self, "Remove Project", f"Are you sure you want to remove the project '{current_project}'?",
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.Yes:
+                if self.cccore.project_manager.remove_project(current_project):
+                    self.update_project_list()
+                    QMessageBox.information(self, "Success", f"Project '{current_project}' removed successfully.")
+                else:
+                    QMessageBox.warning(self, "Error", f"Failed to remove project '{current_project}'.")
+
+    def rename_project(self):
+        old_name = self.project_selector.currentText()
+        if old_name:
+            new_name, ok = QInputDialog.getText(self, "Rename Project", "Enter new project name:", text=old_name)
+            if ok and new_name and new_name != old_name:
+                if self.cccore.project_manager.rename_project(old_name, new_name):
+                    self.update_project_list()
+                    QMessageBox.information(self, "Success", f"Project renamed from '{old_name}' to '{new_name}'.")
+                else:
+                    QMessageBox.warning(self, "Error", f"Failed to rename project. New name may already exist.")
+
+    def configure_project(self):
+        current_project = self.project_selector.currentText()
+        if current_project:
+            project_data = self.cccore.project_manager.get_project_data(current_project)
+            dialog = ProjectConfigDialog(current_project, project_data, self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                new_config = dialog.get_config()
+                self.cccore.project_manager.update_project_config(current_project, new_config)
+                QMessageBox.information(self, "Success", f"Project '{current_project}' configuration updated.")
+
+    def build_project(self):
+        current_project = self.project_selector.currentText()
+        if current_project:
+            success, message = self.cccore.project_manager.build_project(current_project)
+            if success:
+                QMessageBox.information(self, "Build Success", message)
+            else:
+                QMessageBox.warning(self, "Build Error", message)
+
+    def run_project(self):
+        current_project = self.project_selector.currentText()
+        if current_project:
+            success, message = self.cccore.project_manager.run_project(current_project)
+            if success:
+                QMessageBox.information(self, "Run", message)
+            else:
+                QMessageBox.warning(self, "Run Error", message)
+
+    def on_project_selected(self, project_name):
+        if project_name:
+            self.cccore.project_manager.set_current_project(project_name)

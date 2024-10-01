@@ -1,6 +1,8 @@
 import logging
 import os
-from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
+from PyQt6.QtWidgets import QFileDialog, QInputDialog, QMessageBox
+from PyQt6.QtWidgets import QDialog
+from GUX.settings_dialog import SettingsDialog
 
 class ActionHandlers:
     def __init__(self, cccore):
@@ -117,6 +119,14 @@ class ActionHandlers:
             dock.raise_()
         else:
             logging.warning("Settings dock not found")
+            try:
+                dialog = SettingsDialog(self.settings_manager, self)
+                if dialog.exec() == QDialog.DialogCode.Accepted:
+                    # Reload settings in all relevant widgets
+                    self.terminal_emulator.load_typing_effect_settings()
+                    self.code_editor.load_typing_effect_settings()
+            except Exception as e:
+                logging.error(f"Failed to load typing effect settings: {e}")
 
     def show_theme_manager(self):
         logging.info("Showing Theme Manager window")

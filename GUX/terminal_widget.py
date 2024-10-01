@@ -25,7 +25,7 @@ class TerminalWidget(QWidget):
         QShortcut(QKeySequence("Ctrl+Shift+W"), self, self.close_current_terminal)
 
     def add_terminal(self):
-        terminal = TerminalEmulator(self)
+        terminal = TerminalEmulator(self, mm=self.cccore)
         self.splitter.addWidget(terminal)
         return terminal
 

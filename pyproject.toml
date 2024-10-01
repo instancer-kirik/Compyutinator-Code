@@ -43,6 +43,7 @@ pywinpty = {version = "^2.0.13", platform = "win32"}
 ptyprocess = "^0.7.0"
 sip = "^6.8.6"
 pyqt6-sip = "^13.8.0"
+zep-python = "^2.0.2"
 
 
 [build-system]

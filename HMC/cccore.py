@@ -20,11 +20,14 @@ from GUX.radial_menu import RadialMenu
 from .context_manager import ContextManager
 from .environment_manager import EnvironmentManager
 from .secrets_manager import SecretsManager
+from .process_manager import ProcessManager
 from AuraText.auratext.Core.window import AuraTextWindow
+from .input_manager import InputManager
 from PyQt6.QtWidgets import QWidget
 from PyQt6.QtGui import QIcon
 from AuraText.auratext.scripts.def_path import resource
 
+from .font_manager import FontManager
 class CCCore:  # referred to as mm in other files (auratext)
     def __init__(self, settings_manager, main_window=None):
         self.settings_manager = settings_manager
@@ -38,8 +41,11 @@ class CCCore:  # referred to as mm in other files (auratext)
         self.secrets_manager = None
         self.env_manager = EnvironmentManager(self.settings_manager.get_value("environments_path", "./environments"))
         self.project_manager = None
+        self.process_manager = ProcessManager(self)
         self.build_manager = None
         self.file_manager = None
+        self.font_manager = None
+        self.input_manager = InputManager(model_path=None)  # Defaults to small en-us 0.15 model
         self.radial_menu = RadialMenu()
         self.radial_menu.optionSelected.connect(self.handle_radial_menu_selection)
         self.late_init_done = False
@@ -81,7 +87,9 @@ class CCCore:  # referred to as mm in other files (auratext)
         self.context_manager = ContextManager(self)
         self.file_manager = FileManager(self)
         self.workspace_manager = WorkspaceManager(self)
-
+ # Initialize FontManagerWidget
+        self.font_manager = FontManager()
+      
     def late_init(self):
         if not self.late_init_done:
             self.file_manager = FileManager(self)

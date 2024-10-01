@@ -9,6 +9,7 @@ class SettingsManager:
     def __init__(self):
         self.settings =  QSettings("instance.select", "Computinator Code")
         self.ensure_vault_path()
+        self.ensure_typing_effect_settings()
 
     def get_value(self, key, default=None):
         return self.settings.value(key, default)  # Changed from getValue to value
@@ -43,6 +44,33 @@ class SettingsManager:
             vault_path = default_vault_path
         if not os.path.exists(vault_path):
             os.makedirs(vault_path)
+
+    def ensure_typing_effect_settings(self):
+        if not self.get_value("typing_effect_enabled"):
+            self.set_value("typing_effect_enabled", True)
+        if not self.get_value("typing_effect_speed"):
+            self.set_value("typing_effect_speed", 100)  # milliseconds
+        if not self.get_value("typing_effect_particle_count"):
+            self.set_value("typing_effect_particle_count", 10)
+
+    def get_typing_effect_enabled(self):
+        return self.get_value("typing_effect_enabled", True)
+
+    def set_typing_effect_enabled(self, enabled):
+        self.set_value("typing_effect_enabled", enabled)
+
+    def get_typing_effect_speed(self):
+        return self.get_value("typing_effect_speed", 100)
+
+    def set_typing_effect_speed(self, speed):
+        self.set_value("typing_effect_speed", speed)
+
+    def get_typing_effect_particle_count(self):
+        return self.get_value("typing_effect_particle_count", 10)
+
+    def set_typing_effect_particle_count(self, count):
+        self.set_value("typing_effect_particle_count", count)
+
     def get_settings(self):
         return self.settings
     # Add other settings-related methods as needed

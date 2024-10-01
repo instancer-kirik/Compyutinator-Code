@@ -22,18 +22,18 @@ from GUX.media_player import MediaPlayer
 from GUX.diff_merger import DiffMergerWidget
 from HMC.sticky_note_manager import StickyNoteManager
 from HMC.download_manager import DownloadManager, DownloadManagerUI
-from GUX.widget_vault import VaultWidget, VaultsManagerWidget, ProjectsManagerWidget
+from GUX.widget_vault import VaultWidget, VaultsManagerWidget
 from GUX.theme_builder import ThemeBuilderWidget
 import serial
 import serial.tools.list_ports
-
+from HMC.project_manager import ProjectsManagerWidget
 from GUX.diff_merger import DiffMergerWidget
 from AuraText.auratext.Core.window import AuraTextWindow
 from AuraText.auratext.Core.TabWidget import TabWidget
 import logging
 import traceback
 from GUX.file_search_widget import FileSearchWidget
-import sip
+
 class WidgetManager:
     def __init__(self, cccore):
         self.cccore = cccore

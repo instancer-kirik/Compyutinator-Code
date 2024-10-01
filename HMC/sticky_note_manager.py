@@ -24,7 +24,8 @@ class StickyNoteManager(QWidget):
 
     def add_sticky_note(self, content=""):
         note_id = self.sticky_note_list.count() + 1
-        note_widget = StickyNoteWidget(note_id, note_content=content, parent=self)
+        note_content = str(content) if content else ""  # Ensure content is a string
+        note_widget = StickyNoteWidget(note_id, note_content=note_content, parent=self)
         item = QListWidgetItem(f"Sticky Note {note_id}")
         item.setData(Qt.ItemDataRole.UserRole, note_widget)
         self.sticky_note_list.addItem(item)

@@ -1,10 +1,15 @@
+
+import os
+from PyQt6.QtWidgets import QInputDialog
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QTreeWidget, QPushButton, QFileDialog, 
                              QTextEdit, QLabel, QLineEdit, QTreeWidgetItem, QSplitter, 
-                             QWidget, QHBoxLayout)
+                             QWidget, QHBoxLayout, QInputDialog, QMessageBox)
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 import os
-from PyQt6.QtWidgets import QInputDialog
+import importlib
+import inspect
+
 class ContextPickerDialog(QDialog):
     context_added = pyqtSignal(str, str)  # context_type, context_content
 
@@ -57,6 +62,14 @@ class ContextPickerDialog(QDialog):
         add_text_button = QPushButton("Add Custom Text")
         add_text_button.clicked.connect(self.add_custom_text)
         button_layout.addWidget(add_text_button)
+
+        add_import_button = QPushButton("Add Import")
+        add_import_button.clicked.connect(self.add_import)
+        button_layout.addWidget(add_import_button)
+
+        add_url_button = QPushButton("Add URL")
+        add_url_button.clicked.connect(self.add_url)
+        button_layout.addWidget(add_url_button)
 
         layout.addLayout(button_layout)
 
@@ -113,7 +126,7 @@ class ContextPickerDialog(QDialog):
                 context_type = item.parent().text(0)
                 context_name = item.text(0)
                 content = self.get_context_content(context_type, context_name)
-                self.context_added.emit(f"{context_type}: {context_name}", content)
+                self.context_added.emit(f"[{context_type}] {context_name}", content)
         self.accept()
 
     def add_file(self):
@@ -121,12 +134,33 @@ class ContextPickerDialog(QDialog):
         if file_path:
             with open(file_path, 'r') as file:
                 content = file.read()
-            self.context_added.emit(f"File: {os.path.basename(file_path)}", content)
+            self.context_added.emit(f"[File] {os.path.basename(file_path)}", content)
 
     def add_custom_text(self):
         text, ok = QInputDialog.getMultiLineText(self, "Add Custom Text", "Enter your text:")
         if ok and text:
-            self.context_added.emit("Custom Text", text)
+            self.context_added.emit("[Text] Custom Text", text)
+
+    def add_import(self):
+        module_name, ok = QInputDialog.getText(self, "Add Import", "Enter module name:")
+        if ok and module_name:
+            try:
+                module = importlib.import_module(module_name)
+                content = inspect.getsource(module)
+                self.context_added.emit(f"[Import] {module_name}", content)
+            except Exception as e:
+                QMessageBox.warning(self, "Import Error", f"Failed to import {module_name}: {str(e)}")
+
+    def add_url(self):
+        import requests
+        url, ok = QInputDialog.getText(self, "Add URL", "Enter URL:")
+        if ok and url:
+            try:
+                response = requests.get(url)
+                content = response.text
+                self.context_added.emit(f"[URL] {url}", content)
+            except Exception as e:
+                QMessageBox.warning(self, "URL Error", f"Failed to fetch content from {url}: {str(e)}")
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
@@ -138,6 +172,15 @@ class ContextPickerDialog(QDialog):
             if os.path.isfile(file_path):
                 with open(file_path, 'r') as file:
                     content = file.read()
-                self.context_added.emit(f"File: {os.path.basename(file_path)}", content)
+                self.context_added.emit(f"[File] {os.path.basename(file_path)}", content)
         event.acceptProposedAction()
+
+    def get_selected_items(self):
+        selected_items = []
+        for item in self.tree_widget.selectedItems():
+            if item.parent():  # It's a child item (actual context)
+                context_type = item.parent().text(0)
+                context_name = item.text(0)
+                selected_items.append(f"[{context_type}] {context_name}")
+        return selected_items
 

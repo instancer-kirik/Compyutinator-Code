@@ -3,81 +3,16 @@ from PyQt6.QtCore import Qt
 from AuraText.auratext.Core.CodeEditor import CodeEditor
 from GUX.markdown_viewer import MarkdownViewer
 import os
+import hashlib
+
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog,
+                             QLineEdit, QMessageBox, QApplication)
+
+import requests
+from AuraText.auratext.scripts.def_path import resource
 from PyQt6.QtCore import pyqtSignal
 import logging
 from PyQt6.QtGui import QIcon
-from AuraText.auratext.scripts.def_path import resource
-class ProjectsManagerWidget(QWidget):
-    def __init__(self, parent, cccore):
-        super().__init__(parent)
-        self.cccore = cccore
-        self.setup_ui()
-
-    def setup_ui(self):
-        projects_layout = QVBoxLayout(self)
-
-        # Project selector
-        self.project_selector = QComboBox()
-        projects = self.cccore.project_manager.get_projects()
-        self.project_selector.addItems(projects)
-        self.project_selector.currentTextChanged.connect(self.switch_project)
-        projects_layout.addWidget(self.project_selector)
-
-        # Recent projects button
-        self.recent_projects_button = QPushButton("Recent Projects")
-        self.recent_projects_button.clicked.connect(self.show_recent_projects_menu)
-        projects_layout.addWidget(self.recent_projects_button)
-
-        # Create the recent projects menu (but don't add it to the layout)
-        self.recent_projects_menu = QMenu(self)
-        self.update_recent_projects_menu()
-
-        # Add/Remove project buttons
-        button_layout = QHBoxLayout()
-        add_project_button = QPushButton("Add Project")
-        add_project_button.clicked.connect(self.cccore.project_manager.add_project)
-        remove_project_button = QPushButton("Remove Project")
-        remove_project_button.clicked.connect(self.cccore.project_manager.remove_project)
-        rename_project_button = QPushButton("Rename Project")
-        rename_project_button.clicked.connect(self.cccore.project_manager.rename_project)
-        button_layout.addWidget(add_project_button)
-        button_layout.addWidget(remove_project_button)
-        button_layout.addWidget(rename_project_button)
-        projects_layout.addLayout(button_layout)
-
-        # Build and Run buttons
-        build_run_layout = QHBoxLayout()
-        build_button = QPushButton("Build Project")
-        build_button.clicked.connect(self.cccore.project_manager.build_project)
-        run_button = QPushButton("Run Project")
-        run_button.clicked.connect(self.cccore.project_manager.run_project)
-        build_run_layout.addWidget(build_button)
-        build_run_layout.addWidget(run_button)
-        projects_layout.addLayout(build_run_layout)
-
-        # Configure buttons
-        configure_layout = QHBoxLayout()
-        configure_build_button = QPushButton("Configure Build")
-        configure_build_button.clicked.connect(self.cccore.project_manager.configure_build)
-        configure_run_button = QPushButton("Configure Run")
-        configure_run_button.clicked.connect(self.cccore.project_manager.configure_run)
-        configure_layout.addWidget(configure_build_button)
-        configure_layout.addWidget(configure_run_button)
-        projects_layout.addLayout(configure_layout)
-
-    def switch_project(self, project_name):
-        self.cccore.project_manager.switch_project(project_name)
-
-    def show_recent_projects_menu(self):
-        self.update_recent_projects_menu()
-        self.recent_projects_menu.exec(self.recent_projects_button.mapToGlobal(self.recent_projects_button.rect().bottomLeft()))
-
-    def update_recent_projects_menu(self):
-        self.recent_projects_menu.clear()
-        recent_projects = self.cccore.project_manager.get_recent_projects()
-        for project in recent_projects:
-            action = self.recent_projects_menu.addAction(project)
-            action.triggered.connect(lambda checked, p=project: self.switch_project(p))
 
 class VaultsManagerWidget(QWidget):
     vault_selected = pyqtSignal(str)
@@ -252,3 +187,106 @@ class FileExplorerWidget(QWidget):
         self.setWindowIcon(QIcon(resource(r"../media/terminal/remove.svg")))
         self.setWindowIcon(QIcon(resource(r"../media/terminal/remove.svg")))
             
+
+class HashSlingingHasherWidget(QWidget):
+    def __init__(self, backend_url):
+        super().__init__()
+        self.backend_url = backend_url
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout()
+
+        file_layout = QHBoxLayout()
+        self.file_path_input = QLineEdit()
+        self.file_path_input.setPlaceholderText("File path...")
+        file_layout.addWidget(self.file_path_input)
+
+        browse_button = QPushButton("Browse")
+        browse_button.clicked.connect(self.browse_file)
+        file_layout.addWidget(browse_button)
+
+        layout.addLayout(file_layout)
+
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("Enter file name (optional)")
+        layout.addWidget(self.name_input)
+
+        check_button = QPushButton("Check/Add Hash")
+        check_button.clicked.connect(self.check_or_add_hash)
+        layout.addWidget(check_button)
+
+        self.result_label = QLabel()
+        self.result_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.result_label)
+
+        self.setLayout(layout)
+        self.setWindowTitle("File Hash Checker/Adder")
+
+    def browse_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select File")
+        if file_path:
+            self.file_path_input.setText(file_path)
+            if not self.name_input.text():
+                self.name_input.setText(os.path.basename(file_path))
+
+    def calculate_hash(self, file_path):
+        sha256_hash = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest()
+
+    def check_or_add_hash(self):
+        file_path = self.file_path_input.text()
+        if not os.path.isfile(file_path):
+            QMessageBox.warning(self, "Error", "Invalid file path")
+            return
+
+        file_hash = self.calculate_hash(file_path)
+        file_name = self.name_input.text() or os.path.basename(file_path)
+        
+        try:
+            response = requests.post(
+                f"{self.backend_url}/check_or_add_hash",
+                json={"hash": file_hash, "name": file_name}
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            if data.get("exists", False):
+                name = data.get("name", "Unknown")
+                self.result_label.setText(f"Hash found in database. Name: {name}")
+            else:
+                self.result_label.setText(f"Hash added to database with name: {file_name}")
+        except requests.RequestException as e:
+            QMessageBox.critical(self, "Error", f"Failed to check/add hash: {str(e)}")
+from PyQt6.QtWidgets import QWidget
+from PyQt6.QtGui import QPainter, QColor
+from PyQt6.QtCore import Qt
+
+class AudioLevelWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.level = 0
+
+    def setLevel(self, level):
+        self.level = level
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        width = self.width()
+        height = self.height()
+        bar_width = width - 4
+        bar_height = height - 4
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(200, 200, 200))
+        painter.drawRect(2, 2, bar_width, bar_height)
+
+        level_height = int(bar_height * (self.level / 100))
+        painter.setBrush(QColor(0, 255, 0))
+        painter.drawRect(2, 2 + bar_height - level_height, bar_width, level_height)

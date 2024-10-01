@@ -61,7 +61,10 @@ class CollapsibleSection(QWidget):
     def add_widget(self, widget):
         self.content_layout.addWidget(widget)
 
-
+#https://github.com/getzep/zep?tab=readme-ov-file
+#user knowledge graph and stuff 
+# However, Zep cloud:
+# Structured Data Extraction: Quickly extract business data from chat conversations using a schema you define. Understand what your assistant should ask for next to complete the task.
 
 class ChatReferenceWidget(QWidget):
     def __init__(self, parent=None):
@@ -510,7 +513,18 @@ class AIChatWidget(QWidget):
         return '\n'.join(lines)
 
     def add_references(self):
-        dialog = ContextPickerDialog(self, recent_files=self.recent_files, open_files=self.editor_manager.get_open_files(), existing_contexts=[desc for desc, _ in self.context_manager.contexts])
+        open_files = []
+        if hasattr(self, 'editor_manager') and self.editor_manager is not None:
+            open_files = self.editor_manager.get_open_files()
+        else:
+            logging.warning("Editor manager is not available. Open files won't be included in the context picker.")
+
+        dialog = ContextPickerDialog(
+            self,
+            recent_files=self.recent_files,
+            open_files=open_files,
+            existing_contexts=[desc for desc, _ in self.context_manager.contexts]
+        )
         if dialog.exec():
             selected_items = dialog.get_selected_items()
             for item in selected_items:

@@ -94,6 +94,8 @@ from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel
 
 from PyQt6.QtWidgets import QTabWidget
 
+import traceback  # Add this import at the top of the file
+
 class MainApplication(QMainWindow):
     def __init__(self, settings_manager, cccore):
         logging.info("Initializing MainApplication")
@@ -101,6 +103,7 @@ class MainApplication(QMainWindow):
         self.settings_manager = settings_manager
         self.cccore = cccore
         self.widget_manager = cccore.widget_manager
+        
         # Add this line to initialize the config attribute
         self.config = self.settings_manager.get_settings()
         self.vault_manager = cccore.vault_manager
@@ -140,6 +143,12 @@ class MainApplication(QMainWindow):
         # Apply the saved theme
         saved_theme = self.cccore.theme_manager.get_current_theme()
         self.cccore.theme_manager.apply_theme(saved_theme)
+
+         
+        # Add Font Manager action to the menu
+        font_manager_action = QAction("Font Manager", self)
+        font_manager_action.triggered.connect(self.show_font_manager)
+        self.menuBar().addAction(font_manager_action)
 
     def setup_ui(self):
         # Create a central widget
@@ -227,9 +236,13 @@ class MainApplication(QMainWindow):
                     break
 
     def update_tab_color(self, index):
-        tab_color = self.cccore.theme_manager.current_theme.get("tab_colors", {}).get(index, 
-                    self.cccore.theme_manager.current_theme.get("last_focused_tab_color", "#81A1C1"))
-        self.apply_tab_color(tab_color, index)
+        current_theme = self.cccore.theme_manager.get_current_theme()
+        if isinstance(current_theme, dict):  # Add this check
+            tab_color = current_theme.get("tab_colors", {}).get(index,
+                                                                current_theme.get("theme_color", "#81A1C1"))
+            self.tabWidget.tabBar().setTabTextColor(index, QColor(tab_color))
+        else:
+            logging.error(f"Invalid theme type: {type(current_theme)}")
 
     def apply_tab_color(self, color, index):
         stylesheet = f"""
@@ -238,7 +251,7 @@ class MainApplication(QMainWindow):
         }}
         """
         self.tab_widget.setStyleSheet(stylesheet)
-        self.cccore.theme_manager.current_theme["last_focused_tab_color"] = color
+        self.cccore.theme_manager.set_last_focused_tab_color(color)
 
     def add_history_tab(self):
         self.history_widget = QListWidget()
@@ -312,11 +325,11 @@ class MainApplication(QMainWindow):
         QDesktopServices.openUrl(QUrl("https://github.com/instancer-kirik/BigLinks"))
 
     def add_transcriptor_live_tab(self):
-        self.transcriptor_live_widget = VoiceTypingWidget(self)
+        self.transcriptor_live_widget = VoiceTypingWidget(self.cccore.input_manager)
         self.tab_widget.addTab(self.transcriptor_live_widget, "Voice Typing")
 
     def add_logs_viewer_tab(self):
-        self.log_viewer_widget = LogViewerWidget(log_file_path=self.get_log_file_path())
+        self.log_viewer_widget = LogViewerWidget(initial_log_file_path=self.get_log_file_path())
         self.tab_widget.addTab(self.log_viewer_widget, "Logs Viewer")
     
     def get_log_file_path(self):
@@ -389,6 +402,7 @@ class MainApplication(QMainWindow):
 
     def cleanup_processes(self):
         # Terminate all running processes
+        self.cccore.process_manager.cleanup_processes()
         for process in self.child_processes.values():
             if process.state() == QProcess.Running:
                 process.terminate()
@@ -424,52 +438,92 @@ class MainApplication(QMainWindow):
                     logging.warning(f"Failed to create dock: {name}")
         logging.info("Docks creation completed")
 
+    def show_font_manager(self):
+        self.widget_manager.font_manager_widget.show()
+
+
+def exception_hook(exctype, value, tb):
+    logging.error("Uncaught exception", exc_info=(exctype, value, tb))
+    traceback.print_exception(exctype, value, tb)
+    QApplication.quit()
+
 def main():
-    logging.info("Starting main function")
-    
-    # Start the splash screen process
-    logging.info("Starting splash screen process")
-    splash_process = subprocess.Popen([sys.executable, 'GUX/splash_process.py'])
-    
-    logging.info("Creating QApplication")
-    app = QApplication(sys.argv)
+    # Use your existing logging configuration
+    log_directory = os.path.join(os.getcwd(), 'logs')
+    if not os.path.exists(log_directory):
+        os.makedirs(log_directory)
 
-    # Set the application-wide stylesheet for dark theme
-    app.setStyleSheet("""
-        QWidget {
-            background-color: #2E3440;
-            color: #D8DEE9;
-        }
-    """)
+    log_file_path = os.path.join(log_directory, 'app.log')
 
-    # Initialize SettingsManager in the main thread
-    logging.info("Initializing SettingsManager")
-    settings_manager = SettingsManager()
-    
-    logging.info("Initializing managers")
-    cccore, overlay = initialize_managers(settings_manager)
-    cccore.init_managers()
-    # Set overlay for CCCore
-    logging.info("Setting overlay for CCCore")
-    cccore.set_overlay(overlay)
+    logging.basicConfig(level=logging.INFO, 
+                        format='%(asctime)s - %(levelname)s - %(message)s', 
+                        handlers=[logging.FileHandler(log_file_path, 'a'), 
+                                  logging.StreamHandler()])
 
-    # Create WidgetManager
-    logging.info("Creating WidgetManager")
-    widget_manager = WidgetManager(cccore)
+    logging.info("Application started")
 
-    # Set widget_manager for CCCore
-    logging.info("Setting widget_manager for CCCore")
-    cccore.set_widget_manager(widget_manager)
-    cccore.late_init()
-    # Create the main application instance
-    logging.info("Creating MainApplication instance")
-    main_app = MainApplication(settings_manager, cccore)
+    sys.excepthook = exception_hook
 
-    # Set the main_window for widget_manager
-    logging.info("Setting main_window for widget_manager")
-    cccore.set_main_window(main_app)
-    
-    # Function to show the application with fade-in effect
+    try:
+        logging.info("Starting splash screen process")
+        splash_process = subprocess.Popen([sys.executable, 'GUX/splash_process.py'])
+        
+        logging.info("Creating QApplication")
+        app = QApplication(sys.argv)
+
+        logging.info("Setting application-wide stylesheet")
+        app.setStyleSheet("""
+            QWidget {
+                background-color: #2E3440;
+                color: #D8DEE9;
+            }
+        """)
+
+        logging.info("Initializing SettingsManager")
+        settings_manager = SettingsManager()
+        
+        logging.info("Initializing managers")
+        cccore, overlay = initialize_managers(settings_manager)
+        
+        logging.info("Initializing CCCore managers")
+        cccore.init_managers()
+        
+        logging.info("Setting overlay for CCCore")
+        cccore.set_overlay(overlay)
+
+        logging.info("Creating WidgetManager")
+        widget_manager = WidgetManager(cccore)
+
+        logging.info("Setting widget_manager for CCCore")
+        cccore.set_widget_manager(widget_manager)
+        
+        logging.info("Performing CCCore late initialization")
+        cccore.late_init()
+        
+        logging.info("Creating MainApplication instance")
+        main_app = MainApplication(settings_manager, cccore)
+
+        logging.info("Setting main_window for widget_manager")
+        cccore.set_main_window(main_app)
+        
+        def show_app():
+            logging.info("Showing main application")
+            main_app.show()
+            splash_process.terminate()
+            main_app.fade_in()
+
+        logging.info("Scheduling application display")
+        QTimer.singleShot(0, show_app)
+
+        logging.info("Entering Qt event loop")
+        sys.exit(app.exec())
+
+    except Exception as e:
+        logging.error(f"Unhandled exception in main: {e}", exc_info=True)
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()
     def show_app():
         logging.info("Showing main application")
         main_app.show()
