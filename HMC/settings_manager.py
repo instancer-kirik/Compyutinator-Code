@@ -43,5 +43,6 @@ class SettingsManager:
             vault_path = default_vault_path
         if not os.path.exists(vault_path):
             os.makedirs(vault_path)
-
+    def get_settings(self):
+        return self.settings
     # Add other settings-related methods as needed

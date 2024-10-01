@@ -7,7 +7,14 @@
         "File Explorer",
         "Code Editor",
         "Terminal",
-        "AI Chat"
+        "AI Chat",
+        "Symbolic Linker",
+        "Sticky Notes",
+        "Process Manager",
+        "Vaults Manager",
+        "AuraText",
+        "Projects Manager"
+        
     ],
     "layout": {
         "left": ["File Explorer", "Symbolic Linker"],

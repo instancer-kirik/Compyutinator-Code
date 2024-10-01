@@ -146,11 +146,10 @@ class ProjectManager:
         current_project = self.get_current_project()
         if current_project:
             if self.build_manager.build_project(current_project):
-                QMessageBox.information(self,                                        "Build Project",
+                QMessageBox.information(self, "Build Project",
                                         f"Successfully built project: {current_project}")
             else:
-                QMessageBox.warning(self,
-                                    "Build Failed",
+                QMessageBox.warning(self, "Build Failed",
                                     f"Failed to build project: {current_project}")
         else:
             QMessageBox.warning(self, "Error", "No active project to build")

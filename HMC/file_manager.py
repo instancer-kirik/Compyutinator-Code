@@ -4,7 +4,7 @@ from GUX.radial_menu import RadialMenu
 from PyQt6.QtGui import QTextCursor, QFileSystemModel 
 from PyQt6.QtWidgets import QInputDialog 
 from PyQt6.QtCore import QDir
-
+import hashlib
 import tempfile
 import shutil
 import logging
@@ -311,11 +311,67 @@ class FileManager:
         if root_path and os.path.exists(root_path):
             try:
                 file_tree_view.set_root_path(root_path)
-                file_tree_view.setRootIndex(self.file_system_model.index(root_path))
             except Exception as e:
                 logging.error(f"Error setting root path for vault explorer: {e}")
         else:
             logging.warning(f"Current vault path does not exist or is not set: {root_path}")
 
         default_path = os.path.expanduser("~")
-        file_tree_view.setRootIndex(self.file_system_model.index(default_path))
+        file_tree_view.set_root_path(default_path)  # Changed from set_root_index to set_root_path
+        
+    class FileVersionStore:
+        def __init__(self, store_path):
+            self.store_path = store_path
+
+        def save_version(self, file_path, content):
+            hash = self.generate_hash(content)
+            version_path = f"{self.store_path}/{hash}"
+            with open(version_path, 'w') as f:
+                f.write(content)
+            self.update_version_history(file_path, hash)
+            return hash
+
+        def get_version(self, hash):
+            version_path = f"{self.store_path}/{hash}"
+            with open(version_path, 'r') as f:
+                return f.read()
+
+        def update_version_history(self, file_path, hash):
+            history_path = f"{self.store_path}/{file_path}.history"
+            with open(history_path, 'a') as f:
+                f.write(f"{hash}\n")
+    class MediaStore:
+        def __init__(self, store_path):
+            self.store_path = store_path
+
+        def add_media(self, file_path):
+            with open(file_path, 'rb') as f:
+                content = f.read()
+            hash = self.generate_hash(content)
+            media_path = f"{self.store_path}/{hash}"
+            if not os.path.exists(media_path):
+                with open(media_path, 'wb') as f:
+                    f.write(content)
+            return hash
+
+        def get_media_path(self, hash):
+            return f"{self.store_path}/{hash}"
+
+        def generate_hash(self, content):
+            return hashlib.sha256(content).hexdigest()
+    # class DependencyStore:
+    #     def __init__(self, store_path):
+    #         self.store_path = store_path
+
+    #     def add_dependency(self, name, version, content):
+    #         hash = self.generate_hash(content)
+    #         dep_path = f"{self.store_path}/{name}/{version}/{hash}"
+    #         os.makedirs(os.path.dirname(dep_path), exist_ok=True)
+    #         with open(dep_path, 'wb') as f:
+    #             f.write(content)
+    #         return hash
+
+    #     def get_dependency(self, name, version, hash):
+    #         dep_path = f"{self.store_path}/{name}/{version}/{hash}"
+    #         with open(dep_path, 'rb') as f:
+    #             return f.read()

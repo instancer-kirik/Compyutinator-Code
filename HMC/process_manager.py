@@ -3,7 +3,7 @@ import signal
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QListWidget, QMessageBox
 
 class ProcessManagerWidget(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, cccore=None):
         super().__init__(parent)
         self.parent = parent
         self.layout = QVBoxLayout()

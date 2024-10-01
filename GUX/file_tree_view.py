@@ -29,14 +29,14 @@ class PathBreadcrumb(QWidget):
         else:
             self.path_edit.setText(self.current_path)
 
-class FileTreeView(QWidget):
+class FileTreeView(QTreeView):
     file_selected = pyqtSignal(str)
 
     def __init__(self, file_system_model, parent=None):
         super().__init__(parent)
         self.model = file_system_model
         self.setup_ui()
-        self.setup_model()
+        self.setup_model(self.model)
         self.is_scrolling = False
 
     def setup_ui(self):
@@ -70,9 +70,9 @@ class FileTreeView(QWidget):
         self.tree_view.setMouseTracking(True)
         self.tree_view.viewport().installEventFilter(self)
 
-    def setup_model(self):
-        self.tree_view.setModel(self.model)
-        self.tree_view.setRootIndex(self.model.index(""))
+    def setup_model(self,model):
+        self.tree_view.setModel(model)
+        self.tree_view.setRootIndex(model.index(""))
 
     def on_path_changed(self, new_path):
         index = self.model.index(new_path)
@@ -184,6 +184,6 @@ class FileTreeView(QWidget):
 
     def set_root_path(self, path):
         if os.path.exists(path):
-            root_index = self.model.setRootPath(path)
-            self.tree_view.setRootIndex(root_index)
+            index = self.model.index(path)
+            self.tree_view.setRootIndex(index)
             self.breadcrumb.set_path(path)

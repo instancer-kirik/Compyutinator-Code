@@ -1,18 +1,16 @@
-from PyQt6.QtWidgets import QWidget, QDockWidget, QVBoxLayout, QListWidget, QListWidgetItem, QPushButton
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem, QPushButton
 from PyQt6.QtCore import Qt
 from GUX.sticky_note import StickyNoteWidget
 import logging
 
-class StickyNoteManager(QDockWidget):
-    def __init__(self, parent=None):
-        super().__init__("Sticky Notes", parent)
-        self.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+class StickyNoteManager(QWidget):
+    def __init__(self, parent=None, cccore=None):
+        super().__init__(parent)
+        self.cccore = cccore
         self.initUI()
 
     def initUI(self):
-        self.container = QWidget()
-        self.layout = QVBoxLayout()
-        self.container.setLayout(self.layout)
+        self.layout = QVBoxLayout(self)
 
         self.sticky_note_list = QListWidget()
         self.sticky_note_list.itemClicked.connect(self.load_sticky_note)
@@ -23,8 +21,6 @@ class StickyNoteManager(QDockWidget):
         self.add_button = QPushButton("Add Sticky Note")
         self.add_button.clicked.connect(self.add_sticky_note)
         self.layout.addWidget(self.add_button)
-
-        self.setWidget(self.container)
 
     def add_sticky_note(self, content=""):
         note_id = self.sticky_note_list.count() + 1

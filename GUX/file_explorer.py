@@ -9,7 +9,7 @@ from GUX.custom_tree_view import CustomTreeView
 class FileExplorerWidget(QWidget):
     file_selected = pyqtSignal(str)
 
-    def __init__(self, cccore, parent=None):
+    def __init__(self, parent=None, cccore= None):
         super().__init__(parent)
         self.parent = parent
         self.setup_ui()

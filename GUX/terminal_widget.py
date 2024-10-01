@@ -2,34 +2,56 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLineEdit, QMenu, Q
 from PyQt6.QtGui import QAction
 from PyQt6.QtCore import QProcess, Qt
 import os
-
+from PyQt6.QtGui import QKeySequence, QShortcut
+from PyQt6.QtWidgets import QSplitter
+from PyQt6.QtCore import Qt
+from AuraText.auratext.Core.powershell import TerminalEmulator
 class TerminalWidget(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, cccore=None):
         super().__init__(parent)
-        self.process = QProcess(self)
+        self.cccore = cccore
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.splitter = QSplitter(self)
+        self.layout.addWidget(self.splitter)
 
-        self.layout = QVBoxLayout()
-        self.setLayout(self.layout)
+        self.add_terminal()
+    
+        self.setup_shortcuts()
 
-        self.output = QTextEdit()
-        self.output.setReadOnly(True)
-        self.output.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.output.customContextMenuRequested.connect(self.show_context_menu)
-        self.layout.addWidget(self.output)
+    def setup_shortcuts(self):
+        QShortcut(QKeySequence("Ctrl+Shift+H"), self, self.split_horizontal)
+        QShortcut(QKeySequence("Ctrl+Shift+V"), self, self.split_vertical)
+        QShortcut(QKeySequence("Ctrl+Shift+W"), self, self.close_current_terminal)
 
-        self.input = QLineEdit()
-        self.input.returnPressed.connect(self.execute_command)
-        self.layout.addWidget(self.input)
+    def add_terminal(self):
+        terminal = TerminalEmulator(self)
+        self.splitter.addWidget(terminal)
+        return terminal
 
-        if os.name == 'nt':
-            # Windows
-            self.process.start("cmd.exe")
+    def split_horizontal(self):
+        current_terminal = self.splitter.widget(self.splitter.count() - 1)
+        new_terminal = self.add_terminal()
+        self.splitter.setOrientation(Qt.Orientation.Vertical)
+        self.splitter.insertWidget(self.splitter.count() - 1, new_terminal)
+        self.splitter.setStretchFactor(self.splitter.count() - 1, 1)
+        new_terminal.setFocus()
+
+    def split_vertical(self):
+        current_terminal = self.splitter.widget(self.splitter.count() - 1)
+        new_terminal = self.add_terminal()
+        self.splitter.setOrientation(Qt.Orientation.Horizontal)
+        self.splitter.insertWidget(self.splitter.count() - 1, new_terminal)
+        self.splitter.setStretchFactor(self.splitter.count() - 1, 1)
+        new_terminal.setFocus()
+
+    def close_current_terminal(self):
+        current_terminal = self.splitter.widget(self.splitter.count() - 1)
+        if self.splitter.count() > 1:
+            current_terminal.setParent(None)
+            current_terminal.deleteLater()
         else:
-            # Unix-like
-            self.process.start("/bin/bash")
-
-        self.process.readyReadStandardOutput.connect(self.update_output)
-        self.process.readyReadStandardError.connect(self.update_output)
+            self.parent().close()  # Close the entire widget if it's the last terminal
 
     def execute_command(self):
         command = self.input.text()
@@ -43,18 +65,21 @@ class TerminalWidget(QWidget):
         if error_output:
             self.output.append(error_output)
 
-    def show_context_menu(self, position):
-        menu = QMenu()
-        
-        copy_action = QAction("Copy", self)
-        copy_action.triggered.connect(self.copy_text)
-        menu.addAction(copy_action)
+    def contextMenuEvent(self, event):
+        context_menu = QMenu(self)
+        split_h_action = QAction("Split Horizontally", self)
+        split_v_action = QAction("Split Vertically", self)
+        close_action = QAction("Close Terminal", self)
 
-        clear_action = QAction("Clear", self)
-        clear_action.triggered.connect(self.clear_output)
-        menu.addAction(clear_action)
-        
-        menu.exec(self.output.mapToGlobal(position))
+        split_h_action.triggered.connect(self.split_horizontal)
+        split_v_action.triggered.connect(self.split_vertical)
+        close_action.triggered.connect(self.close_current_terminal)
+
+        context_menu.addAction(split_h_action)
+        context_menu.addAction(split_v_action)
+        context_menu.addAction(close_action)
+
+        context_menu.exec(event.globalPos())
 
     def copy_text(self):
         cursor = self.output.textCursor()

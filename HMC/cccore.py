@@ -12,6 +12,8 @@ from .cursor_manager import CursorManager
 import logging
 import os
 import tempfile
+from .file_manager import FileManager
+from .workspace_manager import WorkspaceManager
 from .project_manager import ProjectManager
 from .build_manager import BuildManager
 from GUX.radial_menu import RadialMenu
@@ -37,6 +39,7 @@ class CCCore:  # referred to as mm in other files (auratext)
         self.env_manager = EnvironmentManager(self.settings_manager.get_value("environments_path", "./environments"))
         self.project_manager = None
         self.build_manager = None
+        self.file_manager = None
         self.radial_menu = RadialMenu()
         self.radial_menu.optionSelected.connect(self.handle_radial_menu_selection)
         self.late_init_done = False
@@ -46,9 +49,8 @@ class CCCore:  # referred to as mm in other files (auratext)
 
     def set_widget_manager(self, widget_manager):
         self.widget_manager = widget_manager
-        self.auratext_window = self.widget_manager.auratext_window
-        logging.info(f"AuraTextWindow set: {self.auratext_window}")
-        logging.info(f"tab_widget exists: {hasattr(self.auratext_window, 'tab_widget')}")
+        # Instead of directly accessing auratext_window, let's create it if needed
+        self.create_auratext_window()
         
     def set_auratext_window(self, window):
         self.auratext_window = window
@@ -74,11 +76,11 @@ class CCCore:  # referred to as mm in other files (auratext)
             self.vault_manager.set_default_vault(temp_vault)
         self.env_manager = EnvironmentManager(self.settings_manager.get_value("environments_path", "./environments"))
         self.secrets_manager = SecretsManager(self.settings_manager)
-        
         self.project_manager = ProjectManager(self.settings_manager, self)
-
         self.build_manager = BuildManager(self)
         self.context_manager = ContextManager(self)
+        self.file_manager = FileManager(self)
+        self.workspace_manager = WorkspaceManager(self)
 
     def late_init(self):
         if not self.late_init_done:
@@ -197,19 +199,15 @@ class CCCore:  # referred to as mm in other files (auratext)
 
     def create_auratext_window(self):
         if self.auratext_window is None:
-            self.auratext_window = AuraTextWindow(self)
+            auratext_widget = self.widget_manager.get_or_create_dock("AuraText")
+            if isinstance(auratext_widget, QWidget):
+                # Find the AuraTextWindow within the widget
+                for child in auratext_widget.children():
+                    if isinstance(child, AuraTextWindow):
+                        self.auratext_window = child
+                        break
+            if self.auratext_window is None:
+                logging.error("Failed to create AuraTextWindow")
         return self.auratext_window
 
-    class FileExplorerWidget(QWidget):
-        def __init__(self, cccore):
-            super().__init__()
-            self.cccore = cccore
-            self.setWindowTitle("File Explorer")
-            self.setGeometry(100, 100, 800, 600)
-            self.setStyleSheet("background-color: #282828; color: #FFFFFF;")
-            self.setWindowIcon(QIcon(resource(r"../media/terminal/new.svg")))
-            self.setWindowIcon(QIcon(resource(r"../media/terminal/remove.svg")))
-            self.setWindowIcon(QIcon(resource(r"../media/terminal/remove.svg")))
-            self.setWindowIcon(QIcon(resource(r"../media/terminal/remove.svg")))
-            self.setWindowIcon(QIcon(resource(r"../media/terminal/remove.svg")))
-            
+  

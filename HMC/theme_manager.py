@@ -177,13 +177,50 @@ class ThemeManager(QObject):
 
         logging.info(f"Applying theme: {theme_name}")
         try:
-            apply_stylesheet(QApplication.instance(), theme=theme['style'])
+            if isinstance(theme, dict) and 'colors' in theme:
+                # Apply custom theme
+                self.apply_custom_theme(theme)
+            else:
+                # Apply qt_material theme
+                apply_stylesheet(QApplication.instance(), theme=theme['style'])
+            
             self.current_theme = theme_name
             self.save_config()
             self.theme_changed.emit(theme)
             logging.info("Theme applied successfully")
         except Exception as e:
             logging.error(f"Error applying theme: {e}")
+
+    def apply_custom_theme(self, theme):
+        app = QApplication.instance()
+        stylesheet = f"""
+            QWidget {{
+                background-color: {theme['colors']['backgroundColor']};
+                color: {theme['colors']['textColor']};
+                font-family: {theme['fonts']['family']};
+                font-size: {theme['fonts']['size']}px;
+                font-weight: {theme['fonts']['weight']};
+            }}
+            QPushButton {{
+                background-color: {theme['colors']['buttonColor']};
+                color: {theme['colors']['buttonTextColor']};
+                border-radius: {theme['dimensions']['borderRadius']}px;
+                height: {theme['dimensions']['buttonHeight']}px;
+                {theme['styles']['buttonStyle']}
+            }}
+            QScrollBar {{
+                background-color: {theme['colors']['scrollbarColor']};
+                width: {theme['dimensions']['scrollbarWidth']}px;
+            }}
+            QLineEdit {{
+                {theme['styles']['inputStyle']}
+            }}
+            a {{
+                color: {theme['colors']['linkColor']};
+                {theme['styles']['linkStyle']}
+            }}
+        """
+        app.setStyleSheet(stylesheet)
 
     def get_available_themes(self):
         return list(self.custom_themes.keys()) + list_themes()

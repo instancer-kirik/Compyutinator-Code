@@ -70,10 +70,7 @@ from HMC.workspace_manager import WorkspaceManager
 def initialize_managers(settings_manager):
     cccore = CCCore(settings_manager)
     overlay = CompositeOverlay(cccore, flashlight_size=200, flashlight_power=0.069, serial_port=None)
-    cccore.set_overlay(overlay)
-    vault_manager = VaultManager(settings_manager)
-    workspace_manager = WorkspaceManager(vault_manager, cccore)
-    return cccore, vault_manager, workspace_manager, overlay
+    return cccore, overlay
 
 def merge_themes(default_theme, custom_theme):
     merged_theme = default_theme.copy()
@@ -98,14 +95,16 @@ from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel
 from PyQt6.QtWidgets import QTabWidget
 
 class MainApplication(QMainWindow):
-    def __init__(self, settings_manager, cccore, widget_manager, vault_manager, workspace_manager):
+    def __init__(self, settings_manager, cccore):
         logging.info("Initializing MainApplication")
         super().__init__()
         self.settings_manager = settings_manager
         self.cccore = cccore
-        self.widget_manager = widget_manager
-        self.vault_manager = vault_manager
-        self.workspace_manager = workspace_manager
+        self.widget_manager = cccore.widget_manager
+        # Add this line to initialize the config attribute
+        self.config = self.settings_manager.get_settings()
+        self.vault_manager = cccore.vault_manager
+        self.workspace_manager = cccore.workspace_manager
         self.config = load_config('config.json')
         self.history = []
         self.max_history_length = 10
@@ -113,12 +112,12 @@ class MainApplication(QMainWindow):
         self.child_processes = {}
         self.overlay = self.cccore.overlay
         self.action_handlers = ActionHandlers(self)
-        self.menu_manager = MenuManager(self)
+        
         self.workspace_selector = None
       
         logging.info("Setting main window for widget_manager")
         self.widget_manager.set_main_window_and_create_docks(self)
-       
+        self.menu_manager = MenuManager(self, cccore=self.cccore)
         self.tab_widget = None  # Initialize it as None
         self.workspace_selector = QComboBox(self)
       
@@ -278,17 +277,13 @@ class MainApplication(QMainWindow):
         self.refresh_widgets_after_theme_change()
 
     def refresh_widgets_after_theme_change(self):
-        for dock_name in self.widget_manager.docks:
-            dock = self.widget_manager.get_or_create_dock(dock_name, self)
-            # Apply theme changes to the dock and its contents
-            if hasattr(dock.widget(), 'apply_theme'):
-                dock.widget().apply_theme()
-        # Refresh any widgets that might need special handling
-        auratext_dock = self.widget_manager.get_or_create_dock('AuraText')
-        if auratext_dock:
-            auratext_window = auratext_dock.widget()
-            if hasattr(auratext_window, 'refresh_after_theme_change'):
-                auratext_window.refresh_after_theme_change()
+        for dock_name, dock in self.widget_manager.dock_widgets.items():
+            if dock and not self.widget_manager.is_dock_deleted(dock):
+                widget = dock.widget()
+                if widget and hasattr(widget, 'apply_theme'):
+                    widget.apply_theme()
+            else:
+                logging.warning(f"Invalid dock or widget for {dock_name}")
         
     def update_tab_colors(self):
         # Update tab colors if needed
@@ -452,7 +447,7 @@ def main():
     settings_manager = SettingsManager()
     
     logging.info("Initializing managers")
-    cccore, vault_manager, workspace_manager, overlay = initialize_managers(settings_manager)
+    cccore, overlay = initialize_managers(settings_manager)
     cccore.init_managers()
     # Set overlay for CCCore
     logging.info("Setting overlay for CCCore")
@@ -468,7 +463,7 @@ def main():
     cccore.late_init()
     # Create the main application instance
     logging.info("Creating MainApplication instance")
-    main_app = MainApplication(settings_manager, cccore, widget_manager, vault_manager, workspace_manager)
+    main_app = MainApplication(settings_manager, cccore)
 
     # Set the main_window for widget_manager
     logging.info("Setting main_window for widget_manager")

@@ -10,10 +10,12 @@ from PyQt6.QtGui import QAction
 from .action_handlers import ActionHandlers
 
 import logging
+from PyQt6.QtCore import QObject
 
 class MenuManager:
-    def __init__(self, main_window):
+    def __init__(self, main_window, cccore):
         self.main_window = main_window
+        self.cccore = cccore
         self.action_handlers = ActionHandlers(main_window)
 
     def create_menu_bar(self):
@@ -52,16 +54,38 @@ class MenuManager:
         edit_menu.addAction("Cut", self.action_handlers.cut_document)
         edit_menu.addAction("Copy", self.action_handlers.copy_document)
         edit_menu.addAction("Paste", self.action_handlers.paste_document)
+        edit_menu.addAction("Theme Builder", self.main_window.widget_manager.show_theme_builder)
         return edit_menu
 
     def create_view_menu(self):
-        view_menu = QMenu("&View", self.main_window)
-        widget_manager = self.main_window.widget_manager
-        
-        for dock_name, dock_widget in widget_manager.get_all_dock_widgets().items():
-            self.add_toggle_view_action(view_menu, dock_name, dock_widget)
-        
+        view_menu = QMenu("View", self.main_window)
+        for dock_name, dock_widget in self.cccore.widget_manager.dock_widgets.items():
+            action = view_menu.addAction(dock_name)
+            action.setCheckable(True)
+            try:
+                if dock_widget and isinstance(dock_widget, QObject):
+                    parent = dock_widget.parent()
+                    is_visible = dock_widget.isVisible()
+                    action.setChecked(is_visible)
+                    action.triggered.connect(lambda checked, w=dock_widget: self.toggle_dock_visibility(w, checked))
+                else:
+                    action.setEnabled(False)
+                    logging.warning(f"Dock widget '{dock_name}' is not a valid QObject.")
+            except RuntimeError:
+                action.setEnabled(False)
+                logging.warning(f"Dock widget '{dock_name}' has been deleted or is invalid.")
+            except Exception as e:
+                action.setEnabled(False)
+                logging.error(f"Unexpected error with dock widget '{dock_name}': {str(e)}")
         return view_menu
+
+    def toggle_dock_visibility(self, dock_widget, checked):
+        try:
+            dock_widget.setVisible(checked)
+        except RuntimeError:
+            logging.warning(f"Failed to set visibility for a dock widget. It may have been deleted.")
+        except Exception as e:
+            logging.error(f"Unexpected error toggling dock visibility: {str(e)}")
 
     def create_tools_menu(self):
         tools_menu = QMenu("&Tools", self.main_window)

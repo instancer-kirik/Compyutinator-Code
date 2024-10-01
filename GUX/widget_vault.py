@@ -1,22 +1,89 @@
-from PyQt6.QtWidgets import QWidget, QDockWidget, QVBoxLayout, QPushButton, QListWidget, QInputDialog, QMessageBox, QHBoxLayout, QSplitter
+from PyQt6.QtWidgets import QWidget, QDockWidget, QMenu,QVBoxLayout, QComboBox, QPushButton, QListWidget, QInputDialog, QMessageBox, QHBoxLayout, QSplitter
 from PyQt6.QtCore import Qt
 from AuraText.auratext.Core.CodeEditor import CodeEditor
 from GUX.markdown_viewer import MarkdownViewer
 import os
 from PyQt6.QtCore import pyqtSignal
 import logging
+from PyQt6.QtGui import QIcon
+from AuraText.auratext.scripts.def_path import resource
 class ProjectsManagerWidget(QWidget):
-    def __init__(self, cccore):
-        super().__init__()
+    def __init__(self, parent, cccore):
+        super().__init__(parent)
         self.cccore = cccore
-        # Implement projects manager widget
-        # This could include a list of projects and buttons to add/remove projects
+        self.setup_ui()
+
+    def setup_ui(self):
+        projects_layout = QVBoxLayout(self)
+
+        # Project selector
+        self.project_selector = QComboBox()
+        projects = self.cccore.project_manager.get_projects()
+        self.project_selector.addItems(projects)
+        self.project_selector.currentTextChanged.connect(self.switch_project)
+        projects_layout.addWidget(self.project_selector)
+
+        # Recent projects button
+        self.recent_projects_button = QPushButton("Recent Projects")
+        self.recent_projects_button.clicked.connect(self.show_recent_projects_menu)
+        projects_layout.addWidget(self.recent_projects_button)
+
+        # Create the recent projects menu (but don't add it to the layout)
+        self.recent_projects_menu = QMenu(self)
+        self.update_recent_projects_menu()
+
+        # Add/Remove project buttons
+        button_layout = QHBoxLayout()
+        add_project_button = QPushButton("Add Project")
+        add_project_button.clicked.connect(self.cccore.project_manager.add_project)
+        remove_project_button = QPushButton("Remove Project")
+        remove_project_button.clicked.connect(self.cccore.project_manager.remove_project)
+        rename_project_button = QPushButton("Rename Project")
+        rename_project_button.clicked.connect(self.cccore.project_manager.rename_project)
+        button_layout.addWidget(add_project_button)
+        button_layout.addWidget(remove_project_button)
+        button_layout.addWidget(rename_project_button)
+        projects_layout.addLayout(button_layout)
+
+        # Build and Run buttons
+        build_run_layout = QHBoxLayout()
+        build_button = QPushButton("Build Project")
+        build_button.clicked.connect(self.cccore.project_manager.build_project)
+        run_button = QPushButton("Run Project")
+        run_button.clicked.connect(self.cccore.project_manager.run_project)
+        build_run_layout.addWidget(build_button)
+        build_run_layout.addWidget(run_button)
+        projects_layout.addLayout(build_run_layout)
+
+        # Configure buttons
+        configure_layout = QHBoxLayout()
+        configure_build_button = QPushButton("Configure Build")
+        configure_build_button.clicked.connect(self.cccore.project_manager.configure_build)
+        configure_run_button = QPushButton("Configure Run")
+        configure_run_button.clicked.connect(self.cccore.project_manager.configure_run)
+        configure_layout.addWidget(configure_build_button)
+        configure_layout.addWidget(configure_run_button)
+        projects_layout.addLayout(configure_layout)
+
+    def switch_project(self, project_name):
+        self.cccore.project_manager.switch_project(project_name)
+
+    def show_recent_projects_menu(self):
+        self.update_recent_projects_menu()
+        self.recent_projects_menu.exec(self.recent_projects_button.mapToGlobal(self.recent_projects_button.rect().bottomLeft()))
+
+    def update_recent_projects_menu(self):
+        self.recent_projects_menu.clear()
+        recent_projects = self.cccore.project_manager.get_recent_projects()
+        for project in recent_projects:
+            action = self.recent_projects_menu.addAction(project)
+            action.triggered.connect(lambda checked, p=project: self.switch_project(p))
 
 class VaultsManagerWidget(QWidget):
     vault_selected = pyqtSignal(str)
 
-    def __init__(self, cccore):
-        super().__init__()
+    def __init__(self, parent, cccore):
+        super().__init__(parent)
         self.cccore = cccore
         self.setup_ui()
 
@@ -93,8 +160,8 @@ class VaultsManagerWidget(QWidget):
             QMessageBox.warning(self, "Error", "Config file not found.")
 
 class VaultWidget(QWidget):
-    def __init__(self, cccore):
-        super().__init__()
+    def __init__(self, parent, cccore):
+        super().__init__(parent)
         self.cccore = cccore
         self.setup_ui()
 
@@ -172,3 +239,16 @@ class VaultWidget(QWidget):
     def on_vault_switch(self, new_vault_path):
         self.markdown_viewer.set_vault_path(new_vault_path)
         self.refresh_files()
+class FileExplorerWidget(QWidget):
+    def __init__(self, cccore):
+        super().__init__()
+        self.cccore = cccore
+        self.setWindowTitle("File Explorer")
+        self.setGeometry(100, 100, 800, 600)
+        self.setStyleSheet("background-color: #282828; color: #FFFFFF;")
+        self.setWindowIcon(QIcon(resource(r"../media/terminal/new.svg")))
+        self.setWindowIcon(QIcon(resource(r"../media/terminal/remove.svg")))
+        self.setWindowIcon(QIcon(resource(r"../media/terminal/remove.svg")))
+        self.setWindowIcon(QIcon(resource(r"../media/terminal/remove.svg")))
+        self.setWindowIcon(QIcon(resource(r"../media/terminal/remove.svg")))
+            

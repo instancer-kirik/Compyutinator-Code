@@ -1,4 +1,8 @@
 {
-  "current_theme": "dark_amber.xml",
-  "custom_themes": {}
+  "current_theme": "test",
+  "custom_themes": {
+    "test": {
+      "style": "test"
+    }
+  }
 }

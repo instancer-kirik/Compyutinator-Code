@@ -39,8 +39,9 @@ class PythonHighlighter(QSyntaxHighlighter):
                 self.setFormat(match.capturedStart(), match.capturedLength(), fmt)
 
 class CodeEditorWidget(QWidget):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None, cccore=None):
+        super().__init__(parent)
+        self.cccore = cccore
 
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
