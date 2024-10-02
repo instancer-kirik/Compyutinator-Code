@@ -1,8 +1,10 @@
-How to run it? I do command
+How to run it?
+Good luck, still in active development
+I do command
 C:Users/ME/miniconda3/python.exe x:/_WORK/Python/Qt/BigLinks/main.py
 BUILD WITH POETRY
 poetry install, ezpz
-
+might need nix-portable and/or homeManager (both on github)
 ## Big links make big chains
 BigLinks is a widget in a PyQt app Computinator Code, to help users manage limited file storage more by leveraging symbolic links to keep data on other local drives. (Currently only tested on Windows)
 
