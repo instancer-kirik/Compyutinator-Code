@@ -1,8 +1,8 @@
 from PyQt6.QtWidgets import QSplashScreen, QPushButton, QVBoxLayout, QWidget
 from PyQt6.QtGui import QMovie, QPixmap
-from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal, QObject, QTimer
+from PyQt6.QtCore import Qt, QSize, pyqtSignal, QObject, QTimer
 import logging
-
+from PyQt6.QtWidgets import QLabel
 class MovieUpdater(QObject):
     frameChanged = pyqtSignal(QPixmap)
 

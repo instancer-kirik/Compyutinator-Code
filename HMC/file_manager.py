@@ -310,7 +310,7 @@ class FileManager:
         root_path = self.cccore.vault_manager.get_current_vault_path()
         if root_path and os.path.exists(root_path):
             try:
-                file_tree_view.set_root_path(root_path)
+                file_tree_view.set_root_path(str(root_path))
             except Exception as e:
                 logging.error(f"Error setting root path for vault explorer: {e}")
         else:

@@ -2,7 +2,8 @@ import os
 import shutil
 import logging
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QInputDialog, QProgressBar, QFileDialog, QMessageBox
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import pyqtSignal
+from NITTY_GRITTY.ThreadTrackers import SafeQThread
 
 def is_admin():
     try:
@@ -11,7 +12,7 @@ def is_admin():
         import ctypes
         return ctypes.windll.shell32.IsUserAnAdmin() != 0
 
-class WorkerThread(QThread):
+class WorkerThread(SafeQThread):
     update_progress = pyqtSignal(int)
     finalize_operation = pyqtSignal(str, bool)
 

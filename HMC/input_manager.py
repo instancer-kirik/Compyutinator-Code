@@ -2,10 +2,11 @@ import pyaudio
 import json
 import time
 from vosk import Model, KaldiRecognizer
-from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal
 import numpy as np
 import os
 import logging
+from NITTY_GRITTY.ThreadTrackers import SafeQThread
 from HMC.audio_handler import AudioHandler
 class InputManager(QObject):
     transcription_update = pyqtSignal(str, bool)
@@ -112,7 +113,7 @@ class InputManager(QObject):
                 config = json.load(f)
                 self.device_index = config.get('device_index')
 
-class RealTimeTranscriptionThread(QThread):
+class RealTimeTranscriptionThread(SafeQThread):
     transcription_update = pyqtSignal(str, bool)
     audio_level_update = pyqtSignal(int)
 

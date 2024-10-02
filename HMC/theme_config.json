@@ -1,8 +1,11 @@
 {
-  "current_theme": "dark_red.xml",
+  "current_theme": "dark_medical.xml",
   "custom_themes": {
     "test": {
       "style": "test"
+    },
+    "h": {
+      "style": "hk"
     }
   }
 }

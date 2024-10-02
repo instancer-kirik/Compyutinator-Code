@@ -1,8 +1,25 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QPushButton
-from PyQt6.QtCore import QFileSystemWatcher, QTimer
+from PyQt6.QtCore import QFileSystemWatcher, QTimer, pyqtSignal
 from PyQt6.QtGui import QTextCursor
 from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QPushButton, QVBoxLayout, QFileDialog, QMessageBox
 from PyQt6.QtCore import QSettings
+from NITTY_GRITTY.ThreadTrackers import SafeQThread
+class LogLoader(SafeQThread):
+    log_chunk_loaded = pyqtSignal(str)
+    finished = pyqtSignal()
+
+    def __init__(self, file_path):
+        super().__init__()
+        self.file_path = file_path
+
+    def run(self):
+        try:
+            with open(self.file_path, 'r') as log_file:
+                while chunk := log_file.read(1024 * 1024):  # Read 1MB at a time
+                    self.log_chunk_loaded.emit(chunk)
+        except FileNotFoundError:
+            self.log_chunk_loaded.emit(f"Log file not found: {self.file_path}")
+        self.finished.emit()
 
 class LogViewerWidget(QWidget):
     def __init__(self, initial_log_file_path, parent=None):
@@ -10,9 +27,10 @@ class LogViewerWidget(QWidget):
         self.settings = QSettings("YourCompany", "YourApp")
         self.log_paths = self.settings.value("log_paths", [initial_log_file_path])
         self.current_log_path = initial_log_file_path
+        self.full_log_content = ""
 
         self.setup_ui()
-        self.load_logs()
+        QTimer.singleShot(0, self.load_logs)  # Defer log loading
 
     def setup_ui(self):
         self.text_edit = QTextEdit(self)
@@ -52,33 +70,39 @@ class LogViewerWidget(QWidget):
         self.file_watcher.fileChanged.connect(self.load_logs)
 
     def load_logs(self):
-        try:
-            with open(self.current_log_path, 'r') as log_file:
-                self.full_log_content = log_file.read()
-                self.filter_logs()
-        except FileNotFoundError:
-            self.text_edit.setPlainText(f"Log file not found: {self.current_log_path}")
+        self.full_log_content = ""
+        self.text_edit.clear()
+        self.log_loader = LogLoader(self.current_log_path)
+        self.log_loader.log_chunk_loaded.connect(self.append_log_chunk)
+        self.log_loader.finished.connect(self.on_log_loading_finished)
+        if not self.log_loader.isRunning():
+            self.log_loader.start()
+
+    def append_log_chunk(self, chunk):
+        self.full_log_content += chunk
+        self.text_edit.append(chunk)
+
+    def on_log_loading_finished(self):
+        self.filter_logs()
 
     def filter_logs(self):
         filter_type = self.log_type_filter.currentText()
-        if filter_type == "All":
-            filtered_content = self.full_log_content
-        else:
-            filtered_content = "\n".join([line for line in self.full_log_content.split("\n") if filter_type in line])
-
         self.text_edit.clear()
         cursor = self.text_edit.textCursor()
-        for line in filtered_content.split("\n"):
-            if "ERROR" in line:
-                cursor.insertHtml(f'<span style="color: red;">{line}</span><br>')
-            elif "WARNING" in line:
-                cursor.insertHtml(f'<span style="color: orange;">{line}</span><br>')
-            elif "INFO" in line:
-                cursor.insertHtml(f'<span style="color: green;">{line}</span><br>')
-            elif "DEBUG" in line:
-                cursor.insertHtml(f'<span style="color: blue;">{line}</span><br>')
-            else:
-                cursor.insertHtml(f'{line}<br>')
+
+        for line in self.full_log_content.split("\n"):
+            if filter_type == "All" or filter_type in line:
+                if "ERROR" in line:
+                    color = "red"
+                elif "WARNING" in line:
+                    color = "orange"
+                elif "INFO" in line:
+                    color = "green"
+                elif "DEBUG" in line:
+                    color = "blue"
+                else:
+                    color = "white"
+                cursor.insertHtml(f'<span style="color: {color};">{line}</span><br>')
 
         cursor.movePosition(QTextCursor.MoveOperation.End)
         self.text_edit.setTextCursor(cursor)

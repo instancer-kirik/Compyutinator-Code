@@ -3,11 +3,15 @@ import signal
 import logging
 import psutil
 import subprocess
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QTimer, QObject, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QListWidget, QMessageBox, QHBoxLayout
-class ProcessManager:
+
+class ProcessManager(QObject):
+    process_updated = pyqtSignal()
+
     def __init__(self, cccore):
-        
+        super().__init__()
+        self.cccore = cccore
         self.running_processes = {}
 
     def start_process(self, command, name, cwd=None, capture_output=False):
@@ -48,8 +52,17 @@ class ProcessManager:
         return False
 
     def cleanup_processes(self):
+        logging.info("Cleaning up processes")
         for pid in list(self.running_processes.keys()):
-            self.kill_process(pid)
+            try:
+                self.kill_process(pid)
+            except Exception as e:
+                logging.error(f"Error during process cleanup for PID {pid}: {e}")
+        self.running_processes.clear()
+        logging.info("Process cleanup completed")
+
+    def __del__(self):
+        self.cleanup_processes()
 
 class ProcessManagerWidget(QWidget):
     def __init__(self, parent=None, cccore=None):
@@ -80,19 +93,27 @@ class ProcessManagerWidget(QWidget):
         self.update_process_list()
 
     def update_process_list(self):
-        self.process_list.clear()
-        for pid, proc_info in self.cccore.process_manager.get_running_processes().items():
-            self.process_list.addItem(f"PID: {pid}, Name: {proc_info['name']}, Command: {proc_info['command']}")
+        try:
+            self.process_list.clear()
+            for pid, proc_info in self.cccore.process_manager.get_running_processes().items():
+                self.process_list.addItem(f"PID: {pid}, Name: {proc_info['name']}, Command: {proc_info['command']}")
+        except Exception as e:
+            logging.error(f"Error updating process list: {e}")
 
     def kill_selected_process(self):
         selected_item = self.process_list.currentItem()
         if selected_item:
-            pid = int(selected_item.text().split(",")[0].split(":")[1].strip())
             try:
+                pid = int(selected_item.text().split(",")[0].split(":")[1].strip())
                 if self.cccore.process_manager.kill_process(pid):
                     self.update_process_list()
                     QMessageBox.information(self, "Success", f"Process {pid} killed successfully.")
                 else:
                     QMessageBox.warning(self, "Warning", f"Process {pid} was not found or already terminated.")
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to kill process {pid}: {e}")
+                logging.error(f"Error killing process: {e}")
+                QMessageBox.critical(self, "Error", f"Failed to kill process: {e}")
+
+    def closeEvent(self, event):
+        self.update_timer.stop()
+        super().closeEvent(event)

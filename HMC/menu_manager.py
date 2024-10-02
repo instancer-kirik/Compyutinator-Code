@@ -54,7 +54,7 @@ class MenuManager:
         edit_menu.addAction("Cut", self.action_handlers.cut_document)
         edit_menu.addAction("Copy", self.action_handlers.copy_document)
         edit_menu.addAction("Paste", self.action_handlers.paste_document)
-        edit_menu.addAction("Theme Builder", self.main_window.widget_manager.show_theme_builder)
+        edit_menu.addAction("Theme Builder", self.main_window.cccore.widget_manager.show_theme_builder)
         edit_menu.addAction("Settings", self.action_handlers.show_settings)
         return edit_menu
 

@@ -231,7 +231,7 @@ class CompEditor(QWidget):
         self.ui_update_timer.setSingleShot(True)
         self.ui_update_timer.timeout.connect(self.update_highlights)
        
-        self.thread_pool = QThreadPool()
+       
         
         # Initialize start and end lines for highlighting
         self.start_line = 0
@@ -260,16 +260,17 @@ class CompEditor(QWidget):
     def start_comparison(self):
         # Create the worker
         worker = LineComparisonWorker(self.text_edit.toPlainText(), self.other_file_lines)
+        worker.signals.result.connect(self.on_comparison_finished)
         
-        # Connect the 'finished' signal to the 'on_comparison_finished' slot
-        worker.signals.finished.connect(self.on_comparison_finished)
+       
         
         # Submit the worker to the thread pool
-        self.thread_pool.start(worker)
+        QThreadPool.globalInstance().start(worker)  
 
     def on_comparison_finished(self, result):
         self.comparison_results = result
         self.update_highlights()
+        self.update_line_indicators(result)
 
     def update_highlights(self):
         cursor = QTextCursor(self.text_edit.document())

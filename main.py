@@ -1,22 +1,28 @@
 import sys
 import os
-
+from PyQt6.QtCore import QThreadPool
 # Get the absolute path of the directory containing the script
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Add the project root directory to Python path
 sys.path.insert(0, script_dir)
+import cProfile
+import pstats
+from NITTY_GRITTY.ThreadTrackers import ThreadTracker, QThreadTracker
+profiler = cProfile.Profile()
 
+global_thread_tracker = ThreadTracker()
+global_qthread_tracker = QThreadTracker()
 # Now try to import from HMC
 from HMC.cccore import CCCore
 from HMC.sticky_note_manager import StickyNoteManager
 from PyQt6.QtWidgets import QWidget
 
 import logging
-from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget, QListWidget, QVBoxLayout, QWidget, QLabel, QPushButton
+from PyQt6.QtWidgets import QApplication, QMainWindow, QFileDialog, QTabWidget, QListWidget, QVBoxLayout, QWidget, QLabel, QPushButton
 from PyQt6.QtGui import QAction, QDesktopServices
 from PyQt6.QtWidgets import QMenu
-from PyQt6.QtCore import QSettings, QByteArray,QProcess,  QUrl, QTimer, Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QSettings, QByteArray,QProcess,  QUrl, QTimer, Qt, pyqtSignal
 
 import subprocess
 from HMC.cccore import CCCore
@@ -35,11 +41,12 @@ import json
 from HMC.theme_manager import ThemeManager
 from PyQt6.QtGui import QPalette, QColor
 from HMC.settings_manager import SettingsManager
-from HMC.vault_manager import VaultManager
 from PyQt6.QtWidgets import QInputDialog
 import threading
 from HMC.workspace_manager import WorkspaceManager
 from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, QEvent
+from NITTY_GRITTY.ThreadTrackers import SafeQThread
+
 log_directory = os.path.join(os.getcwd(), 'logs')
 if not os.path.exists(log_directory):
     os.makedirs(log_directory)
@@ -47,8 +54,13 @@ if not os.path.exists(log_directory):
 log_file_path = os.path.join(log_directory, 'app.log')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.FileHandler(log_file_path, 'a'), logging.StreamHandler()])
+#this not showing any logs wtf
 logging.info("Application started")
+import logging
 
+logging.basicConfig(level=logging.DEBUG, 
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    handlers=[logging.FileHandler("debug.log"), logging.StreamHandler()])
 default_theme = {
     "main_window_color": "#2E3440",
     "window_color": "#3B4252",
@@ -64,6 +76,27 @@ default_theme = {
     },
     "last_focused_tab_color": "#81A1C1"
 }
+import signal
+
+def signal_handler(signum, frame):
+    logging.critical(f"Received signal: {signum}")
+    QApplication.quit()
+    QApplication.instance().exit(1)  # Exit with an error code
+
+# In your main function:
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
+# Use a timer to process signals
+timer = QTimer()
+timer.start(500)
+timer.timeout.connect(lambda: None)  # Let the interpreter run each 500 ms
+
+def qt_thread_exception_handler(type, value, tb):
+    logging.critical("Uncaught exception in QThread:", exc_info=(type, value, tb))
+    sys.__excepthook__(type, value, tb)
+
+#SafeQThread.setExceptionHandler(qt_thread_exception_handler)
 
 from HMC.workspace_manager import WorkspaceManager
 
@@ -100,10 +133,22 @@ class MainApplication(QMainWindow):
     def __init__(self, settings_manager, cccore):
         logging.info("Initializing MainApplication")
         super().__init__()
-        self.settings_manager = settings_manager
+        self.setWindowTitle("Computinator Code")
         self.cccore = cccore
-        self.widget_manager = cccore.widget_manager
+        self.cccore.set_main_window(self)
+       
         
+        # Show the main window
+        self.show()
+        
+        # Schedule the rest of the initialization for after the event loop starts
+#        QTimer.singleShot(0, self.post_show_init)
+        
+        self.settings_manager = settings_manager
+        self.menu_manager = MenuManager(self, self.cccore)
+        self.cccore.set_menu_manager(self.menu_manager)
+        self.setup_ui()
+        self.widget_manager = self.cccore.widget_manager
         # Add this line to initialize the config attribute
         self.config = self.settings_manager.get_settings()
         self.vault_manager = cccore.vault_manager
@@ -119,12 +164,13 @@ class MainApplication(QMainWindow):
         self.workspace_selector = None
       
         logging.info("Setting main window for widget_manager")
-        self.widget_manager.set_main_window_and_create_docks(self)
-        self.menu_manager = MenuManager(self, cccore=self.cccore)
+        self.cccore.widget_manager.set_main_window_and_create_docks(self)
+        
         self.tab_widget = None  # Initialize it as None
         self.workspace_selector = QComboBox(self)
-      
-        logging.info("Initializing UI")
+        # Create AuraText window
+        self.create_auratext_window()
+        
         self.setup_ui()
         
         logging.info("Loading settings")
@@ -134,7 +180,10 @@ class MainApplication(QMainWindow):
         logging.info("Loading splash input")
         self.load_splash_input()
         logging.info("MainApplication initialization complete")
-        if not cccore.vault_manager.vault_path:
+        
+        # Check for current vault path
+        current_vault_path = self.cccore.vault_manager.get_current_vault_path()
+        if not current_vault_path:
             logging.warning("No default vault set. Some features may be unavailable.")
             # You might want to prompt the user to set a vault here
         
@@ -144,11 +193,24 @@ class MainApplication(QMainWindow):
         saved_theme = self.cccore.theme_manager.get_current_theme()
         self.cccore.theme_manager.apply_theme(saved_theme)
 
-         
-        # Add Font Manager action to the menu
-        font_manager_action = QAction("Font Manager", self)
-        font_manager_action.triggered.connect(self.show_font_manager)
-        self.menuBar().addAction(font_manager_action)
+        self.create_docks()
+        self.auratext_windows = []
+        self.cccore.set_main_window(self)
+    def dump_thread_info():
+        logging.critical("Active threads at exit:")
+        for thread in global_thread_tracker.get_active_threads():
+            logging.critical(f"Thread {thread.name} (ID: {thread.ident}) is still running")
+            stack = traceback.format_stack(sys._current_frames()[thread.ident])
+            logging.critical("".join(stack))
+        
+        for thread in global_qthread_tracker.get_active_threads():
+            logging.critical(f"QThread {thread.objectName()} is still running")
+
+    def init_ui(self):
+        # ... (other initializations)
+        
+        # Add this line to create the toolbar
+        self.toolbar = self.addToolBar("Main Toolbar")
 
     def setup_ui(self):
         # Create a central widget
@@ -166,12 +228,15 @@ class MainApplication(QMainWindow):
         self.set_dark_background()
         
         # Set window title and geometry
-        self.setWindowTitle(self.config['window_title'])
-        self.setGeometry(*self.config['window_geometry'])
+        self.setWindowTitle(self.settings_manager.get_value('window_title', 'Computinator Code'))
+        self.setGeometry(*self.settings_manager.get_value('window_geometry', (100, 100, 1280, 720)))
         
         # Initialize menu bar
         self.init_menu_bar()
-      
+        
+        # Initialize toolbar
+        self.toolbar = self.addToolBar("Main Toolbar")
+        
         # Add other widgets or tabs
         self.add_support_box()
         self.add_transcriptor_live_tab()
@@ -181,23 +246,67 @@ class MainApplication(QMainWindow):
         self.flashlight = Flashlight(self.cccore, size=200, power=0.036)
         self.setup_workspace_selector()
 
+        # Add action for creating new AuraText window
+        self.create_auratext_window_action = QAction("New AuraText Window", self)
+        self.create_auratext_window_action.triggered.connect(self.create_auratext_window)
+        self.menuBar().addAction(self.create_auratext_window_action)
+
     def setup_workspace_selector(self):
-        workspaces = self.workspace_manager.get_workspace_names()
-        self.workspace_selector.addItems(workspaces)
-        active_workspace = self.workspace_manager.get_active_workspace()
-        if active_workspace:
-            self.workspace_selector.setCurrentText(active_workspace.name)
-        else:
-            default_workspace = self.workspace_manager.get_default_workspace()
+        self.workspace_selector = QComboBox()
+        current_vault = self.cccore.vault_manager.get_current_vault()
+        if current_vault:
+            workspaces = self.cccore.workspace_manager.get_workspace_names(current_vault.path)
+            self.workspace_selector.addItems(workspaces)
+            
+            default_workspace = self.cccore.workspace_manager.get_default_workspace(current_vault.path)
             if default_workspace:
-                self.workspace_selector.setCurrentText(default_workspace.name)
+                if isinstance(default_workspace, str):
+                    self.workspace_selector.setCurrentText(default_workspace)
+                else:
+                    self.workspace_selector.setCurrentText(default_workspace.name)
+        else:
+            logging.warning("No current vault set. Workspace selector will be empty.")
+        
         self.workspace_selector.currentTextChanged.connect(self.on_workspace_changed)
+        
+        # Create a widget to hold the label and combobox
+        workspace_widget = QWidget()
+        workspace_layout = QHBoxLayout(workspace_widget)
+        workspace_layout.addWidget(QLabel("Workspace:"))
+        workspace_layout.addWidget(self.workspace_selector)
+        workspace_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Add the widget to the toolbar
+        self.toolbar.addWidget(workspace_widget)
+
+    def set_vault(self, vault_path):
+        self.setWindowTitle(f"AuraText - Main Vault: {os.path.basename(vault_path)}")
+        self.load_vault(vault_path)
+
+    def load_vault(self, vault_path):
+        # Load main vault-specific data
+        workspaces = self.cccore.workspace_manager.get_workspace_names(vault_path)
+        self.update_workspace_list(workspaces)
+
+    def update_workspace_list(self, workspaces):
+        # Update UI with the list of workspaces for the main vault
+        pass
+
+    def open_new_vault(self):
+        vault_path = QFileDialog.getExistingDirectory(self, "Select Vault Directory")
+        if vault_path:
+            self.cccore.open_vault(vault_path)
 
     def on_workspace_changed(self, workspace_name):
-        self.workspace_manager.set_active_workspace(workspace_name)
-        # Update any necessary UI elements or load workspace-specific content
-        active_files = self.workspace_manager.get_active_files(workspace_name)
-        self.load_files(active_files)  # Implement this method to load files into your editor
+        if workspace_name:
+            current_vault = self.cccore.vault_manager.get_current_vault()
+            if current_vault:
+                self.cccore.workspace_manager.set_active_workspace(current_vault.path, workspace_name)
+                # Update UI or perform any other necessary actions
+            else:
+                logging.warning("No current vault set. Cannot change workspace.")
+        else:
+            logging.warning("No workspace selected.")
    
     def setup_connections(self):
         if self.tab_widget:
@@ -290,8 +399,8 @@ class MainApplication(QMainWindow):
         self.refresh_widgets_after_theme_change()
 
     def refresh_widgets_after_theme_change(self):
-        for dock_name, dock in self.widget_manager.dock_widgets.items():
-            if dock and not self.widget_manager.is_dock_deleted(dock):
+        for dock_name, dock in self.cccore.widget_manager.dock_widgets.items():
+            if dock and not self.cccore.widget_manager.is_dock_deleted(dock):
                 widget = dock.widget()
                 if widget and hasattr(widget, 'apply_theme'):
                     widget.apply_theme()
@@ -330,7 +439,8 @@ class MainApplication(QMainWindow):
 
     def add_logs_viewer_tab(self):
         self.log_viewer_widget = LogViewerWidget(initial_log_file_path=self.get_log_file_path())
-        self.tab_widget.addTab(self.log_viewer_widget, "Logs Viewer")
+        self.tab_widget.addTab(self.log_viewer_widget, "Logs")
+        # Don't wait for logs to load, the widget will handle it asynchronously
     
     def get_log_file_path(self):
         return os.path.join(os.getcwd(), 'logs', 'app.log')
@@ -358,9 +468,17 @@ class MainApplication(QMainWindow):
                 self.switch_to_workspace(vault_dir, workspace)
 
     def switch_to_workspace(self, vault_dir, workspace_name):
-        self.workspace_manager.set_active_workspace(vault_dir, workspace_name)
-        self.vault_manager.set_default_vault(vault_dir)
-        self.load_workspace(self.workspace_manager.get_active_workspace())
+        vault = self.vault_manager.get_vault(vault_dir)
+        if vault:
+            workspace = vault.get_workspace(workspace_name)
+            if workspace:
+                for window in self.auratext_windows:
+                    if window.current_vault == vault:
+                        window.set_workspace(workspace)
+            else:
+                logging.error(f"Workspace not found: {workspace_name}")
+        else:
+            logging.error(f"Vault not found: {vault_dir}")
 
     def load_workspace(self, workspace):
         # Close all open files
@@ -401,6 +519,17 @@ class MainApplication(QMainWindow):
         super().closeEvent(event)
 
     def cleanup_processes(self):
+        thread_pool = QThreadPool.globalInstance()
+        thread_pool.clear()  # Clear all queued tasks
+        
+        # Wait for active threads to finish
+        while thread_pool.activeThreadCount() > 0:
+            logging.info(f"Waiting for {thread_pool.activeThreadCount()} active threads to finish...")
+            if not thread_pool.waitForDone(1000):  # Wait for up to 1 second
+                logging.warning("Some threads are taking longer than expected to finish")
+        
+        logging.info("All threads have finished")
+        
         # Terminate all running processes
         self.cccore.process_manager.cleanup_processes()
         for process in self.child_processes.values():
@@ -409,8 +538,9 @@ class MainApplication(QMainWindow):
                 process.waitForFinished(1000)  # Wait for 1 second
                 if process.state() == QProcess.Running:
                     process.kill()  # Force kill if it doesn't terminate
-
+          
         # Clear the process dictionary
+        
         self.child_processes.clear()
 
     def fade_in(self):
@@ -427,27 +557,68 @@ class MainApplication(QMainWindow):
         return super().eventFilter(obj, event)
 
     def create_docks(self):
-        logging.info("Creating docks")
-        for name, config in self.widget_manager.dock_configs.items():
-            if config.get("visible", True):
-                logging.info(f"Creating dock: {name}")
-                dock = self.widget_manager.get_or_create_dock(name)
-                if dock:
-                    self.addDockWidget(config["area"], dock)
-                else:
-                    logging.warning(f"Failed to create dock: {name}")
-        logging.info("Docks creation completed")
+        logging.info("Creating startup docks")
+        default_docks = [
+            "File Explorer", "Code Editor", "Terminal", "AI Chat", 
+            "Symbolic Linker", "Sticky Notes", "Process Manager", 
+            "Vaults Manager", "Projects Manager"
+        ]
+        # Remove "AuraText" from the default_docks list
+        for name in default_docks:
+            logging.info(f"Ensuring dock: {name}")
+            dock = self.cccore.widget_manager.ensure_dock(name)
+            if dock:
+                self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
+                logging.info(f"Successfully added dock: {name}")
+            else:
+                logging.warning(f"Failed to create or add dock: {name}")
+        logging.info("Startup docks creation completed")
 
-    def show_font_manager(self):
-        self.widget_manager.font_manager_widget.show()
+    def create_auratext_window(self):
+        auratext_window = self.cccore.create_auratext_window()
+       
+        auratext_window.show()
+  
+    def cleanup(self):
+        profiler.disable()
+        stats = pstats.Stats(profiler).sort_stats('cumulative')
+        stats.print_stats(20)  # Print top 20 time-consuming functions
+        logging.info("Starting application cleanup")
+        
+        # Clean up thread pool
+        thread_pool = QThreadPool.globalInstance()
+        thread_pool.clear()  # Clear all queued tasks
+        
+        # Wait for active threads to finish
+        while thread_pool.activeThreadCount() > 0:
+            logging.info(f"Waiting for {thread_pool.activeThreadCount()} active threads to finish...")
+            if not thread_pool.waitForDone(1000):  # Wait for up to 1 second
+                logging.warning("Some threads are taking longer than expected to finish")
+        
+        logging.info("All threads have finished")
 
+         # Stop all Python threads (except the main thread)
+        for thread in threading.enumerate():
+            if thread != threading.main_thread():
+                logging.info(f"Stopping Python thread: {thread.name}")
+                thread.join(5)  # Wait up to 5 seconds for the thread to finish
+        
+        QThreadPool.globalInstance().waitForDone(5000)  # Wait up to 5 seconds for all threads to finish
+        logging.info("Cleanup process completed")
 
+        logging.info("Application cleanup complete")
+def post_show_init(self):#
+        logging.info("Post show init")
+        #$self.create_workspace()
 def exception_hook(exctype, value, tb):
     logging.error("Uncaught exception", exc_info=(exctype, value, tb))
     traceback.print_exception(exctype, value, tb)
     QApplication.quit()
 
 def main():
+    
+    profiler = cProfile.Profile()
+    profiler.enable()
     # Use your existing logging configuration
     log_directory = os.path.join(os.getcwd(), 'logs')
     if not os.path.exists(log_directory):
@@ -503,20 +674,56 @@ def main():
         logging.info("Creating MainApplication instance")
         main_app = MainApplication(settings_manager, cccore)
 
-        logging.info("Setting main_window for widget_manager")
-        cccore.set_main_window(main_app)
+       # logging.info("Setting main_window for widget_manager")
+       # cccore.set_main_window(main_app)
+        def show(self):
         
+            super().show()
+            
         def show_app():
             logging.info("Showing main application")
-            main_app.show()
-            splash_process.terminate()
+            
+            try:
+                logging.info("Attempting to show main application window")
+                main_app.show()
+                logging.info("Main application window shown successfully")
+            except Exception as e:
+                logging.critical(f"Failed to show main application window: {e}", exc_info=True)
+                QApplication.quit()
+            try:
+                splash_process.terminate()
+                splash_process.wait(5000)  # Wait up to 5 seconds for the process to terminate
+                if splash_process.poll() is None:
+                    logging.warning("Splash process did not terminate, forcing kill")
+                    splash_process.kill()
+            except Exception as e:
+                logging.error(f"Error terminating splash process: {e}")
             main_app.fade_in()
 
         logging.info("Scheduling application display")
         QTimer.singleShot(0, show_app)
 
+        def cleanup():
+            main_app.cleanup()
+            app.quit()
+
+        app.aboutToQuit.connect(cleanup)
+
         logging.info("Entering Qt event loop")
-        sys.exit(app.exec())
+        try:
+            exit_code = app.exec()
+            logging.info(f"Qt event loop exited with code: {exit_code}")
+        except Exception as e:
+            logging.critical(f"Critical error in main event loop: {e}", exc_info=True)
+        finally:
+            global_thread_tracker.dump_thread_info()
+            global_qthread_tracker.dump_thread_info()
+            logging.info("Cleaning up QApplication")
+            cccore.cleanup()
+            app.quit()
+            app.deleteLater()
+            logging.info("Exiting application")
+            sys.exit(exit_code if 'exit_code' in locals() else 1)
 
     except Exception as e:
         logging.error(f"Unhandled exception in main: {e}", exc_info=True)
@@ -524,18 +731,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    def show_app():
-        logging.info("Showing main application")
-        main_app.show()
-        splash_process.terminate()
-        main_app.fade_in()
-
-    # Start the show process with a slight delay
-    QTimer.singleShot(0, show_app)  # 100ms delay     
-
-    sys.exit(app.exec())
-
-if __name__ == '__main__':
-    main()
-
-   

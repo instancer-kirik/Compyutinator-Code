@@ -62,7 +62,8 @@ class WidgetManager:
         self.workspace_manager = cccore.workspace_manager
        
         self.theme_manager_window = None
-        self.auratext_window = None
+        
+        self.auratext_windows = []
 
     def load_config(self):
         try:
@@ -73,14 +74,14 @@ class WidgetManager:
             logging.error(f"Error loading config: {str(e)}")
             self.config = {}
             self.startup_config = {}
-
+        return self.startup_config
     def set_main_window(self, main_window):
         self.main_window = main_window
 
     def get_or_create_dock(self, name):
         logging.info(f"Attempting to get or create dock: {name}")
-        if name in self.dock_widgets and self.dock_widgets[name].widget() is not None:
-            logging.info(f"Existing dock found for {name}")
+        if name in self.dock_widgets and self.is_dock_valid(self.dock_widgets[name]):
+            logging.info(f"Existing valid dock found for {name}")
             return self.dock_widgets[name]
         
         widget_method = getattr(self, f"{name.replace(' ', '')}Widget", None)
@@ -109,8 +110,8 @@ class WidgetManager:
         return None
 
     def create_dock(self, name, widget, parent):
-        if name in self.docks and self.docks[name] is not None:
-            logging.warning(f"Dock {name} already exists. Returning existing dock.")
+        if name in self.docks and self.is_dock_valid(self.docks[name]):
+            logging.info(f"Valid dock {name} already exists. Returning existing dock.")
             return self.docks[name]
         
         try:
@@ -127,6 +128,11 @@ class WidgetManager:
             logging.error(traceback.format_exc())
             return None
 
+    def is_dock_valid(self, dock):
+        try:
+            return dock is not None and not self.is_dock_deleted(dock) and dock.widget() is not None
+        except RuntimeError:
+            return False
    
     def apply_layout(self):
         logging.info("Applying layout")
@@ -157,14 +163,24 @@ class WidgetManager:
             return True
         
     def create_startup_docks(self):
-        logging.info("Creating startup docks")
-        for name in self.config.get('default_docks', []):
-            dock = self.get_or_create_dock(name)
-            if dock:
-                logging.info(f"Dock created successfully for {name}")
-            else:
-                logging.warning(f"Failed to create dock: {name}")
-        logging.info("Startup docks creation completed")
+        logging.info("Not creating startup docks")
+     #   default_docks = [
+    #         "File Explorer", "Code Editor", "Terminal", "AI Chat", 
+    #         "Symbolic Linker", "Sticky Notes", "Process Manager", 
+    #         "Vaults Manager", "Projects Manager", "AuraText"
+    #     ]
+    #     for name in default_docks:
+    #         self.ensure_dock(name)
+    #     logging.info("Startup docks creation completed")
+
+    def ensure_dock(self, name):
+        logging.info(f"Ensuring dock: {name}")
+        dock = self.get_or_create_dock(name)
+        if dock:
+            logging.info(f"Dock ensured successfully for {name}")
+        else:
+            logging.warning(f"Failed to ensure dock: {name}")
+        return dock
 
     def set_main_window_and_create_docks(self, main_window):
         logging.info(f"Setting main window: {main_window}")
@@ -252,12 +268,12 @@ class WidgetManager:
     def update_flashlight_power(self, value):
         self.flashlight.set_power(value / 100)
 
-    def create_auratext_dock(self):
-        if self.auratext_dock is None:
-            auratext_widget = self.AuraTextWidget(self.cccore)
-            self.auratext_dock = self.create_dock("AuraText", auratext_widget, self.main_window)
-            self.add_dock_widget(self.auratext_dock, "AuraText", Qt.DockWidgetArea.RightDockWidgetArea)
-        return self.auratext_dock
+    # def create_auratext_dock(self):
+    #     if self.auratext_dock is None:
+    #         auratext_widget = self.AuraTextWidget(self.cccore)
+    #         self.auratext_dock = self.create_dock("AuraText", auratext_widget, self.main_window)
+    #         self.add_dock_widget(self.auratext_dock, "AuraText", Qt.DockWidgetArea.RightDockWidgetArea)
+    #     return self.auratext_dock
 
     def move_ai_chat_dock(self):
         logging.info("Starting move_ai_chat_dock method")
@@ -317,10 +333,9 @@ class WidgetManager:
         return self.widgets['projects_manager']
 
     def VaultsManagerWidget(self, cccore):
-        if 'vaults_manager' not in self.widgets:
-            self.widgets['vaults_manager'] = VaultsManagerWidget(parent=self.main_window, cccore=self.cccore)
-        return self.widgets['vaults_manager']
-
+        if not hasattr(self, '_vaults_manager_widget'):
+            self._vaults_manager_widget = VaultsManagerWidget(parent=self.main_window, cccore=cccore)
+        return self._vaults_manager_widget
     def VaultWidget(self, cccore):
         if 'vault' not in self.widgets:
             self.widgets['vault'] = VaultWidget(parent=self.main_window, cccore=self.cccore)
@@ -331,27 +346,18 @@ class WidgetManager:
             self.widgets['process_manager'] = ProcessManagerWidget(parent=self.main_window, cccore=self.cccore)
         return self.widgets['process_manager']
     def AIChatWidget(self, cccore):
-        logging.info("Attempting to create or retrieve AIChatWidget")
-        if not hasattr(self, 'ai_chat_widget') or self.ai_chat_widget is None:
-            try:
-                logging.info("Creating new AIChatWidget")
-                self.ai_chat_widget = AIChatWidget(
-                    parent=self.main_window,
-                    context_manager=cccore.context_manager,
-                    editor_manager=cccore.editor_manager,
-                    model_manager=cccore.model_manager,
-                    download_manager=cccore.download_manager,
-                    settings_manager=cccore.settings_manager
-                )
-                logging.info("AIChatWidget created successfully")
-            except Exception as e:
-                logging.error(f"Error creating AIChatWidget: {str(e)}")
-                logging.error(traceback.format_exc())
-                self.ai_chat_widget = None
-        else:
-            logging.info("Existing AIChatWidget found")
-        
-        return self.ai_chat_widget
+        if not hasattr(self, '_ai_chat_widget'):
+            self._ai_chat_widget = AIChatWidget(
+                parent=self.main_window,
+                context_manager=cccore.context_manager,
+                editor_manager=cccore.editor_manager,
+                model_manager=cccore.model_manager,
+                download_manager=cccore.download_manager,
+                settings_manager=cccore.settings_manager
+            )
+        return self._ai_chat_widget
+
+    
     def CodeEditorWidget(self, cccore):
         if not hasattr(self, 'code_editor_widget'):
             self.code_editor_widget = CodeEditorWidget(parent=self.main_window, cccore=self.cccore)
@@ -366,22 +372,11 @@ class WidgetManager:
             self.terminal_widget = TerminalWidget(parent=self.main_window, cccore=self.cccore)
         return self.terminal_widget
 
-    def AuraTextWidget(self, cccore):
-        logging.info("Creating AuraTextWidget")
-        if not hasattr(self, 'auratext_widget') or self.auratext_widget is None:
-            try:
-                self.auratext_window = AuraTextWindow(parent=self.main_window, mm=cccore)
-                self.auratext_widget = QWidget()
-                layout = QVBoxLayout(self.auratext_widget)
-                layout.addWidget(self.auratext_window)
-                logging.info("AuraTextWidget created successfully")
-            except Exception as e:
-                logging.error(f"Error creating AuraTextWindow: {str(e)}")
-                logging.error(traceback.format_exc())
-                self.auratext_widget = None
-
-        return self.auratext_widget
-
+    
+    def create_auratext_window(self, cccore):
+        new_window = AuraTextWindow(mm=cccore)
+        self.auratext_windows.append(new_window)
+        return new_window
 
     def StickyNotesWidget(self, cccore):
         if 'sticky_notes' not in self.widgets:
@@ -423,3 +418,16 @@ class WidgetManager:
         if not hasattr(self, 'theme_builder_widget'):
             self.theme_builder_widget = ThemeBuilderWidget(self.cccore.theme_manager)
         self.theme_builder_widget.show()
+
+    def recreate_invalid_docks(self):
+        for name, dock in list(self.dock_widgets.items()):
+            if not self.is_dock_valid(dock):
+                logging.warning(f"Recreating invalid dock: {name}")
+                new_dock = self.ensure_dock(name)
+                if new_dock and self.is_dock_valid(new_dock):
+                    self.dock_widgets[name] = new_dock
+                    if self.main_window:
+                        self.main_window.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, new_dock)
+                    logging.info(f"Successfully recreated dock: {name}")
+                else:
+                    logging.error(f"Failed to recreate dock: {name}")

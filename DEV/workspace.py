@@ -2,7 +2,7 @@ import json
 import os
 
 class Workspace:
-    def __init__(self, name, vault_path):
+    def __init__(self, name, vault_path, config=None):
         self.name = self.sanitize_name(name)
         self.vault_path = vault_path
         self.filesets = {}
@@ -10,7 +10,11 @@ class Workspace:
         self.layout = None
         self.visible_docks = []
         self.config_file = os.path.join(vault_path, f'.workspace_{self.name}.json')
-        self.load_config()
+        
+        if config:
+            self.load_from_config(config)
+        else:
+            self.load_config()
 
     def sanitize_name(self, name=None):
         if name is None:
@@ -66,3 +70,9 @@ class Workspace:
 
     def get_layout(self):
         return self.layout, self.visible_docks
+
+    def load_from_config(self, config):
+        self.filesets = config.get('filesets', {})
+        self.active_fileset = config.get('active_fileset')
+        self.layout = config.get('layout')
+        self.visible_docks = config.get('visible_docks', [])

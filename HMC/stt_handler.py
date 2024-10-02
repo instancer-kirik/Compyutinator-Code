@@ -1,12 +1,13 @@
 import pyaudio
 import json
 from vosk import Model, KaldiRecognizer
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import pyqtSignal
 import numpy as np
+from NITTY_GRITTY.ThreadTrackers import SafeQThread
 #I want it to generate subtitles from audio out
 #would be cool to do with midi too, but then I might have to implement a lot of other things too
 #I am building my own workspace, what if it does DAW stuff too
-class RealTimeTranscriptionThread(QThread):
+class RealTimeTranscriptionThread(SafeQThread):
     transcription_update = pyqtSignal(str, bool)
     audio_level_update = pyqtSignal(int)
 

@@ -5,7 +5,7 @@ from qt_material import apply_stylesheet, list_themes
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtWidgets import QComboBox, QPushButton, QLayout, QVBoxLayout, QInputDialog, QColorDialog
-from PyQt6.QtCore import Qt, QObject, pyqtSignal, QTimer, QThread
+from PyQt6.QtCore import Qt, QObject, pyqtSignal, QTimer
 import logging
 import time
 from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QWidget, QComboBox, QPushButton, QColorDialog, QInputDialog
@@ -103,8 +103,8 @@ class ThemeManagerWidget(QWidget):
         self.theme_combo.clear()
         self.theme_combo.addItems(self.theme_manager.get_available_themes())
         self.set_current_theme(current_theme)
-
-class ThemeApplier(QThread):
+from NITTY_GRITTY.ThreadTrackers import SafeQThread
+class ThemeApplier(SafeQThread):
     finished = pyqtSignal()
     progress = pyqtSignal(int)
 

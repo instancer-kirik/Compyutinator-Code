@@ -26,6 +26,8 @@ class TerminalWidget(QWidget):
 
     def add_terminal(self):
         terminal = TerminalEmulator(self, mm=self.cccore)
+        if self.cccore and hasattr(self.cccore, 'input_manager'):
+            terminal.keyPressed.connect(self.cccore.input_manager.update_typing_speed)
         self.splitter.addWidget(terminal)
         return terminal
 

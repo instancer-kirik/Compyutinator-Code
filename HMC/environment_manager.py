@@ -3,12 +3,17 @@ import subprocess
 from pathlib import Path
 import json
 import shutil
+import os
+import platform
+import logging
 
 class EnvironmentManager:
     def __init__(self, base_path):
         self.base_path = Path(base_path)
+        self.nix_portable_path = self.base_path / "nix-portable"
         self.environments_file = self.base_path / "environments.json"
         self.load_environments()
+        self.ensure_nix_portable()
 
     def load_environments(self):
         if self.environments_file.exists():
@@ -21,6 +26,39 @@ class EnvironmentManager:
         with open(self.environments_file, 'w') as f:
             json.dump(self.environments, f, indent=2)
 
+    def ensure_nix_portable(self):
+        if not self.nix_portable_path.exists():
+            # Ensure the directory exists
+            self.base_path.mkdir(parents=True, exist_ok=True)
+            
+            # Path to the nix-portable binary in your project resources
+            arch = platform.machine()
+            if arch == 'x86_64':
+                source_filename = "nix-portable-x86_64"
+            elif arch == 'aarch64':
+                source_filename = "nix-portable-aarch64"
+            elif arch == 'AMD64':
+                source_filename = "nix-portable-x86_64"
+           
+                
+            else:
+                raise RuntimeError(f"Unsupported architecture: {arch}")
+            
+            source_path = Path(__file__).parent.parent / "NITTY_GRITTY" / source_filename
+            
+            if not source_path.exists():
+                logging.error(f"nix-portable binary not found at {source_path}")
+                raise FileNotFoundError(f"nix-portable binary not found at {source_path}")
+            
+            # Copy nix-portable from your project's resources to base_path
+            shutil.copy(str(source_path), str(self.nix_portable_path))
+            self.nix_portable_path.chmod(0o755)  # Make it executable
+            logging.info(f"Copied nix-portable to {self.nix_portable_path}")
+
+    def run_nix_command(self, command):
+        full_command = f"{self.nix_portable_path} {command}"
+        return subprocess.run(full_command, shell=True, check=True, capture_output=True, text=True)
+
     def create_environment(self, name, language, version):
         if name in self.environments:
             click.echo(f"Environment {name} already exists.")
@@ -29,20 +67,9 @@ class EnvironmentManager:
         env_path = self.base_path / name
         env_path.mkdir(exist_ok=True)
 
-        if language == "python":
-            subprocess.run(["python", "-m", "venv", str(env_path)])
-        elif language == "kotlin":
-            # Use sdkman to install Kotlin
-            subprocess.run(["sdk", "install", "kotlin", version])
-        elif language == "csharp":
-            # Use dotnet to create a new C# project
-            subprocess.run(["dotnet", "new", "console", "-o", str(env_path)])
-        elif language == "elixir":
-            # Use kiex to install Elixir
-            subprocess.run(["kiex", "install", version])
-        else:
-            click.echo(f"Unsupported language: {language}")
-            return
+        # Use nix-shell to create an environment
+        command = f"nix-shell -p {language} --run 'echo Environment created'"
+        self.run_nix_command(command)
 
         self.environments[name] = {
             "path": str(env_path),
@@ -64,11 +91,19 @@ class EnvironmentManager:
         click.echo(f"Deleted environment {name}")
 
     def list_environments(self):
+        # List installed packages
+        command = "nix-env -q"
+        result = self.run_nix_command(command)
+        print(result.stdout)
         for name, env in self.environments.items():
             click.echo(f"{name}: {env['language']} {env['version']}")
 
     def get_environment_path(self, name):
         return self.environments.get(name, {}).get("path")
+
+    def ensure_nix_environment(self):
+        # This is not needed with nix-portable
+        pass
 
 @click.group()
 @click.option('--base-path', default='./environments', help='Base path for environments')

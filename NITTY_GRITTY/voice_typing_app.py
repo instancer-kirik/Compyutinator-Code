@@ -3,7 +3,7 @@ import pyaudio
 import json
 from vosk import Model, KaldiRecognizer
 from PyQt6.QtWidgets import QApplication, QMainWindow, QTextEdit, QPushButton, QVBoxLayout, QWidget, QProgressBar, QLabel, QComboBox
-from PyQt6.QtCore import QThread, pyqtSignal, pyqtSlot, QTimer, Qt, QRect
+from PyQt6.QtCore import pyqtSignal, pyqtSlot, QTimer, Qt, QRect
 from PyQt6.QtGui import QTextCursor, QColor, QPainter
 import numpy as np
 import keyboard  # For global hotkeys
@@ -57,8 +57,8 @@ class AudioHandler:
             self.audio_output.stop()
             self.audio_buffer.close()
         self.media_player.stop()
-
-class RealTimeTranscriptionThread(QThread):
+from NITTY_GRITTY.ThreadTrackers import SafeQThread
+class RealTimeTranscriptionThread(SafeQThread):
     transcription_update = pyqtSignal(str, bool)
     audio_level_update = pyqtSignal(int)
 
@@ -263,6 +263,7 @@ class VoiceTypingApp(QMainWindow):
             # Update the UI after a short delay using a timer
             QTimer.singleShot(10, self.update_ui)
         except Exception as e:
+            import logging
             logging.error("Error updating transcription: %s", str(e))
 
 

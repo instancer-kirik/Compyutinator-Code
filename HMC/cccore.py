@@ -28,18 +28,21 @@ from PyQt6.QtGui import QIcon
 from AuraText.auratext.scripts.def_path import resource
 
 from .font_manager import FontManager
+from .thread_controller import ThreadController
+
 class CCCore:  # referred to as mm in other files (auratext)
     def __init__(self, settings_manager, main_window=None):
         self.settings_manager = settings_manager
         self.main_window = main_window
         self.widget_manager = None
-        self.auratext_window = None
+        self.auratext_windows = []
         self.editor_manager = None
         self.overlay = None
-        self.vault_manager = None
         self.workspace_manager = None
         self.secrets_manager = None
         self.env_manager = EnvironmentManager(self.settings_manager.get_value("environments_path", "./environments"))
+        self.vault_manager = VaultManager(self.settings_manager, cccore=self)
+        self.vault_manager.ensure_default_vaults()  # Add this line
         self.project_manager = None
         self.process_manager = ProcessManager(self)
         self.build_manager = None
@@ -49,6 +52,8 @@ class CCCore:  # referred to as mm in other files (auratext)
         self.radial_menu = RadialMenu()
         self.radial_menu.optionSelected.connect(self.handle_radial_menu_selection)
         self.late_init_done = False
+        self.vault_windows = {}  # Dictionary to store vault paths and their corresponding windows
+        self.main_vault = None
         
         self.init_managers()
        
@@ -56,10 +61,10 @@ class CCCore:  # referred to as mm in other files (auratext)
     def set_widget_manager(self, widget_manager):
         self.widget_manager = widget_manager
         # Instead of directly accessing auratext_window, let's create it if needed
-        self.create_auratext_window()
+     
         
     def set_auratext_window(self, window):
-        self.auratext_window = window
+        self.auratext_windows.append(window)
         if self.editor_manager:
             self.editor_manager.window = window
         self.late_init()
@@ -72,14 +77,25 @@ class CCCore:  # referred to as mm in other files (auratext)
         self.theme_manager = ThemeManager(self)
         self.lexer_manager = LexerManager(self)
         self.lsp_manager = LSPManager(self)
-        self.vault_manager = VaultManager(self.settings_manager)
+      #  self.vault_manager = VaultManager(self.settings_manager, self)
         self.cursor_manager = CursorManager(self)
-        # Ensure there's a valid vault path before initializing WorkspaceManager
-        if not self.vault_manager.vault_path:
-            logging.warning("No default vault set. Creating a temporary vault.")
-            temp_vault = os.path.join(tempfile.gettempdir(), 'temp_vault')
-            os.makedirs(temp_vault, exist_ok=True)
-            self.vault_manager.set_default_vault(temp_vault)
+        
+        # The vault manager is already initialized in __init__, so we don't need to create it here
+        # Just ensure that a current vault is set
+        # if not self.vault_manager.get_current_vault():
+        #     logging.warning("No current vault set. Creating a default vault.")
+        #     default_vault_path = os.path.join(self.settings_manager.get_value('app_data_dir'), 'default_vault')
+        #     self.vault_manager.create_vault("Default Vault", default_vault_path)
+        #     self.vault_manager.set_current_vault("Default Vault")
+        # else:
+        #     logging.warning("No current vault set. Using the first available vault.")
+        #     available_vaults = self.vault_manager.get_vaults()
+        #     if available_vaults:
+        #         self.vault_manager.set_current_vault(available_vaults[0])
+        #     else:
+        #         logging.error("No vaults available. Application may not function correctly.")
+        logging.info(f"Current vault: {self.vault_manager.current_vault.name if self.vault_manager.current_vault else 'None'}")
+       
         self.env_manager = EnvironmentManager(self.settings_manager.get_value("environments_path", "./environments"))
         self.secrets_manager = SecretsManager(self.settings_manager)
         self.project_manager = ProjectManager(self.settings_manager, self)
@@ -87,7 +103,7 @@ class CCCore:  # referred to as mm in other files (auratext)
         self.context_manager = ContextManager(self)
         self.file_manager = FileManager(self)
         self.workspace_manager = WorkspaceManager(self)
- # Initialize FontManagerWidget
+        # Initialize FontManagerWidget
         self.font_manager = FontManager()
       
     def late_init(self):
@@ -136,25 +152,48 @@ class CCCore:  # referred to as mm in other files (auratext)
         elif option == "Close All Tabs":
             self.editor_manager.close_all_tabs()
 
-    def switch_workspace(self, workspace_name):
-        self.workspace_manager.set_active_workspace(workspace_name)
+    def create_auratext_window(self):
+        new_window = self.widget_manager.create_auratext_window(self)
+        current_vault = self.vault_manager.get_current_vault()
+        if current_vault:
+            new_window.set_vault(current_vault)
+            self.auratext_windows.append(new_window)
+        else:
+            logging.warning("No current vault set. Creating window without a vault.")
+        return new_window
 
     def get_vault_manager(self, directory):
         return self.vault_managers.get(directory)
 
+    def get_auratext_windows(self):
+        return self.auratext_windows
+
+    def switch_workspace(self, vault_dir, workspace_name):
+        if self.workspace_manager.set_active_workspace(vault_dir, workspace_name):
+            for window in self.auratext_windows:
+                window.on_workspace_switch(vault_dir, workspace_name)
+            return True
+        return False
+
+    def notify_vault_switch(self, new_vault_path):
+        for window in self.auratext_windows:
+            window.on_vault_switch(new_vault_path)
+        # Notify other components
+        if self.editor_manager:
+            self.editor_manager.on_vault_switch(new_vault_path)
+        if self.file_manager:
+            self.file_manager.on_vault_switch(new_vault_path)
+        if self.workspace_manager:
+            self.workspace_manager.on_vault_switch(new_vault_path)
+       
     def set_active_vault(self, directory):
-        if directory in self.vault_managers:
-            self.active_vault = directory
-            self.settings_manager.set_value("default_vault", directory)
+        if self.vault_manager.set_default_vault(directory):
+            self.notify_vault_switch(directory)
             return True
         return False
 
     def get_active_vault_manager(self):
         return self.vault_managers.get(self.active_vault)
-
-    def switch_workspace(self, workspace_name):
-        self.workspace_manager.set_active_workspace(workspace_name)
-        return True
 
     def create_workspace(self, workspace_name):
         self.workspace_manager.create_workspace(workspace_name)
@@ -166,32 +205,19 @@ class CCCore:  # referred to as mm in other files (auratext)
           self.overlay = overlay
 
     def open_vault(self, path):
-        return self.vault_manager.open_vault(path)
-
-    def notify_vault_switch(self, new_vault_path):
-        # Update components that need to know about the vault switch
-        if self.editor_manager:
-            self.editor_manager.on_vault_switch(new_vault_path)
-        if self.auratext_window:
-            self.auratext_window.on_vault_switch(new_vault_path)
-        # Add other components as needed
+        vault = self.vault_manager.get_vault(path)
+        if vault:
+            window = self.create_auratext_window()
+            window.set_vault(vault)
+            window.show()
+        else:
+            logging.error(f"Vault not found: {path}")
 
     def add_vault_directory(self, path, name=None):
         return self.vault_manager.add_vault_directory(path, name)
 
     def remove_vault_directory(self, name):
         return self.vault_manager.remove_vault_directory(name)
-
-    def set_default_vault(self, name):
-        return self.vault_manager.set_default_vault(name)
-
-    def switch_vault(self, name):
-        if self.vault_manager.switch_vault(name):
-            new_vault_path = self.vault_manager.vault_path
-            self.workspace_manager.on_vault_switch(new_vault_path)
-            self.notify_vault_switch(new_vault_path)
-            return True
-        return False
 
     def open_vault_config_file(self):
         config_file_path = self.vault_manager.get_config_file_path()
@@ -205,17 +231,42 @@ class CCCore:  # referred to as mm in other files (auratext)
         self.theme_manager.main_window = main_window
         self.widget_manager.set_main_window_and_create_docks(main_window)
 
-    def create_auratext_window(self):
-        if self.auratext_window is None:
-            auratext_widget = self.widget_manager.get_or_create_dock("AuraText")
-            if isinstance(auratext_widget, QWidget):
-                # Find the AuraTextWindow within the widget
-                for child in auratext_widget.children():
-                    if isinstance(child, AuraTextWindow):
-                        self.auratext_window = child
-                        break
-            if self.auratext_window is None:
-                logging.error("Failed to create AuraTextWindow")
-        return self.auratext_window
+    def create_vault_window(self, vault_path):
+        if vault_path not in self.vault_windows:
+            new_window = self.widget_manager.create_auratext_window(self)
+            new_window.set_vault(vault_path)
+            self.vault_windows[vault_path] = new_window
+        return self.vault_windows[vault_path]
 
-  
+    def get_vault_window(self, vault_path):
+        return self.vault_windows.get(vault_path)
+
+    def set_main_vault(self, vault_path):
+        self.main_vault = vault_path
+        if self.main_window:
+            self.main_window.set_vault(vault_path)
+
+    def close_vault(self, vault_path):
+        if vault_path in self.vault_windows:
+            self.vault_windows[vault_path].close()
+            del self.vault_windows[vault_path]
+
+    def create_vault(self, name, path):
+        return self.vault_manager.create_vault(name, path)
+
+    def create_project(self, name, path, language, version):
+        return self.project_manager.create_project(name, path, language, version)
+
+    def create_workspace(self, vault, name):
+        return self.workspace_manager.create_workspace(vault, name)
+    
+    def set_menu_manager(self, menu_manager):
+        self.menu_manager = menu_manager
+    def cleanup(self):
+        logging.info("Starting CCCore cleanup")
+        if hasattr(self, 'thread_controller'):
+            self.thread_controller.shutdown()
+        if hasattr(self, 'process_manager'):
+            self.process_manager.cleanup_processes()
+       # ... cleanup other managers ...
+        logging.info("CCCore cleanup complete")

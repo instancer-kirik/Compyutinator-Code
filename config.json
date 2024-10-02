@@ -12,13 +12,13 @@
         "Sticky Notes",
         "Process Manager",
         "Vaults Manager",
-        "AuraText",
+        
         "Projects Manager"
         
     ],
     "layout": {
         "left": ["File Explorer", "Symbolic Linker"],
-        "right": ["AuraText", "Code Editor", "Sticky Notes"],
+        "right": ["Code Editor", "Sticky Notes"],
         "bottom": ["Terminal", "Process Manager"]
     }
       

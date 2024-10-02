@@ -2,11 +2,11 @@ import os
 import requests
 import json
 from threading import Thread
-from PyQt6.QtCore import Qt, QObject, pyqtSignal, pyqtSlot, QThread
+from PyQt6.QtCore import Qt, QObject, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton, QProgressBar, QMessageBox, QFileDialog
 import logging
-
-class DownloadThread(QThread):
+from NITTY_GRITTY.ThreadTrackers import SafeQThread
+class DownloadThread(SafeQThread):
     progress = pyqtSignal(int, int)
     finished = pyqtSignal()
     error = pyqtSignal(str)

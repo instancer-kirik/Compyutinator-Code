@@ -1,7 +1,7 @@
 How to run it? I do command
 C:Users/ME/miniconda3/python.exe x:/_WORK/Python/Qt/BigLinks/main.py
-
-you might have to install the packages, the list might not be up to date, but they're all on pip maybe
+BUILD WITH POETRY
+poetry install, ezpz
 
 ## Big links make big chains
 BigLinks is a widget in a PyQt app Computinator Code, to help users manage limited file storage more by leveraging symbolic links to keep data on other local drives. (Currently only tested on Windows)
@@ -28,13 +28,13 @@ Permissions: Specific permissions may be required to create or access symlinks o
 Security: Exercise caution as symlinks can potentially expose sensitive directories or files outside the intended scope.
 Important: Ensure compatibility and test symlinks and this tool in your specific network and OS environment to prevent data loss or unintended access.
 
-## Also haven't tested large folder moves yet or nested symlinks. Nested folders work tho c:
+## Also haven't tested large folder moves yet or nested symlinks. Nested folders work as far as I know. review my code for mistakes and optimizations and features.
 
 ## Framework
 BigLinks is built using the PyQt framework; open source and cross-platform.
 Build exe with:
-
-```pyinstaller --onefile --uac-admin --manifest=app.manifest main.py```
+its not one file, it's 100+
+```pyinstaller idk --onefile --uac-admin --manifest=app.manifest main.py```
 
 ## Features
 Folder Movement: Simplify the process of moving folders from one drive to another.

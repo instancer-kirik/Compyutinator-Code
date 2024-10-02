@@ -5,7 +5,7 @@ from .environment_manager import EnvironmentManager
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QPushButton, 
                              QInputDialog, QMessageBox, QFileDialog, QDialog, QLabel, QLineEdit, QFormLayout)
 from PyQt6.QtCore import Qt
-
+import sys
 class ProjectConfigDialog(QDialog):
     def __init__(self, project_name, project_data, parent=None):
         super().__init__(parent)
@@ -41,6 +41,45 @@ class ProjectConfigDialog(QDialog):
             'build_command': self.build_command_edit.text(),
             'run_command': self.run_command_edit.text()
         }
+
+class Project:
+    def __init__(self, name, path, language, version):
+        self.name = name
+        self.path = path
+        self.language = language
+        self.version = version
+        self.config_file = os.path.join(path, '.project_config.json')
+        self.build_command = ""
+        self.run_command = ""
+        self.load_config()
+
+    def load_config(self):
+        if os.path.exists(self.config_file):
+            with open(self.config_file, 'r') as f:
+                config = json.load(f)
+                self.build_command = config.get('build_command', "")
+                self.run_command = config.get('run_command', "")
+        else:
+            self.save_config()
+
+    def save_config(self):
+        config = {
+            'name': self.name,
+            'language': self.language,
+            'version': self.version,
+            'build_command': self.build_command,
+            'run_command': self.run_command
+        }
+        with open(self.config_file, 'w') as f:
+            json.dump(config, f, indent=4)
+
+    def set_build_command(self, command):
+        self.build_command = command
+        self.save_config()
+
+    def set_run_command(self, command):
+        self.run_command = command
+        self.save_config()
 
 class ProjectManager:
     def __init__(self, settings_manager, cccore):
@@ -98,6 +137,14 @@ class ProjectManager:
             self.save_projects()
             return True
         return False
+    def close_project(self):
+        current_project = self.project_selector.currentText()
+        if current_project:
+            self.save_current_project_state()
+            self.current_project = None
+            QMessageBox.information(self, "Success", f"Project '{current_project}' closed successfully.")
+        else:
+            QMessageBox.warning(self, "Error", "No active project to close.")
 
     def rename_project(self, old_name, new_name):
         if old_name in self.projects and new_name not in self.projects:
@@ -340,10 +387,16 @@ class ProjectsManagerWidget(QWidget):
         if ok and name:
             path = QFileDialog.getExistingDirectory(self, "Select Project Directory")
             if path:
-                language, ok = QInputDialog.getItem(self, "Select Language", "Choose project language:", 
-                                                    ["Python", "C++", "JavaScript"], 0, False)
+                languages = ["Python", "C++", "JavaScript"]
+                language, ok = QInputDialog.getItem(self, "Select Language", "Choose project main language:", 
+                                                    languages, 0, False)
                 if ok:
-                    version, ok = QInputDialog.getText(self, "Enter Version", "Enter language version:")
+                    default_version = ""
+                    if language == "Python":
+                        default_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+                    
+                    version, ok = QInputDialog.getText(self, "Enter Version", "Enter language version:", 
+                                                       text=default_version)
                     if ok:
                         if self.cccore.project_manager.add_project(name, path, language, version):
                             self.update_project_list()
@@ -405,3 +458,9 @@ class ProjectsManagerWidget(QWidget):
     def on_project_selected(self, project_name):
         if project_name:
             self.cccore.project_manager.set_current_project(project_name)
+            
+
+
+    def closeEvent(self, event):
+        self.update_timer.stop()
+        super().closeEvent(event)
