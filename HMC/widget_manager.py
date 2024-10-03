@@ -375,8 +375,15 @@ class WidgetManager:
     
     def create_auratext_window(self, cccore):
         new_window = AuraTextWindow(mm=cccore)
+        new_window.setWindowOpacity(0)  # Start fully transparent
+        new_window.hide()  # Hide the window initially
         self.auratext_windows.append(new_window)
+        QTimer.singleShot(1000, lambda: self.show_auratext_window(new_window))  # Show after a short delay
         return new_window
+
+    def show_auratext_window(self, window):
+        window.show()
+        window.fade_in()  # Assuming you have a fade_in method in AuraTextWindow
 
     def StickyNotesWidget(self, cccore):
         if 'sticky_notes' not in self.widgets:
@@ -431,3 +438,24 @@ class WidgetManager:
                     logging.info(f"Successfully recreated dock: {name}")
                 else:
                     logging.error(f"Failed to recreate dock: {name}")
+                    
+    # def create_file_selector(self, parent):
+    #     if 'file_selector' not in self.widgets:
+    #         self.widgets['file_selector'] = QComboBox(parent)
+    #     return self.widgets['file_selector']
+
+    def create_project_widget(self, parent):
+        if 'project_widget' not in self.widgets:
+            self.widgets['project_widget'] = self.create_project_selector_widget(parent)
+        return self.widgets['project_widget']
+
+    def create_project_selector_widget(self, parent):
+        widget = QWidget(parent)
+        layout = QVBoxLayout(widget)
+        vault_selector = QComboBox(widget)
+        project_selector = QComboBox(widget)
+        layout.addWidget(QLabel("Vault:"))
+        layout.addWidget(vault_selector)
+        layout.addWidget(QLabel("Project:"))
+        layout.addWidget(project_selector)
+        return widget

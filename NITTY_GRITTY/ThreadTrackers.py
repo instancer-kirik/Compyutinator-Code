@@ -47,7 +47,10 @@ class ThreadTracker:
                 logging.debug(f"Unregistered thread: {thread.name} (ID: {thread_id})")
             else:
                 logging.debug(f"Attempted to unregister unknown thread ID: {thread_id}")
-
+    def dump_thread_info(self):
+        print("Active Threads:")
+        for thread_id, thread_info in self.active_threads.items():
+            print(f"Thread ID: {thread_id}, Name: {thread_info['name']}, Start Time: {thread_info['start_time']}")
     def is_thread_registered(self, thread_id):
         with self.lock:
             return thread_id in self.threads

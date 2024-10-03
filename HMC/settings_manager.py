@@ -8,6 +8,7 @@ import os
 class SettingsManager:
     def __init__(self):
         self.settings =  QSettings("instance.select", "Computinator Code")
+        self.ensure_app_data_dir()
         self.ensure_vault_path()
         self.ensure_typing_effect_settings()
 
@@ -74,3 +75,11 @@ class SettingsManager:
     def get_settings(self):
         return self.settings
     # Add other settings-related methods as needed
+
+    def ensure_app_data_dir(self):
+        app_data_dir = self.get_value("app_data_dir")
+        if not app_data_dir:
+            default_app_data_dir = os.path.join(os.path.expanduser("~"), ".computinator_code")
+            self.set_value("app_data_dir", default_app_data_dir)
+        if not os.path.exists(self.get_value("app_data_dir")):
+            os.makedirs(self.get_value("app_data_dir"))

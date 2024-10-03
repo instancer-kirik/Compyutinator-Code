@@ -10,20 +10,27 @@ class ActionHandlers:
 
     def new_file(self):
         self.cccore.editor_manager.new_document()
+    def new_project(self):
+        self.cccore.project_manager.new_project()
+    
+    def open_file(self, path=None, file_path=None):
+        if path is None:
+            
+            file_path, _ = QFileDialog.getOpenFileName(self.cccore.main_window, "Open File")
+            if file_path:
+                self.cccore.editor_manager.open_file(file_path)
 
-    def open_file(self):
-        file_path, _ = QFileDialog.getOpenFileName(self.cccore.main_window, "Open File")
-        if file_path:
-            self.cccore.editor_manager.open_file(file_path)
-
-    def open_file(self, path, file_path=None):
         path = file_path if file_path else path#refactored lol
         if hasattr(self.cccore, 'file_manager') and self.cccore.file_manager:
             self.cccore.file_manager.open_file(path)
         else:
             logging.error("File manager not properly initialized")
-   
-
+    def open_project(self):
+        self.cccore.project_manager.open_project()
+    def toggle_python_console(self):
+        self.cccore.python_console.toggle_visibility()
+    def show_project_settings(self):
+        self.cccore.project_manager.show_project_settings()
     def save_file(self):
         current_editor = self.cccore.editor_manager.current_editor
         if current_editor:

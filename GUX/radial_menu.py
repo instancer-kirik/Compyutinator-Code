@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QWidget, QApplication
 from PyQt6.QtGui import QPainter, QColor, QPen, QFont
-from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal
+from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QSize, QPointF
 import math
 
 class RadialMenu(QWidget):
@@ -10,41 +10,52 @@ class RadialMenu(QWidget):
         super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint)
         self.options = []
         self.hover_index = -1
-        self.radius = 100
+        self.radius = 120
+        self.inner_radius = 40
+        self.option_radius = 35
         self.setMouseTracking(True)
         self.right_button_pressed = False
+        self.background_color = QColor(240, 240, 240, 200)
+        self.hover_color = QColor(200, 200, 255)
+        self.text_color = QColor(0, 0, 0)
+        self.font = QFont("Arial", 10)
 
     def set_options(self, options):
         self.options = options
         self.update()
 
     def show_at(self, pos):
+        size = QSize(self.radius * 2, self.radius * 2)
+        self.setFixedSize(size)
         self.move(pos - QPoint(self.radius, self.radius))
         self.show()
-        self.setFocus()  # Ensure the widget receives keyboard events
+        self.setFocus()
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        center = QPoint(self.radius, self.radius)
-        painter.translate(center)
+        center_x = self.width() / 2
+        center_y = self.height() / 2
 
         for i, option in enumerate(self.options):
             angle = 2 * math.pi * i / len(self.options)
-            x = self.radius * 0.7 * math.cos(angle)
-            y = self.radius * 0.7 * math.sin(angle)
+            x = center_x + self.radius * math.cos(angle)
+            y = center_y + self.radius * math.sin(angle)
 
-            if i == self.hover_index:
-                painter.setBrush(QColor(200, 200, 255))
-            else:
-                painter.setBrush(QColor(240, 240, 240))
+            # Convert to integers
+            x_int = int(x)
+            y_int = int(y)
+            option_radius_int = int(self.option_radius)
 
-            painter.setPen(QPen(Qt.GlobalColor.black, 1))
-            painter.drawEllipse(QPoint(x, y), 30, 30)
+            # Use integer values for QRect
+            text_rect = QRect(x_int - option_radius_int, y_int - option_radius_int,
+                              2 * option_radius_int, 2 * option_radius_int)
 
-            painter.setFont(QFont("Arial", 8))
-            painter.drawText(QRect(x-25, y-25, 50, 50), Qt.AlignmentFlag.AlignCenter, option)
+            painter.drawEllipse(text_rect)
+            painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, option)
+
+        painter.end()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.RightButton:
@@ -79,3 +90,8 @@ class RadialMenu(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape:
             self.close()
+        elif Qt.Key.Key_1 <= event.key() <= Qt.Key.Key_9:
+            index = event.key() - Qt.Key.Key_1
+            if index < len(self.options):
+                self.optionSelected.emit(self.options[index])
+                self.close()

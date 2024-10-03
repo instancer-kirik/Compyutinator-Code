@@ -5,39 +5,61 @@ from pathlib import Path
 from DEV.workspace import Workspace
 import tempfile
 import logging
+
+from .project_manager import Project
+#WORKSPACES IS UI RELATED, probably, filesets open?
+##Vaults can be considered as top-level containers.
+# Projects can exist within vaults.
+# UI Organization:
+# Add a vault selector at the top level of your UI.
+# Under each vault, show a project selector.
+# File System Integration:
+# Vault path: The root directory for all content in a vault.
+# Project path: A subdirectory within a vault.
+# Class Structure:
+# Modify the VaultManager to handle both vaults and projects.
+# Create a Project class to represent individual projects.
 class Vault:
     def __init__(self, name, path, cccore):
         self.name = name
         self.cccore = cccore
         self.path = Path(path)
+        self.projects = {}
         self.workspaces = {}
         self.config_file = self.path / '.vault_config.json'
         self.index_file = self.path / '.vault_index.json'
         logging.info(f"Initializing Vault: {name} at {path}")
         self.load_config()
-        self.load_index()
-       
+
+    def add_project(self, project_name, project_path):
+        if not project_path.startswith(str(self.path)):
+            raise ValueError("Project path must be within the vault")
+        relative_path = os.path.relpath(project_path, str(self.path))
+        self.projects[project_name] = relative_path
+        self.save_config()
+        return True
+
+    def get_project_path(self, project_name):
+        relative_path = self.projects.get(project_name)
+        if relative_path:
+            return str(self.path / relative_path)
+        return None
+
     def load_config(self):
-        logging.info(f"Loading config for vault: {self.name}")
-        if os.path.exists(self.config_file):
+        if self.config_file.exists():
             with open(self.config_file, 'r') as f:
                 config = json.load(f)
-                self.workspaces = config.get('workspaces', {})
-            logging.info(f"Config loaded for vault: {self.name}")
+                self.projects = config.get('projects', {})
         else:
-            logging.warning(f"Config file not found for vault: {self.name}. Creating new config.")
-            self.workspaces = {}
             self.save_config()
-        
+
     def save_config(self):
-        logging.info(f"Saving config for vault: {self.name}")
         config = {
             'name': self.name,
-            'workspaces': self.workspaces
+            'projects': self.projects
         }
         with open(self.config_file, 'w') as f:
             json.dump(config, f, indent=4)
-        logging.info(f"Config saved for vault: {self.name}")
 
     def add_workspace(self, workspace_name):
         if workspace_name not in self.workspaces:
@@ -57,11 +79,11 @@ class Vault:
         return list(self.workspaces.keys())
 
     def load_index(self):
-        logging.info(f"Loading index for vault: {self.name}")
+        logging.warning(f"Loading index for vault: {self.name}")
         if self.index_file.exists():
             with open(self.index_file, 'r') as f:
                 self.index = json.load(f)
-            logging.info(f"Index loaded for vault: {self.name}")
+            logging.warning(f"Index loaded for vault: {self.name}")
         else:
             logging.warning(f"Index file not found for vault: {self.name}. Updating index.")
             self.update_index()
@@ -113,10 +135,36 @@ class Vault:
     def get_file_info(self, rel_path):
         return next((f for f in self.index['files'] if f['path'] == rel_path), None)
 
+    def add_project(self, vault_name, project_name, project_path, language=None, version=None):
+        if project_name not in self.projects:
+            vault = self.get_vault(vault_name)
+            if vault:
+                project = Project(project_name, project_path, language, version)
+                return vault.add_project(project_name, project)
+            else:
+                logging.error(f"Vault '{vault_name}' not found.")
+                return False
+        else:
+            logging.warning(f"Project '{project_name}' already exists in vault '{vault_name}'.")
+            return False
+
+            self.save_config()
+            return True
+        return False
+
+    def get_project(self, project_name):
+        return self.projects.get(project_name)
+
+    def get_project_names(self):
+        return list(self.projects.keys())
+
+   
+
 class VaultManager:
     def __init__(self, settings_manager, cccore):
         self.settings_manager = settings_manager
         self.cccore = cccore
+        self.project_manager = cccore.get_project_manager()
         self.app_config_dir = Path.home() / ".computinator_code"
         self.app_config_dir.mkdir(exist_ok=True)
         self.vaults_config_file = self.app_config_dir / "vaults_config.json"
@@ -155,15 +203,33 @@ class VaultManager:
             self.set_current_vault(next(iter(self.vaults)))
 
     def ensure_default_vault(self):
+        app_data_dir = self.settings_manager.get_value('app_data_dir')
+        if not app_data_dir:
+            app_data_dir = os.path.join(os.path.expanduser("~"), ".computinator_code")
+            self.settings_manager.set_value('app_data_dir', app_data_dir)
+        
+        default_path = os.path.join(app_data_dir, 'default_vault')
+        if not os.path.exists(default_path):
+            os.makedirs(default_path)
+            logging.info(f"Created default vault directory at {default_path}")
+        
         if not self.vaults:
-            logging.info("No vaults found. Creating default vault.")
-            default_path = self.app_config_dir / "default_vault"
-            self.add_vault_directory(str(default_path), "Default Vault")
+            logging.info(f"No vaults found. Creating default vault at {default_path}")
+            self.create_vault("Default Vault", default_path)
         
         if not self.current_vault:
             self.set_current_vault(next(iter(self.vaults)))
         
         logging.info(f"Current vault set to: {self.current_vault.name if self.current_vault else 'None'}")
+
+    def create_vault(self, name, path):
+        path = Path(path)
+        path.mkdir(parents=True, exist_ok=True)
+        new_vault = Vault(name, str(path), self.cccore)
+        self.vaults[name] = new_vault
+        self.save_vaults_config()
+        logging.info(f"Created new vault: {name} at {path}")
+        return new_vault
 
     def add_vault_directory(self, path, name=None):
         logging.info(f"Adding vault directory: {path} with name: {name}")
@@ -192,15 +258,16 @@ class VaultManager:
             return None
 
     def set_current_vault(self, name):
+        logging.info(f"Setting current vault to: {name}")
         if name not in self.vaults:
             logging.warning(f"Vault '{name}' does not exist.")
             return False
         
         self.current_vault = self.vaults[name]
         self.save_vaults_config()
-        logging.info(f"Current vault set to: {name}")
+        self.initialize_vault(self.current_vault)
+        logging.info(f"Successfully set current vault to: {name}")
         return True
-
     def ensure_default_vaults(self):
         logging.info("Ensuring default vaults...")
         if not self.vaults:
@@ -335,7 +402,8 @@ class VaultManager:
         for vault in self.vaults.values():
             if vault.path == path:
                 return vault
-        return None
+        return Vault(name=f"{path.split('/')[-1]}_vault", path=path, cccore=self.cccore)
+       
     def get_current_vault(self):
         if self.current_vault and isinstance(self.current_vault, Vault):
             return self.current_vault
@@ -354,17 +422,7 @@ class VaultManager:
 
     def set_config(self, key, value):
         self.settings_manager.set_value(key, value)
-    def set_current_vault(self, name):
-        logging.info(f"Setting current vault to: {name}")
-        if name not in self.vaults:
-            logging.warning(f"Vault '{name}' does not exist.")
-            return False
-        
-        self.current_vault = self.vaults[name]
-        self.save_vaults_config()
-        self.initialize_vault(self.current_vault)
-        logging.info(f"Successfully set current vault to: {name}")
-        return True
+    
     def get_index(self):
         return self.current_vault.get_index() if self.current_vault else {}
 
@@ -387,3 +445,44 @@ class VaultManager:
             del self.vaults[name]
         self.save_vaults_config()
         logging.info(f"Cleaned up {len(temp_vaults)} temporary vaults")
+
+    def add_vault(self, name, path=None):
+        if path is None:
+            path = os.path.join(self.settings_manager.get_value('app_data_dir'), name)
+        
+        if name in self.vaults:
+            logging.warning(f"Vault with name '{name}' already exists.")
+            return False
+
+        try:
+            os.makedirs(path, exist_ok=True)
+            new_vault = Vault(name, path, self.cccore)
+            self.vaults[name] = new_vault
+            self.save_vaults_config()
+            logging.info(f"Added new vault: {name} at {path}")
+            return True
+        except Exception as e:
+            logging.error(f"Failed to add vault {name}: {str(e)}")
+            return False
+
+    def add_vault(self, name, path):
+        if name not in self.vaults:
+            self.vaults[name] = Vault(name, path)
+            self.save_vaults()
+            return True
+        return False
+
+    def add_project(self, vault_name, project_name, project_path):
+        vault = self.get_vault(vault_name)
+        if vault:
+            return vault.add_project(project_name, project_path)
+        return False
+
+    def get_projects(self, vault_name):
+        vault = self.get_vault(vault_name)
+        return vault.get_projects() if vault else []
+
+    def get_vault(self, vault_name):
+        return self.vaults.get(vault_name)
+    def get_vault_names(self):
+        return list(self.vaults.keys())

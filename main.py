@@ -8,16 +8,14 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, script_dir)
 import cProfile
 import pstats
-from NITTY_GRITTY.ThreadTrackers import ThreadTracker, QThreadTracker
+from NITTY_GRITTY.ThreadTrackers import ThreadTracker, QThreadTracker, global_thread_tracker, global_qthread_tracker
 profiler = cProfile.Profile()
 
-global_thread_tracker = ThreadTracker()
-global_qthread_tracker = QThreadTracker()
 # Now try to import from HMC
 from HMC.cccore import CCCore
 from HMC.sticky_note_manager import StickyNoteManager
 from PyQt6.QtWidgets import QWidget
-
+import io
 import logging
 from PyQt6.QtWidgets import QApplication, QMainWindow, QFileDialog, QTabWidget, QListWidget, QVBoxLayout, QWidget, QLabel, QPushButton
 from PyQt6.QtGui import QAction, QDesktopServices
@@ -80,8 +78,8 @@ import signal
 
 def signal_handler(signum, frame):
     logging.critical(f"Received signal: {signum}")
-    QApplication.quit()
-    QApplication.instance().exit(1)  # Exit with an error code
+    # Force exit without waiting for threads
+    os._exit(1)
 
 # In your main function:
 signal.signal(signal.SIGINT, signal_handler)
@@ -515,6 +513,7 @@ class MainApplication(QMainWindow):
             logging.error(f"Expected StickyNoteManager, got {type(sticky_note_manager)}")
 
     def closeEvent(self, event):
+        event.accept()  # Always accept the close event
         self.cleanup_processes()
         super().closeEvent(event)
 
@@ -580,10 +579,16 @@ class MainApplication(QMainWindow):
         auratext_window.show()
   
     def cleanup(self):
-        profiler.disable()
-        stats = pstats.Stats(profiler).sort_stats('cumulative')
-        stats.print_stats(20)  # Print top 20 time-consuming functions
+        if hasattr(self, 'profiler'):
+            self.profiler.disable()
+            s = io.StringIO()
+            ps = pstats.Stats(self.profiler, stream=s).sort_stats('cumulative')
+            ps.print_stats()
+            print(s.getvalue())
         logging.info("Starting application cleanup")
+        
+        # Set a timeout for cleanup operations
+        cleanup_timeout = 5  # seconds
         
         # Clean up thread pool
         thread_pool = QThreadPool.globalInstance()
@@ -614,6 +619,31 @@ def exception_hook(exctype, value, tb):
     logging.error("Uncaught exception", exc_info=(exctype, value, tb))
     traceback.print_exception(exctype, value, tb)
     QApplication.quit()
+
+def setup_logging():
+    log_directory = os.path.join(os.getcwd(), 'logs')
+    if not os.path.exists(log_directory):
+        os.makedirs(log_directory)
+
+    log_file_path = os.path.join(log_directory, 'app.log')
+
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file_path, mode='w'),
+            logging.StreamHandler()
+        ]
+    )
+
+    # Test logging
+    logging.debug("Debug message")
+    logging.info("Info message")
+    logging.warning("Warning message")
+    logging.error("Error message")
+
+# Call this function at the beginning of your main() function
+setup_logging()
 
 def main():
     
@@ -711,19 +741,15 @@ def main():
 
         logging.info("Entering Qt event loop")
         try:
-            exit_code = app.exec()
-            logging.info(f"Qt event loop exited with code: {exit_code}")
+            sys.exit(app.exec())
         except Exception as e:
-            logging.critical(f"Critical error in main event loop: {e}", exc_info=True)
+            logging.error(f"Unhandled exception in main: {str(e)}")
+            logging.error(traceback.format_exc())
         finally:
-            global_thread_tracker.dump_thread_info()
-            global_qthread_tracker.dump_thread_info()
-            logging.info("Cleaning up QApplication")
-            cccore.cleanup()
-            app.quit()
-            app.deleteLater()
-            logging.info("Exiting application")
-            sys.exit(exit_code if 'exit_code' in locals() else 1)
+            if 'main_app' in locals():
+                main_app.cleanup()
+            if 'global_thread_tracker' in globals():
+                global_thread_tracker.dump_thread_info()
 
     except Exception as e:
         logging.error(f"Unhandled exception in main: {e}", exc_info=True)

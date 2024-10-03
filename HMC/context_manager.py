@@ -7,7 +7,8 @@ from transformers import AutoTokenizer, BasicTokenizer
 import logging
 
 class ContextManager:
-    def __init__(self, max_tokens=4000, max_file_size=1024*1024, model_name="arcee-ai/Llama-3.1-SuperNova-Lite"):
+    def __init__(self, cccore, max_tokens=4000, max_file_size=1024*1024, model_name="arcee-ai/Llama-3.1-SuperNova-Lite"):
+        self.cccore = cccore
         self.max_tokens = max_tokens
         self.max_file_size = max_file_size
         self.tokenizer = self.load_tokenizer(model_name)

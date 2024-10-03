@@ -36,3 +36,18 @@ class LSPManager(QObject):
             "position": position
         }
         self.send_request("textDocument/completion", params)
+    # def cleanup(self):
+    #     for process in self.lsp_processes.values():
+    #         if process.state() == QProcess.Running:
+    #             process.terminate()
+    #             process.waitForFinished(5000)  # Wait up to 5 seconds
+    #             if process.state() == QProcess.Running:
+    #                 process.kill()  # Force kill if it doesn't terminate
+    #     self.lsp_processes.clear()
+    def cleanup(self):
+        if self.process.state() == QProcess.Running:
+            self.process.terminate()
+            self.process.waitForFinished(5000)  # Wait up to 5 seconds
+            if self.process.state() == QProcess.Running:
+                self.process.kill()  # Force kill if it doesn't terminate
+        self.process.clear()

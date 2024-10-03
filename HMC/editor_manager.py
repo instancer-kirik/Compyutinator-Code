@@ -33,25 +33,39 @@ class EditorManager:
         self.window_editors = {}  # Map of windows to their editors
 
     def add_window(self, window):
+        
         self.windows.append(window)
         self.window_editors[window] = []
-        if not self.current_window:
-            self.current_window = window
+        self.set_current_window(window)
 
     def set_current_window(self, window):
         if window in self.windows:
             self.current_window = window
-
+            logging.info(f"Current AuraText window set in EditorManager: {window}")
+        else:
+            self.windows.append(window)
+            self.current_window=window
     def open_file(self, file_path):
+        if self.is_file_in_current_context(file_path):
+            # Existing open_file logic
+            pass
+        else:
+            logging.warning(f"File {file_path} is not in the current project context")
+
         existing_editor = self.get_editor_by_path(file_path)
         if existing_editor:
             self.set_current_editor(existing_editor)
             return existing_editor
 
+        if not os.path.exists(file_path):
+            logging.error(f"File not found: {file_path}")
+            return None
+
         try:
             with open(file_path, 'r') as file:
                 content = file.read()
             new_editor = self.create_new_editor_tab(file_path, content)
+            
             return new_editor
         except Exception as e:
             logging.error(f"Error opening file: {file_path}")
@@ -80,44 +94,27 @@ class EditorManager:
             return None
 
     def new_document(self):
-        logging.info("Creating new document")
+        if self.current_window is None:
+            logging.error("No current AuraText window set in EditorManager")
+            return None
+
         try:
-            editor = CodeEditor(self.cccore)
-            title = f"Untitled_{int(time.time())}"
-            
-            if self.current_window:
-                index = self.current_window.add_new_tab(editor, title)
-                if index is not None:
-                    self.window_editors[self.current_window].append(editor)
-                    self.set_current_editor(editor)
-                    logging.info(f"New document created successfully at index {index}")
-                else:
-                    logging.error("Failed to add new tab")
-                    raise Exception("Failed to add new tab")
+            new_editor = CodeEditor(self.cccore)
+            index = self.current_window.add_new_tab(new_editor, "Untitled")
+            if index is not None:
+                self.set_current_editor(new_editor)
+                return new_editor
             else:
-                logging.error("No current window to add the new document")
-                raise Exception("No current window")
-            
+                logging.error("Failed to add new tab to current AuraText window")
+                return None
         except Exception as e:
-            logging.error(f"Error creating new document: {e}")
+            logging.error(f"Error creating new document: {str(e)}")
             logging.error(traceback.format_exc())
-            QMessageBox.critical(self.current_window, "Error", f"Could not create new document: {e}")
+            return None
 
     def save_file(self, editor=None):
-        editor = editor or self.current_editor
-        if not editor:
-            return
-        if not editor.file_path:
-            return self.save_file_as(editor)
-        try:
-            with open(editor.file_path, 'w') as file:
-                file.write(editor.text())
-            editor.setModified(False)
-            return True
-        except Exception as e:
-            logging.error(f"Error saving file: {e}")
-            QMessageBox.critical(self.current_window, "Error", f"Could not save file: {e}")
-            return False
+        # Similar check as in open_file
+        pass
 
     def save_file_as(self, editor=None):
         editor = editor or self.current_editor
@@ -204,8 +201,16 @@ class EditorManager:
         for window, editors in self.window_editors.items():
             all_editors.extend(editors)
         return all_editors
-
     
+    def get_all_editor_paths(self):
+        all_editor_paths = []
+        for window, editors in self.window_editors.items():
+            for editor in editors:
+                all_editor_paths.append(editor.file_path)
+        return all_editor_paths
+    
+    def get_project_path(self,project_name):
+        return self.cccore.project_manager.get_project_path(project_name)
     def on_vault_switch(self, new_vault_path):
         for window, editors in self.window_editors.items():
             for editor in editors:
@@ -287,13 +292,28 @@ class EditorManager:
                     return editor
         return None
     def set_current_editor(self, editor):
-        for window, editors in self.window_editors.items():
-            if editor in editors:
-                self.current_editor = editor
-                self.current_window = window
-                index = editors.index(editor)
-                window.tab_widget.setCurrentIndex(index)
-                logging.info(f"Current editor set to index {index} in window {window}")
-                return
-        logging.warning(f"Editor not found in any window. Unable to set as current.")
-    
+        if self.current_window:
+            self.current_window.set_current_editor(editor)
+        else:
+            #this is where we need to add the code to switch to the correct window and set the current editor
+            for window, editors in self.window_editors.items():
+                if editor in editors:
+                    self.current_editor = editor
+                    self.current_window = window
+                    index = editors.index(editor)
+                    window.tab_widget.setCurrentIndex(index)
+                    logging.info(f"Current editor set to index {index} in window {window}")
+                    return
+            logging.warning(f"Editor not found in any window. Unable to set as current.")
+
+    def is_file_in_current_context(self, file_path):
+        current_vault = self.cccore.vault_manager.get_current_vault()
+        current_project = self.cccore.project_manager.current_project
+        if current_vault and current_project:
+            project_path = self.get_project_path(current_project)
+            try:
+                return os.path.commonpath([file_path, project_path]) == project_path
+            except ValueError:
+                # Paths are on different drives, so we'll compare them as strings
+                return file_path.lower().startswith(project_path.lower())
+        return False

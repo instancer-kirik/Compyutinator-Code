@@ -4,7 +4,7 @@ import mimetypes
 import importlib
 import inspect
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QMessageBox, 
-                             QTextEdit, QLineEdit, QInputDialog, QFileDialog, 
+                             QTextEdit, QLineEdit, QInputDialog, QFileDialog, QTextBrowser,
                              QDialog, QScrollArea, QComboBox, QProgressBar, QApplication)
 from PyQt6.QtCore import QThread, pyqtSignal, QObject
 
@@ -30,6 +30,10 @@ from HMC.download_manager import DownloadManager
 from requests.exceptions import RequestException
 import requests
 import traceback
+
+
+from GUX.diff_merger import DiffMergerWidget
+
 class CollapsibleSection(QWidget):
     def __init__(self, title, parent=None):
         super().__init__(parent)
@@ -113,6 +117,9 @@ class ReferenceItem(QWidget):
         self.parent.remove_reference(self)
 
 class AIChatWidget(QWidget):
+    file_clicked = pyqtSignal(str)
+    merge_requested = pyqtSignal(str, str)
+
     def __init__(self, parent=None, context_manager=None, editor_manager=None, model_manager=None, download_manager=None, settings_manager=None):
         super().__init__(parent)
         logging.info("Initializing AIChatWidget")
@@ -215,8 +222,10 @@ class AIChatWidget(QWidget):
         layout.addWidget(self.chat_reference_widget)
         
         # Chat display
-        self.chat_display = QTextEdit()
+        self.chat_display = QTextBrowser()
         self.chat_display.setReadOnly(True)
+        self.chat_display.setOpenLinks(False)
+        self.chat_display.anchorClicked.connect(self.handle_link_click)
         layout.addWidget(self.chat_display)
         
         # User input
@@ -251,6 +260,7 @@ class AIChatWidget(QWidget):
         # Set default model URL hint
         self.set_default_model_url_hint()
         logging.info("UI initialized successfully")
+
     def set_default_model_url_hint(self):
         default_model_name = "Llama-3.1-SuperNova-Lite-8.0B-OF32.EF32.IQ6_K.gguf"
         default_model_url = f"https://huggingface.co/Joseph717171/Llama-3.1-SuperNova-Lite-8.0B-OQ8_0.EF32.IQ4_K-Q8_0-GGUF/resolve/main/{default_model_name}"
@@ -487,12 +497,15 @@ class AIChatWidget(QWidget):
             for file_path, block in diff_blocks:
                 if os.path.basename(file_path) == os.path.basename(self.current_file_path):
                     merged_content = self.apply_diff_to_content(self.current_file_content, [(file_path, block)])
-                    diff_merger = DiffMergerWidget(self.current_file_content, merged_content, self)
-                    if diff_merger.exec() == QDialog.DialogCode.Accepted:
-                        self.current_file_content = diff_merger.get_merged_content()
-                        # Here you might want to update the main editor with the new content
-                        # self.parent().update_editor_content(self.current_file_content)
+                    diff_merger = DiffMergerWidget(self.mm, self.current_file_content, merged_content)
+                    diff_merger.show()  # Show as a non-modal dialog
+                    diff_merger.accepted.connect(lambda: self.update_file_content(diff_merger.result_box.text_edit.toPlainText()))
                     break
+
+    def update_file_content(self, new_content):
+        self.current_file_content = new_content
+        # Update the main editor with the new content
+        self.mm.editor_manager.update_current_editor_content(self.current_file_content)
 
     def apply_diff_to_content(self, content, diff_blocks):
         lines = content.split('\n')
@@ -624,4 +637,8 @@ class AIChatWidget(QWidget):
 
     def log_message(self, message):
         logging.info(message)
+
+    def handle_link_click(self, url):
+        file_path = url.toString()
+        self.file_clicked.emit(file_path)
 

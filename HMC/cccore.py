@@ -34,16 +34,29 @@ class CCCore:  # referred to as mm in other files (auratext)
     def __init__(self, settings_manager, main_window=None):
         self.settings_manager = settings_manager
         self.main_window = main_window
+        
         self.widget_manager = None
         self.auratext_windows = []
         self.editor_manager = None
         self.overlay = None
         self.workspace_manager = None
+        self.project_manager = None
         self.secrets_manager = None
         self.env_manager = EnvironmentManager(self.settings_manager.get_value("environments_path", "./environments"))
         self.vault_manager = VaultManager(self.settings_manager, cccore=self)
-        self.vault_manager.ensure_default_vaults()  # Add this line
-        self.project_manager = None
+        
+        # Add debug logging
+        logging.debug(f"Initializing CCCore. Default vault path: {self.settings_manager.get_value('app_data_dir')}")
+        
+        # Ensure default vault is created and set
+        default_vault_path = os.path.join(self.settings_manager.get_value('app_data_dir'), 'default_vault')
+        if not self.vault_manager.get_current_vault():
+            logging.info(f"Creating default vault at: {default_vault_path}")
+            self.vault_manager.create_vault("Default Vault", default_vault_path)
+            self.vault_manager.set_current_vault("Default Vault")
+        
+        logging.debug(f"Current vault after initialization: {self.vault_manager.get_current_vault()}")
+        
         self.process_manager = ProcessManager(self)
         self.build_manager = None
         self.file_manager = None
@@ -110,6 +123,7 @@ class CCCore:  # referred to as mm in other files (auratext)
         if not self.late_init_done:
             self.file_manager = FileManager(self)
             self.editor_manager = EditorManager(self)
+            self.editor_manager.set_current_window(self.main_window)
             self.late_init_done = True
 
     def show_radial_menu(self, pos, context):
@@ -154,6 +168,7 @@ class CCCore:  # referred to as mm in other files (auratext)
 
     def create_auratext_window(self):
         new_window = self.widget_manager.create_auratext_window(self)
+        self.editor_manager.set_current_window(new_window)
         current_vault = self.vault_manager.get_current_vault()
         if current_vault:
             new_window.set_vault(current_vault)
@@ -227,7 +242,9 @@ class CCCore:  # referred to as mm in other files (auratext)
             logging.warning("Editor manager not initialized. Cannot open config file.")
 
     def set_main_window(self, main_window):
+        main_window.setWindowOpacity(0)
         self.main_window = main_window
+        
         self.theme_manager.main_window = main_window
         self.widget_manager.set_main_window_and_create_docks(main_window)
 
@@ -269,4 +286,10 @@ class CCCore:  # referred to as mm in other files (auratext)
         if hasattr(self, 'process_manager'):
             self.process_manager.cleanup_processes()
        # ... cleanup other managers ...
+        if hasattr(self, 'lsp_manager'):
+            self.lsp_manager.cleanup()
         logging.info("CCCore cleanup complete")
+    def get_project_manager(self):
+        return self.project_manager
+    def get_vault_manager(self):
+        return self.vault_manager

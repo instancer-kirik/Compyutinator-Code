@@ -1,11 +1,275 @@
 {
-  "current_theme": "dark_medical.xml",
+  "current_theme": "dark_amber.xml",
   "custom_themes": {
     "test": {
       "style": "test"
     },
     "h": {
       "style": "hk"
+    },
+    "new1": {
+      "colors": {
+        "backgroundColor": "#23222c",
+        "textColor": "#bb8c2d",
+        "linkColor": "#7fa106"
+      },
+      "highlighting": {
+        "keyword": "#23222c",
+        "string": "#23222c",
+        "comment": "#23222c",
+        "function": "#23222c",
+        "class": "#23222c",
+        "number": "#23222c",
+        "operator": "#23222c"
+      },
+      "QWidget": {
+        "Background Color": "#4b1627",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 1,
+        "Border Color": "#251a20",
+        "Border Radius": 1,
+        "Padding": "",
+        "Margin": ""
+      },
+      "QPushButton": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": "",
+        "Hover Background": "#23222c",
+        "Hover Text Color": "#23222c",
+        "Pressed Background": "#23222c",
+        "Pressed Text Color": "#23222c"
+      },
+      "QLabel": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": ""
+      },
+      "QLineEdit": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": "",
+        "Placeholder Text Color": "#23222c",
+        "Focus Border Color": "#23222c"
+      },
+      "QTextEdit": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": "",
+        "Placeholder Text Color": "#23222c",
+        "Focus Border Color": "#23222c"
+      },
+      "QComboBox": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": ""
+      },
+      "QCheckBox": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": ""
+      },
+      "QRadioButton": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": ""
+      },
+      "QSlider": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": ""
+      },
+      "QProgressBar": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": ""
+      },
+      "QScrollBar": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": ""
+      },
+      "QTabWidget": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": ""
+      },
+      "QTableWidget": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": ""
+      },
+      "QTreeWidget": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": ""
+      },
+      "QListWidget": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": ""
+      },
+      "QMenuBar": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": ""
+      },
+      "QMenu": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": ""
+      },
+      "QToolBar": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": ""
+      },
+      "QStatusBar": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": ""
+      },
+      "QDialog": {
+        "Background Color": "#23222c",
+        "Text Color": "#23222c",
+        "Font Family": "",
+        "Font Size": 0,
+        "Border Style": "",
+        "Border Width": 0,
+        "Border Color": "#23222c",
+        "Border Radius": 0,
+        "Padding": "",
+        "Margin": ""
+      }
     }
   }
 }

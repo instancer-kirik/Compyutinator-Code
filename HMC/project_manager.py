@@ -91,6 +91,7 @@ class ProjectManager:
         self.current_project = None
         self.recent_projects = []
         self.env_manager = EnvironmentManager(self.settings_manager.get_value("environments_path", "./environments"))
+        self.vaults = {}  # New attribute to store vaults
         self.load_projects()
 
     def load_projects(self):
@@ -121,11 +122,32 @@ class ProjectManager:
         open_files = self.cccore.editor_manager.get_open_files()
         self.cccore.settings_manager.set_value(f"open_files_{current_project}", open_files)
 
-    def add_project(self, name, path, language, version):
-        if name not in self.projects:
-            self.projects[name] = {"path": path, "language": language, "version": version}
-            self.env_manager.create_environment(name, language, version)
-            self.save_projects()
+    def add_project(self, vault_name, project_name, project_path):
+        vault = self.cccore.vault_manager.get_vault(vault_name)
+        if vault:
+            return vault.add_project(project_name, project_path)
+        return False
+
+    def get_projects(self, vault_name):
+        vault = self.cccore.vault_manager.get_vault(vault_name)
+        if vault:
+            return vault.get_project_names()
+        return []
+
+    def get_project_path(self, vault_name, project_name):
+        vault = self.cccore.vault_manager.get_vault(vault_name)
+        if vault:
+            return vault.get_project_path(project_name)
+        return None
+
+    def set_current_project(self, vault_name, project_name):
+        project_path = self.get_project_path(vault_name, project_name)
+        if project_path:
+            self.current_project = {
+                'name': project_name,
+                'path': project_path,
+                'vault': vault_name
+            }
             return True
         return False
     
@@ -322,13 +344,40 @@ class ProjectManager:
                     self.update_project_selector()
                 else:
                     QMessageBox.warning(self, "Error", "Failed to rename project. New name may already exist.")
+    def open_project(self):
+        selected_project = self.project_selector.currentText()
+        if selected_project:
+            self.switch_project(selected_project)
+    
+    def show_project_settings(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Project Settings")
+        layout = QVBoxLayout(dialog)
+        
+        # Add project path label
+        path_label = QLabel("Project Path:")
+        layout.addWidget(path_label)
+        
+        # Add project path input field
+        # current_project = self.get_current_project()
+        # if current_project:
+        #     project_path = self.get_project_path(current_project)
+        #     if project_path:
+                
+        #     else:
+        #         QMessageBox.warning(self, "Error", "Failed to open project directory.")
+        # else:
+        #     QMessageBox.warning(self, "Error", "No active project to open.")
+    
+   
 
 class ProjectsManagerWidget(QWidget):
     def __init__(self, parent, cccore):
         super().__init__(parent)
         self.cccore = cccore
         self.setup_ui()
-        self.update_project_list()
+        self.update_project_list(cccore.vault_manager.get_current_vault())
+        self.setup_vault_selector()
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -376,34 +425,55 @@ class ProjectsManagerWidget(QWidget):
         # Set the layout for the widget
         self.setLayout(layout)
 
-    def update_project_list(self):
+    def setup_vault_selector(self):
+        self.vault_selector = QComboBox()
+        self.vault_selector.addItems(self.cccore.vault_manager.get_vault_names())
+        self.vault_selector.currentTextChanged.connect(self.on_vault_changed)
+        # Add the vault selector to your layout
+
+    def on_vault_changed(self, vault_name):
+        self.update_project_list(vault_name)
+
+    def update_project_list(self, vault_name):
         self.project_selector.clear()
-        projects = self.cccore.project_manager.get_projects()
+        projects = self.cccore.vault_manager.get_projects(vault_name)
         self.project_selector.addItems(projects)
         logging.debug(f"Updated project list: {projects}")
 
     def add_project(self):
-        name, ok = QInputDialog.getText(self, "Add Project", "Enter project name:")
-        if ok and name:
-            path = QFileDialog.getExistingDirectory(self, "Select Project Directory")
-            if path:
-                languages = ["Python", "C++", "JavaScript"]
-                language, ok = QInputDialog.getItem(self, "Select Language", "Choose project main language:", 
-                                                    languages, 0, False)
-                if ok:
-                    default_version = ""
-                    if language == "Python":
-                        default_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-                    
-                    version, ok = QInputDialog.getText(self, "Enter Version", "Enter language version:", 
-                                                       text=default_version)
-                    if ok:
-                        if self.cccore.project_manager.add_project(name, path, language, version):
-                            self.update_project_list()
-                            QMessageBox.information(self, "Success", f"Project '{name}' added successfully.")
-                        else:
-                            QMessageBox.warning(self, "Error", f"Project '{name}' already exists.")
+        vault_name = self.cccore.vault_manager.get_current_vault().name
+        if not vault_name:
+            QMessageBox.warning(self, "Nope", "Please select a vault first.")
+            return
 
+        name, ok = QInputDialog.getText(self, "Add Project", "Enter project name:")
+        if not ok or not name:
+            return
+
+        path = QFileDialog.getExistingDirectory(self, "Select Project Directory")
+        if not path:
+            return
+
+        languages = ["Python", "C++", "JavaScript"]
+        language, ok = QInputDialog.getItem(self, "Select Language", "Choose project main language:", 
+                                            languages, 0, False)
+        if not ok:
+            return
+
+        default_version = ""
+        if language == "Python":
+            default_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        
+        version, ok = QInputDialog.getText(self, "Enter Version", "Enter language version:", 
+                                           text=default_version)
+        if not ok:
+            return
+
+        if self.cccore.vault_manager.add_project(vault_name, name, path, language, version):
+            self.update_project_list()
+            QMessageBox.information(self, "Success", f"Project '{name}' added successfully.")
+        else:
+            QMessageBox.warning(self, "Error", f"Failed to add project '{name}'.")
     def remove_project(self):
         current_project = self.project_selector.currentText()
         if current_project:
@@ -425,7 +495,7 @@ class ProjectsManagerWidget(QWidget):
                     self.update_project_list()
                     QMessageBox.information(self, "Success", f"Project renamed from '{old_name}' to '{new_name}'.")
                 else:
-                    QMessageBox.warning(self, "Error", f"Failed to rename project. New name may already exist.")
+                    QMessageBox.warning(self, "Error", "Failed to rename project. New name may already exist.")
 
     def configure_project(self):
         current_project = self.project_selector.currentText()
@@ -464,3 +534,5 @@ class ProjectsManagerWidget(QWidget):
     def closeEvent(self, event):
         self.update_timer.stop()
         super().closeEvent(event)
+    
+    

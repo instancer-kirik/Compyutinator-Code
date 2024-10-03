@@ -578,10 +578,10 @@ class ThemeManager(QObject):
         """)
 
         # Add animation durations
-        styles.append(f"""
-            QWidget {{
-                transition-duration: {animations.get('hoverDuration', '200ms')};
-            }}
-        """)
+        # styles.append(f"""
+        #     QWidget {{
+        #         transition-duration: {animations.get('hoverDuration', '200ms')};
+        #     }}
+        # """)
 
         return '\n'.join(styles)
