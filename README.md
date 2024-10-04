@@ -61,6 +61,7 @@ pip install keyboard, numpy,  openai, PyAudio, PyAutoGUI, PyOgg, PyQt6-WebEngine
 you can run this to create the exe in dist/
 pyinstaller --onefile --windowed --manifest=app.manifest main.py
 
+Want: system-wide overlay event about the cursor on ctrl+c, so you know you got the text right
 ## Contributing
 We welcome contributions! Whether you're looking to report a bug, propose a feature, or submit a pull request, your input is valuable. Please refer to our contribution guidelines for more information.
 
