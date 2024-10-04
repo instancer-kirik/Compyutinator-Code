@@ -64,8 +64,10 @@ class VaultsManagerWidget(QWidget):
     def add_vault(self):
         name, ok = QInputDialog.getText(self, "Add Vault", "Enter vault name:")
         if ok and name:
-            self.cccore.vault_manager.add_vault(name)
-            self.refresh_vaults()
+            path = QFileDialog.getExistingDirectory(self, "Select Vault Directory")
+            if path:
+                self.cccore.vault_manager.add_vault(name, path)
+                self.refresh_vaults()
 
     def remove_vault(self):
         current_item = self.vault_list.currentItem()

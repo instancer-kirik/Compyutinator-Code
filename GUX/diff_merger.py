@@ -2,13 +2,14 @@ import difflib
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QSplitter, QTextEdit, QScrollArea, QFrame, QFileDialog, QStatusBar, QCheckBox, 
-    QPlainTextEdit, QApplication)
+    QPlainTextEdit, QApplication, QDialog)
 from PyQt6.QtGui import QTextCharFormat, QSyntaxHighlighter, QColor, QKeySequence, QShortcut, QTextCursor, QFont, QFontInfo, QFontMetrics, QPainter
 from PyQt6.QtCore import Qt, QRegularExpression, QEvent, QSize, QRect, pyqtSignal
 import re
 from GUX.code_editor import CompEditor
 from AuraText.auratext.Core.CodeEditor import CodeEditor
 import logging
+import os
 class DiffHighlighter(QSyntaxHighlighter):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -22,13 +23,60 @@ class DiffHighlighter(QSyntaxHighlighter):
             self.setFormat(0, len(text), QColor(255, 0, 0, 50))  # Light red background
         elif text.startswith('?'):
             self.setFormat(0, len(text), QColor(0, 0, 255, 50))  # Light blue background
+class InlineDiffWidget(QWidget):
+    def __init__(self, mm, original_text, suggested_text):
+        super().__init__()
+        self.mm = mm
+        self.original_text = original_text
+        self.suggested_text = suggested_text
+        self.initUI()
 
+    def initUI(self):
+        layout = QVBoxLayout()
+        self.editor = QTextEdit()
+        self.editor.setReadOnly(True)
+        layout.addWidget(self.editor)
+
+        button_layout = QHBoxLayout()
+        self.accept_button = QPushButton("Accept Change")
+        self.reject_button = QPushButton("Reject Change")
+        button_layout.addWidget(self.accept_button)
+        button_layout.addWidget(self.reject_button)
+        layout.addLayout(button_layout)
+
+        self.setLayout(layout)
+
+        self.show_diff()
+
+    def show_diff(self):
+        diff = difflib.ndiff(self.original_text.splitlines(True), 
+                             self.suggested_text.splitlines(True))
+        
+        html = []
+        for line in diff:
+            if line.startswith('+ '):
+                html.append(f'<span style="background-color: #e6ffe6">{line[2:]}</span>')
+            elif line.startswith('- '):
+                html.append(f'<span style="background-color: #ffe6e6"> {line[2:]}</span>')
+            elif line.startswith('? '):
+                continue
+            else:
+                html.append(line[2:])
+        
+        self.editor.setHtml(''.join(html))
+
+    def apply_changes(self):
+        # Logic to apply accepted changes
+        pass
 class DiffMergerWidget(QWidget):
     key_symbols = ['def', 'class', 'import']
 
-    def __init__(self, mm, original_text="", suggested_text=""):
+    def __init__(self, mm, original_text="", suggested_text="", file_path=None):
         super().__init__()
         self.mm = mm
+        self.file_path = file_path
+        self.original_text = original_text
+        self.suggested_text = suggested_text
         self.isFullScreen = True
         self.diff_data = {}
         self.current_diff_index = -1
@@ -115,6 +163,9 @@ class DiffMergerWidget(QWidget):
         self.x_highlighter = DiffHighlighter(self.x_box.text_edit.document())
         self.y_highlighter = DiffHighlighter(self.y_box.text_edit.document())
         self.result_highlighter = DiffHighlighter(self.result_box.text_edit.document())
+
+        if self.file_path:
+            self.setWindowTitle(f"Diff Merger - {os.path.basename(self.file_path)}")
 
     def setup_shortcuts(self):
         QShortcut(QKeySequence("Ctrl+O"), self, self.load_original_text)
@@ -413,6 +464,57 @@ class DiffMergerWidget(QWidget):
        def report_test_results(self):
         # Generate a report of the test results after merging
         pass
+    def apply_changes(self):
+        merged_content = self.result_box.text_edit.toPlainText()
+        if self.file_path:
+            self.mm.editor_manager.update_editor_content(self.file_path, merged_content)
+        else:
+            self.mm.editor_manager.update_current_editor_content(merged_content)
+        self.close()
+class DiffMergerDialog(QDialog):
+    def __init__(self, mm, original_text, suggested_text, file_path=None):
+        super().__init__()
+        self.mm = mm
+        self.file_path = file_path
+        self.original_text = original_text
+        self.suggested_text = suggested_text
+        self.merged_content = ""
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout(self)
+        
+        self.diff_view = QTextEdit()
+        self.diff_view.setReadOnly(True)
+        layout.addWidget(self.diff_view)
+
+        self.result_view = QTextEdit()
+        layout.addWidget(self.result_view)
+
+        button_layout = QHBoxLayout()
+        self.accept_button = QPushButton("Accept Changes")
+        self.accept_button.clicked.connect(self.accept)
+        self.reject_button = QPushButton("Reject Changes")
+        self.reject_button.clicked.connect(self.reject)
+        button_layout.addWidget(self.accept_button)
+        button_layout.addWidget(self.reject_button)
+        layout.addLayout(button_layout)
+
+        self.setLayout(layout)
+        self.show_diff()
+
+    def show_diff(self):
+        diff = difflib.unified_diff(
+            self.original_text.splitlines(keepends=True),
+            self.suggested_text.splitlines(keepends=True),
+            fromfile='Original',
+            tofile='Suggested'
+        )
+        self.diff_view.setPlainText(''.join(diff))
+        self.result_view.setPlainText(self.suggested_text)
+
+    def get_merged_content(self):
+        return self.result_view.toPlainText()
 if __name__ == '__main__':
     import sys
     app = QApplication(sys.argv)

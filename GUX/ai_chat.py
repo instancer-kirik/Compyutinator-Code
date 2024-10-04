@@ -31,8 +31,9 @@ from requests.exceptions import RequestException
 import requests
 import traceback
 
+from DEV.utils import extract_code_blocks, extract_diff_blocks, apply_diff_to_content
 
-from GUX.diff_merger import DiffMergerWidget
+from GUX.diff_merger import DiffMergerWidget, DiffMergerDialog
 
 class CollapsibleSection(QWidget):
     def __init__(self, title, parent=None):
@@ -123,7 +124,7 @@ class AIChatWidget(QWidget):
     def __init__(self, parent=None, context_manager=None, editor_manager=None, model_manager=None, download_manager=None, settings_manager=None):
         super().__init__(parent)
         logging.info("Initializing AIChatWidget")
-        
+        self.code_block_pattern = re.compile(r'```(\w+)?:?(.*?)\n(.*?)\n```', re.DOTALL)
         try:
             logging.info(f"Parent: {parent}")
             logging.info(f"Context manager: {context_manager}")
@@ -165,7 +166,7 @@ class AIChatWidget(QWidget):
       
         self.instructions = self.set_default_instructions()
         self.model_path = None
-       
+
     def set_default_instructions(self):
         return """
         Please follow these instructions in your response:
@@ -467,63 +468,26 @@ class AIChatWidget(QWidget):
 
         return "<br>".join(formatted_lines)
 
-    def extract_diff_blocks(self, response):
-        diff_blocks = []
-        lines = response.split('\n')
-        current_file = None
-        current_block = []
+    def apply_code_changes(self, file_path, suggested_code):
+        if not file_path:
+            QMessageBox.warning(self, "No File Specified", "No file path specified for this code block.")
+            return
 
-        for line in lines:
-            if line.startswith("```") and ":" in line:
-                if current_file and current_block:
-                    diff_blocks.append((current_file, current_block))
-                    current_block = []
-                current_file = line.split(":")[1].strip()
-            elif line.startswith("```"):
-                if current_file and current_block:
-                    diff_blocks.append((current_file, current_block))
-                    current_file = None
-                    current_block = []
-            elif current_file:
-                current_block.append(line)
+        current_content = self.mm.editor_manager.get_file_content(file_path)
+        if current_content is None:
+            QMessageBox.warning(self, "File Not Found", f"The file {file_path} could not be found or opened.")
+            return
 
-        if current_file and current_block:
-            diff_blocks.append((current_file, current_block))
-
-        return diff_blocks
-
-    def show_diff_merger(self, diff_blocks):
-        if self.current_file_path and self.current_file_content:
-            for file_path, block in diff_blocks:
-                if os.path.basename(file_path) == os.path.basename(self.current_file_path):
-                    merged_content = self.apply_diff_to_content(self.current_file_content, [(file_path, block)])
-                    diff_merger = DiffMergerWidget(self.mm, self.current_file_content, merged_content)
-                    diff_merger.show()  # Show as a non-modal dialog
-                    diff_merger.accepted.connect(lambda: self.update_file_content(diff_merger.result_box.text_edit.toPlainText()))
-                    break
+        diff_merger = DiffMergerDialog(self.mm, current_content, suggested_code, file_path)
+        if diff_merger.exec() == QDialog.DialogCode.Accepted:
+            merged_content = diff_merger.get_merged_content()
+            self.mm.editor_manager.update_file_content(file_path, merged_content)
+            QMessageBox.information(self, "Changes Applied", f"Changes have been applied to {file_path}")
 
     def update_file_content(self, new_content):
         self.current_file_content = new_content
         # Update the main editor with the new content
         self.mm.editor_manager.update_current_editor_content(self.current_file_content)
-
-    def apply_diff_to_content(self, content, diff_blocks):
-        lines = content.split('\n')
-        for _, block in diff_blocks:
-            for line in block:
-                if line.startswith('+'):
-                    match = re.match(r'\+(\d+):', line)
-                    if match:
-                        line_num = int(match.group(1)) - 1
-                        new_line = line[len(match.group(0)):].strip()
-                        lines.insert(line_num, new_line)
-                elif line.startswith('-'):
-                    match = re.match(r'-(\d+):', line)
-                    if match:
-                        line_num = int(match.group(1)) - 1
-                        if 0 <= line_num < len(lines):
-                            lines.pop(line_num)
-        return '\n'.join(lines)
 
     def add_references(self):
         open_files = []
@@ -642,3 +606,43 @@ class AIChatWidget(QWidget):
         file_path = url.toString()
         self.file_clicked.emit(file_path)
 
+    def display_message(self, message, is_user=False):
+        parts = self.process_message(message)
+        for part_type, *content in parts:
+            if part_type == 'text':
+                self.chat_display.append(content[0])
+            elif part_type == 'code':
+                self.add_code_block_widget(*content)
+
+    def process_message(self, message):
+        parts = []
+        last_end = 0
+        for match in self.code_block_pattern.finditer(message):
+            start, end = match.span()
+            if start > last_end:
+                parts.append(('text', message[last_end:start]))
+            language = match.group(1) or 'text'
+            file_path = match.group(2).strip()
+            code = match.group(3)
+            parts.append(('code', language, file_path, code))
+            last_end = end
+        if last_end < len(message):
+            parts.append(('text', message[last_end:]))
+        return parts
+
+    def add_code_block_widget(self, language, file_path, code):
+        code_widget = QWidget()
+        layout = QVBoxLayout(code_widget)
+        
+        code_display = QTextEdit()
+        code_display.setPlainText(code)
+        code_display.setReadOnly(True)
+        
+        apply_button = QPushButton("Apply Changes")
+        apply_button.clicked.connect(lambda: self.apply_code_changes(file_path, code))
+        
+        layout.addWidget(QLabel(f"File: {file_path}"))
+        layout.addWidget(code_display)
+        layout.addWidget(apply_button)
+        
+        self.chat_display.addWidget(code_widget)

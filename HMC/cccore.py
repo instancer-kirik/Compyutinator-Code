@@ -29,11 +29,12 @@ from AuraText.auratext.scripts.def_path import resource
 
 from .font_manager import FontManager
 from .thread_controller import ThreadController
-
+from .action_handlers import ActionHandlers
 class CCCore:  # referred to as mm in other files (auratext)
     def __init__(self, settings_manager, main_window=None):
         self.settings_manager = settings_manager
         self.main_window = main_window
+        self.action_handlers = ActionHandlers(self)
         
         self.widget_manager = None
         self.auratext_windows = []
@@ -293,3 +294,5 @@ class CCCore:  # referred to as mm in other files (auratext)
         return self.project_manager
     def get_vault_manager(self):
         return self.vault_manager
+    def get_current_window(self):
+        return self.editor_manager.current_window

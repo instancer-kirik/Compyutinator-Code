@@ -73,7 +73,20 @@ class EditorManager:
             QMessageBox.critical(self.current_window, "Error", f"Could not open file: {e}")
             return None
 
-    def create_new_editor_tab(self, file_path, content):
+    def create_new_editor_tab(self, file_path=None, content=None):
+        if self.current_window is None:
+            logging.warning("No current AuraText window set in EditorManager")
+            return None
+        if self.current_editor is None:
+            logging.warning("No current editor set in EditorManager")
+            return None
+        if file_path is None:
+            logging.warning("No file path provided for new editor tab")
+            file_path = "Untitled"
+        if content is None:
+            logging.warning("No content provided for new editor tab")
+            content = ""
+        
         try:
             editor = CodeEditor(self.cccore)
             editor.set_file_path(file_path)
@@ -317,3 +330,48 @@ class EditorManager:
                 # Paths are on different drives, so we'll compare them as strings
                 return file_path.lower().startswith(project_path.lower())
         return False
+
+    def update_current_editor_content(self, new_content):
+        if self.current_editor:
+            self.current_editor.setPlainText(new_content)
+            self.current_editor.document().setModified(True)
+        else:
+            logging.warning("No current editor to update")
+
+    def update_editor_content(self, file_path, new_content):
+        editor = self.get_editor_by_file_path(file_path)
+        if editor:
+            editor.setPlainText(new_content)
+            editor.document().setModified(True)
+        else:
+            logging.warning(f"No editor found for file: {file_path}")
+    
+    def refresh_current_editor(self):
+        if self.current_editor:
+            current_file = self.current_editor.file_path
+            self.close_file(current_file)
+            self.open_file(current_file)
+
+    def get_file_content(self, file_path):
+        editor = self.get_editor_by_file_path(file_path)
+        if editor:
+            return editor.toPlainText()
+        else:
+            try:
+                with open(file_path, 'r') as file:
+                    return file.read()
+            except FileNotFoundError:
+                return None
+
+    def update_file_content(self, file_path, new_content):
+        editor = self.get_editor_by_file_path(file_path)
+        if editor:
+            editor.setPlainText(new_content)
+            editor.document().setModified(True)
+        else:
+            try:
+                with open(file_path, 'w') as file:
+                    file.write(new_content)
+            except IOError as e:
+                logging.error(f"Error writing to file {file_path}: {str(e)}")
+                raise

@@ -52,7 +52,7 @@ class Project:
         self.build_command = ""
         self.run_command = ""
         self.load_config()
-
+        
     def load_config(self):
         if os.path.exists(self.config_file):
             with open(self.config_file, 'r') as f:
@@ -92,8 +92,9 @@ class ProjectManager:
         self.recent_projects = []
         self.env_manager = EnvironmentManager(self.settings_manager.get_value("environments_path", "./environments"))
         self.vaults = {}  # New attribute to store vaults
+        self.project_selector = QComboBox()
         self.load_projects()
-
+        self.update_project_selector()
     def load_projects(self):
         projects_data = self.settings_manager.get_value("projects", {})
         logging.debug(f"Projects data from settings: {projects_data}")
@@ -125,7 +126,7 @@ class ProjectManager:
     def add_project(self, vault_name, project_name, project_path):
         vault = self.cccore.vault_manager.get_vault(vault_name)
         if vault:
-            return vault.add_project(project_name, project_path)
+            return vault.add_project(project_name=project_name, project_path=project_path)
         return False
 
     def get_projects(self, vault_name):
@@ -185,8 +186,8 @@ class ProjectManager:
             return True
         return False
 
-    def get_projects(self):
-        return list(self.projects.keys())
+    # def get_projects(self):
+    #     return list(self.projects.keys())
 
     def get_current_project(self):
         return self.current_project
@@ -345,7 +346,7 @@ class ProjectManager:
                 else:
                     QMessageBox.warning(self, "Error", "Failed to rename project. New name may already exist.")
     def open_project(self):
-        selected_project = self.project_selector.currentText()
+        selected_project = self.cccore.widget_manager.project_.project_selector.currentText()
         if selected_project:
             self.switch_project(selected_project)
     
@@ -357,7 +358,15 @@ class ProjectManager:
         # Add project path label
         path_label = QLabel("Project Path:")
         layout.addWidget(path_label)
+    def update_project_selector(self):
+        self.project_selector.clear()
+        self.project_selector.addItems(self.get_projects(self.cccore.vault_manager.get_current_vault()))
+        self.project_selector.setCurrentText(self.get_current_project())
+
+    def open_project_as_treeview(self):
         
+        pass
+    
         # Add project path input field
         # current_project = self.get_current_project()
         # if current_project:
@@ -446,8 +455,8 @@ class ProjectsManagerWidget(QWidget):
             QMessageBox.warning(self, "Nope", "Please select a vault first.")
             return
 
-        name, ok = QInputDialog.getText(self, "Add Project", "Enter project name:")
-        if not ok or not name:
+        project_name, ok = QInputDialog.getText(self, "Add Project", "Enter project name:")
+        if not ok or not project_name:
             return
 
         path = QFileDialog.getExistingDirectory(self, "Select Project Directory")
@@ -469,11 +478,11 @@ class ProjectsManagerWidget(QWidget):
         if not ok:
             return
 
-        if self.cccore.vault_manager.add_project(vault_name, name, path, language, version):
+        if self.cccore.vault_manager.add_project(vault_name=vault_name, project_name=project_name, project_path=path, language=language, version=version):
             self.update_project_list()
-            QMessageBox.information(self, "Success", f"Project '{name}' added successfully.")
+            QMessageBox.information(self, "Success", f"Project '{project_name}' added successfully.")
         else:
-            QMessageBox.warning(self, "Error", f"Failed to add project '{name}'.")
+            QMessageBox.warning(self, "Error", f"Failed to add project '{project_name}'.")
     def remove_project(self):
         current_project = self.project_selector.currentText()
         if current_project:
@@ -535,4 +544,4 @@ class ProjectsManagerWidget(QWidget):
         self.update_timer.stop()
         super().closeEvent(event)
     
-    
+  

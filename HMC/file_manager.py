@@ -48,36 +48,28 @@ class FileManager:
         editor = self.cccore.editor_manager.create_new_editor_tab(tempfile.NamedTemporaryFile().name, "")
         self.cccore.current_window.tab_widget.addTab(editor, "Untitled")
 
-    def open_file(self, path=None):
-        if path is None:
-            path, _ = QFileDialog.getOpenFileName(self.cccore.current_window, "Open File")
-        if path:
-            self._open_file(path)
+    def open_file(self, file_path):
+        if not os.path.exists(file_path):
+            logging.error(f"File not found: {file_path}")
+            return
 
-    def _open_file(self, path):
-        if self.cccore.current_window and hasattr(self.cccore.current_window, 'tab_widget'):
-            # Check if the file is already open
-            for i in range(self.cccore.current_window.tab_widget.count()):
-                editor = self.cccore.current_window.tab_widget.widget(i)
-                if editor.file_path == path:
-                    self.cccore.current_window.tab_widget.setCurrentIndex(i)
-                    return
+        # Check if the file is already open
+        existing_editor = self.cccore.editor_manager.get_editor_by_file_path(file_path)
+        if existing_editor:
+            self.cccore.editor_manager.set_current_editor(existing_editor)
+            return
 
-            try:
-                with open(path, 'r') as file:
-                    content = file.read()
-                new_editor = self.cccore.editor_manager.create_new_editor_tab(path, content)
-                if new_editor:
-                    index = self.cccore.current_window.tab_widget.addTab(new_editor, os.path.basename(path))
-                    self.cccore.current_window.tab_widget.setCurrentIndex(index)
-                    self.cccore.editor_manager.set_current_editor(new_editor)
-                    logging.info(f"File opened successfully: {path}")
-                else:
-                    logging.error(f"Failed to create new editor for file: {path}")
-            except Exception as e:
-                logging.error(f"Error opening file: {e}")
-        else:
-            logging.error("AuraTextWindow or tab_widget not properly initialized")
+        try:
+            with open(file_path, 'r', encoding='utf-8') as file:
+                content = file.read()
+            new_editor = self.cccore.editor_manager.create_new_editor_tab(file_path, content)
+            if new_editor:
+                self.cccore.editor_manager.set_current_editor(new_editor)
+                logging.info(f"File opened successfully: {file_path}")
+            else:
+                logging.error(f"Failed to create new editor for file: {file_path}")
+        except Exception as e:
+            logging.error(f"Error opening file: {e}")
 
     def save_file(self, editor=None):
         if editor is None:
@@ -92,8 +84,8 @@ class FileManager:
             with open(editor.file_path, 'w') as file:
                 file.write(editor.text())
             editor.setModified(False)
-            index = self.cccore.current_window.tab_widget.indexOf(editor)
-            self.cccore.current_window.tab_widget.setTabText(index, os.path.basename(editor.file_path))
+            index = self.cccore.editor_manager.current_window.tab_widget.indexOf(editor)
+            self.cccore.editor_manager.current_window.tab_widget.setTabText(index, os.path.basename(editor.file_path))
         except Exception as e:
             logging.error(f"Error saving file: {e}")
             QMessageBox.critical(self.cccore.current_window, "Error", f"Could not save file: {e}")
@@ -112,7 +104,7 @@ class FileManager:
         return self.save_file(editor)
 
     def close_tab(self, index):
-        editor = self.cccore.current_window.tab_widget.widget(index)
+        editor = self.cccore.editor_manager.current_window.tab_widget.widget(index)
         if editor.isModified():
             reply = QMessageBox.question(self.cccore.current_window, "Save Changes?",
                                          "Do you want to save your changes?",
@@ -124,64 +116,64 @@ class FileManager:
                     return False
             elif reply == QMessageBox.StandardButton.Cancel:
                 return False
-        self.cccore.current_window.tab_widget.removeTab(index)
+        self.cccore.editor_manager.current_window.tab_widget.removeTab(index)
         return True
     
     def create_fileset(self):
-        name, ok = QInputDialog.getText(self.cccore.current_window, "Create Fileset", "Enter fileset name:")
+        name, ok = QInputDialog.getText(self.cccore.editor_manager.current_window, "Create Fileset", "Enter fileset name:")
         if ok and name:
-            files, _ = QFileDialog.getOpenFileNames(self.cccore.current_window, "Select Files for Fileset")
+            files, _ = QFileDialog.getOpenFileNames(self.cccore.editor_manager.current_window, "Select Files for Fileset")
             if files:
                 if self.cccore.vault_manager.create_fileset(name, files):
-                    QMessageBox.information(self.cccore.current_window, "Success", f"Fileset '{name}' created successfully.")
+                    QMessageBox.information(self.cccore.editor_manager.current_window, "Success", f"Fileset '{name}' created successfully.")
                     self.update_fileset_dropdowns()
                 else:
-                    QMessageBox.warning(self.cccore.current_window, "Error", f"Fileset '{name}' already exists.")
+                    QMessageBox.warning(self.cccore.editor_manager.current_window, "Error", f"Fileset '{name}' already exists.")
 
     def open_fileset(self):
         filesets = self.cccore.vault_manager.get_all_filesets()
         if not filesets:
-            QMessageBox.information(self.cccore.current_window, "No Filesets", "No filesets available. Create one first.")
+            QMessageBox.information(self.cccore.editor_manager.current_window, "No Filesets", "No filesets available. Create one first.")
             return
 
-        fileset_name, ok = QInputDialog.getItem(self.cccore.current_window, "Open Fileset", "Select a fileset:", filesets, 0, False)
+        fileset_name, ok = QInputDialog.getItem(self.cccore.editor_manager.current_window, "Open Fileset", "Select a fileset:", filesets, 0, False)
         if ok and fileset_name:
             files = self.cccore.vault_manager.get_fileset(fileset_name)
             for file_path in files:
-                self._open_file(file_path)
+                self.open_file(file_path)
 
     def update_fileset(self):
         filesets = self.cccore.vault_manager.get_all_filesets()
         if not filesets:
-            QMessageBox.information(self.cccore.current_window, "No Filesets", "No filesets available. Create one first.")
+            QMessageBox.information(self.cccore.editor_manager.current_window, "No Filesets", "No filesets available. Create one first.")
             return
 
-        fileset_name, ok = QInputDialog.getItem(self.cccore.current_window, "Update Fileset", "Select a fileset to update:", filesets, 0, False)
+        fileset_name, ok = QInputDialog.getItem(self.cccore.editor_manager.current_window, "Update Fileset", "Select a fileset to update:", filesets, 0, False)
         if ok and fileset_name:
-            files, _ = QFileDialog.getOpenFileNames(self.cccore.current_window, "Select Files for Fileset")
+            files, _ = QFileDialog.getOpenFileNames(self.cccore.editor_manager.current_window, "Select Files for Fileset")
             if files:
                 if self.cccore.vault_manager.update_fileset(fileset_name, files):
-                    QMessageBox.information(self.cccore.current_window, "Success", f"Fileset '{fileset_name}' updated successfully.")
+                    QMessageBox.information(self.cccore.editor_manager.current_window, "Success", f"Fileset '{fileset_name}' updated successfully.")
                     self.update_fileset_dropdowns()
                 else:
-                    QMessageBox.warning(self.cccore.current_window, "Error", f"Failed to update fileset '{fileset_name}'.")
+                    QMessageBox.warning(self.cccore.editor_manager.current_window, "Error", f"Failed to update fileset '{fileset_name}'.")
 
     def delete_fileset(self):
         filesets = self.cccore.vault_manager.get_all_filesets()
         if not filesets:
-            QMessageBox.information(self.cccore.current_window, "No Filesets", "No filesets available to delete.")
+            QMessageBox.information(self.cccore.editor_manager.current_window, "No Filesets", "No filesets available to delete.")
             return
 
-        fileset_name, ok = QInputDialog.getItem(self.cccore.current_window, "Delete Fileset", "Select a fileset to delete:", filesets, 0, False)
+        fileset_name, ok = QInputDialog.getItem(self.cccore.editor_manager.current_window, "Delete Fileset", "Select a fileset to delete:", filesets, 0, False)
         if ok and fileset_name:
-            confirm = QMessageBox.question(self.cccore.current_window, "Confirm Deletion", f"Are you sure you want to delete the fileset '{fileset_name}'?",
+            confirm = QMessageBox.question(self.cccore.editor_manager.current_window, "Confirm Deletion", f"Are you sure you want to delete the fileset '{fileset_name}'?",
                                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             if confirm == QMessageBox.StandardButton.Yes:
                 if self.cccore.vault_manager.delete_fileset(fileset_name):
-                    QMessageBox.information(self.cccore.current_window, "Success", f"Fileset '{fileset_name}' deleted successfully.")
+                    QMessageBox.information(self.cccore.editor_manager.current_window, "Success", f"Fileset '{fileset_name}' deleted successfully.")
                     self.update_fileset_dropdowns()
                 else:
-                    QMessageBox.warning(self.cccore.current_window, "Error", f"Failed to delete fileset '{fileset_name}'.")
+                    QMessageBox.warning(self.cccore.editor_manager.current_window, "Error", f"Failed to delete fileset '{fileset_name}'.")
 
     def update_fileset_dropdowns(self):
         # Update the fileset dropdown in all open CodeEditor instances
@@ -191,10 +183,10 @@ class FileManager:
     def open_workspace(self):
         workspaces = self.cccore.workspace_manager.get_all_workspaces()
         if not workspaces:
-            QMessageBox.information(self.cccore.current_window, "No Workspaces", "No workspaces available. Create one first.")
+            QMessageBox.information(self.cccore.editor_manager.current_window, "No Workspaces", "No workspaces available. Create one first.")
             return
 
-        workspace_name, ok = QInputDialog.getItem(self.cccore.current_window, "Open Workspace", "Select a workspace:", workspaces, 0, False)
+        workspace_name, ok = QInputDialog.getItem(self.cccore.editor_manager.current_window, "Open Workspace", "Select a workspace:", workspaces, 0, False)
         if ok and workspace_name:
             if self.cccore.workspace_manager.switch_workspace(workspace_name):
                 vault_path = self.cccore.workspace_manager.get_workspace_vault(workspace_name)
@@ -205,26 +197,26 @@ class FileManager:
                 
                 # Open the files from the fileset
                 for file_path in fileset:
-                    self._open_file(file_path)
+                    self.open_file(file_path)
                 
-                QMessageBox.information(self.cccore.current_window, "Success", f"Workspace '{workspace_name}' opened successfully.")
+                QMessageBox.information(self.cccore.editor_manager.current_window, "Success", f"Workspace '{workspace_name}' opened successfully.")
             else:
-                QMessageBox.warning(self.cccore.current_window, "Error", f"Failed to open workspace '{workspace_name}'.")
+                QMessageBox.warning(self.cccore.editor_manager.current_window, "Error", f"Failed to open workspace '{workspace_name}'.")
 
     def create_workspace(self):
-        name, ok = QInputDialog.getText(self.cccore.current_window, "Create Workspace", "Enter workspace name:")
+        name, ok = QInputDialog.getText(self.cccore.editor_manager.current_window, "Create Workspace", "Enter workspace name:")
         if ok and name:
-            vault_path = QFileDialog.getExistingDirectory(self.cccore.current_window, "Select Vault Directory")
+            vault_path = QFileDialog.getExistingDirectory(self.cccore.editor_manager.current_window, "Select Vault Directory")
             if vault_path:
                 filesets = self.cccore.vault_manager.get_all_filesets()
-                fileset_name, ok = QInputDialog.getItem(self.cccore.current_window, "Create Workspace", "Select a fileset (optional):", 
+                fileset_name, ok = QInputDialog.getItem(self.cccore.editor_manager.current_window, "Create Workspace", "Select a fileset (optional):", 
                                                         ["None"] + filesets, 0, False)
                 if ok:
                     fileset_name = None if fileset_name == "None" else fileset_name
                     if self.cccore.workspace_manager.create_workspace(name, vault_path, fileset_name):
-                        QMessageBox.information(self.cccore.current_window, "Success", f"Workspace '{name}' created successfully.")
+                        QMessageBox.information(self.cccore.editor_manager.current_window, "Success", f"Workspace '{name}' created successfully.")
                     else:
-                        QMessageBox.warning(self.cccore.current_window, "Error", f"Workspace '{name}' already exists.")
+                        QMessageBox.warning(self.cccore.editor_manager.current_window, "Error", f"Workspace '{name}' already exists.")
 
     def handle_radial_selection(self, option):
         if option == "Code":
@@ -260,38 +252,38 @@ class FileManager:
 
     def create_new_folder(self):
         current_path = self.cccore.widget_manager.file_explorer.current_path
-        folder_name, ok = QInputDialog.getText(self.cccore.current_window, "Create New Folder", "Enter folder name:")
+        folder_name, ok = QInputDialog.getText(self.cccore.editor_manager.current_window, "Create New Folder", "Enter folder name:")
         if ok and folder_name:
             new_folder_path = os.path.join(current_path, folder_name)
             try:
                 os.makedirs(new_folder_path)
-                QMessageBox.information(self.cccore.current_window, "Success", f"Folder '{folder_name}' created successfully.")
+                QMessageBox.information(self.cccore.editor_manager.current_window, "Success", f"Folder '{folder_name}' created successfully.")
                 self.cccore.widget_manager.file_explorer.refresh()
             except OSError as e:
-                QMessageBox.warning(self.cccore.current_window, "Error", f"Failed to create folder: {str(e)}")
+                QMessageBox.warning(self.cccore.editor_manager.current_window, "Error", f"Failed to create folder: {str(e)}")
 
     def rename_selected_item(self):
         selected_item = self.cccore.widget_manager.file_explorer.get_selected_item()
         if selected_item:
             old_name = os.path.basename(selected_item)
-            new_name, ok = QInputDialog.getText(self.cccore.current_window, "Rename Item", "Enter new name:", text=old_name)
+            new_name, ok = QInputDialog.getText(self.cccore.editor_manager.current_window, "Rename Item", "Enter new name:", text=old_name)
             if ok and new_name:
                 old_path = selected_item
                 new_path = os.path.join(os.path.dirname(old_path), new_name)
                 try:
                     os.rename(old_path, new_path)
-                    QMessageBox.information(self.cccore.current_window, "Success", f"Item renamed from '{old_name}' to '{new_name}'.")
+                    QMessageBox.information(self.cccore.editor_manager.current_window, "Success", f"Item renamed from '{old_name}' to '{new_name}'.")
                     self.cccore.widget_manager.file_explorer.refresh()
                 except OSError as e:
-                    QMessageBox.warning(self.cccore.current_window, "Error", f"Failed to rename item: {str(e)}")
+                    QMessageBox.warning(self.cccore.editor_manager.current_window, "Error", f"Failed to rename item: {str(e)}")
         else:
-            QMessageBox.warning(self.cccore.current_window, "Error", "No item selected for renaming.")
+            QMessageBox.warning(self.cccore.editor_manager.current_window, "Error", "No item selected for renaming.")
 
     def delete_selected_item(self):
         selected_item = self.cccore.widget_manager.file_explorer.get_selected_item()
         if selected_item:
             item_name = os.path.basename(selected_item)
-            confirm = QMessageBox.question(self.cccore.current_window, "Confirm Deletion", 
+            confirm = QMessageBox.question(self.cccore.editor_manager.current_window, "Confirm Deletion", 
                                            f"Are you sure you want to delete '{item_name}'?",
                                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             if confirm == QMessageBox.StandardButton.Yes:
@@ -300,12 +292,12 @@ class FileManager:
                         shutil.rmtree(selected_item)
                     else:
                         os.remove(selected_item)
-                    QMessageBox.information(self.cccore.current_window, "Success", f"'{item_name}' deleted successfully.")
+                    QMessageBox.information(self.cccore.editor_manager.current_window, "Success", f"'{item_name}' deleted successfully.")
                     self.cccore.widget_manager.file_explorer.refresh()
                 except OSError as e:
-                    QMessageBox.warning(self.cccore.current_window, "Error", f"Failed to delete item: {str(e)}")
+                    QMessageBox.warning(self.cccore.editor_manager.current_window, "Error", f"Failed to delete item: {str(e)}")
         else:
-            QMessageBox.warning(self.cccore.current_window, "Error", "No item selected for deletion.")
+            QMessageBox.warning(self.cccore.editor_manager.current_window, "Error", "No item selected for deletion.")
     def update_explorer_views(self,file_tree_view):
         root_path = self.cccore.vault_manager.get_current_vault_path()
         if root_path and os.path.exists(root_path):

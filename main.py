@@ -26,7 +26,7 @@ import subprocess
 from HMC.cccore import CCCore
 from HMC.sticky_note_manager import StickyNoteManager
 # Create AuraText directory if it doesn't exist
-from HMC.action_handlers import ActionHandlers
+
 auratext_dir = os.path.join(script_dir, 'AuraText')
 if not os.path.exists(auratext_dir):
     os.makedirs(auratext_dir)
@@ -157,7 +157,6 @@ class MainApplication(QMainWindow):
         self.last_focused_widget = None
         self.child_processes = {}
         self.overlay = self.cccore.overlay
-        self.action_handlers = ActionHandlers(self)
         
         self.workspace_selector = None
       

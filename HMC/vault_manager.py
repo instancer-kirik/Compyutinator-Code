@@ -20,25 +20,18 @@ from .project_manager import Project
 # Modify the VaultManager to handle both vaults and projects.
 # Create a Project class to represent individual projects.
 class Vault:
-    def __init__(self, name, path, cccore):
-        self.name = name
+    def __init__(self, vault_name, path, cccore):
+        self.name = vault_name
         self.cccore = cccore
         self.path = Path(path)
         self.projects = {}
         self.workspaces = {}
         self.config_file = self.path / '.vault_config.json'
         self.index_file = self.path / '.vault_index.json'
-        logging.info(f"Initializing Vault: {name} at {path}")
+        logging.info(f"Initializing Vault: {vault_name} at {path}")
         self.load_config()
 
-    def add_project(self, project_name, project_path):
-        if not project_path.startswith(str(self.path)):
-            raise ValueError("Project path must be within the vault")
-        relative_path = os.path.relpath(project_path, str(self.path))
-        self.projects[project_name] = relative_path
-        self.save_config()
-        return True
-
+   
     def get_project_path(self, project_name):
         relative_path = self.projects.get(project_name)
         if relative_path:
@@ -134,24 +127,21 @@ class Vault:
 
     def get_file_info(self, rel_path):
         return next((f for f in self.index['files'] if f['path'] == rel_path), None)
-
-    def add_project(self, vault_name, project_name, project_path, language=None, version=None):
-        if project_name not in self.projects:
-            vault = self.get_vault(vault_name)
-            if vault:
-                project = Project(project_name, project_path, language, version)
-                return vault.add_project(project_name, project)
-            else:
-                logging.error(f"Vault '{vault_name}' not found.")
-                return False
-        else:
-            logging.warning(f"Project '{project_name}' already exists in vault '{vault_name}'.")
-            return False
-
-            self.save_config()
-            return True
-        return False
-
+    def add_project(self, project_name, project_path, language=None, version=None):
+        project_path = Path(project_path)
+        if not project_path.is_relative_to(self.path):
+            # Project is outside the vault, create a wrapper vault
+            return self.cccore.vault_manager.create_wrapper_vault_project(project_name, project_path, language, version)
+        
+        relative_path = project_path.relative_to(self.path)
+        self.projects[project_name] = str(relative_path)
+        self.save_config()
+        return True
+ 
+    def _add_project(self, project_name, project):
+        self.projects[project_name] = project
+        self.save_config()
+        return True
     def get_project(self, project_name):
         return self.projects.get(project_name)
 
@@ -183,7 +173,7 @@ class VaultManager:
                 for name, path in config.get('vaults', {}).items():
                     logging.info(f"Loading vault: {name} at {path}")
                     try:
-                        self.vaults[name] = Vault(name, path, self.cccore)
+                        self.vaults[name] = Vault(vault_name=name, path=path, cccore=self.cccore)
                         logging.info(f"Successfully loaded vault: {name}")
                     except Exception as e:
                         logging.error(f"Failed to load vault {name}: {str(e)}")
@@ -225,7 +215,7 @@ class VaultManager:
     def create_vault(self, name, path):
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
-        new_vault = Vault(name, str(path), self.cccore)
+        new_vault = Vault(vault_name=name, path=str(path), cccore=self.cccore)
         self.vaults[name] = new_vault
         self.save_vaults_config()
         logging.info(f"Created new vault: {name} at {path}")
@@ -248,7 +238,7 @@ class VaultManager:
             logging.info(f"Created vault directory: {path}")
         
         try:
-            new_vault = Vault(name, str(path), self.cccore)
+            new_vault = Vault(vault_name=name, path=str(path), cccore=self.cccore)
             self.vaults[name] = new_vault
             self.save_vaults_config()
             logging.info(f"Successfully added new vault: {name} at {path}")
@@ -402,7 +392,7 @@ class VaultManager:
         for vault in self.vaults.values():
             if vault.path == path:
                 return vault
-        return Vault(name=f"{path.split('/')[-1]}_vault", path=path, cccore=self.cccore)
+        return Vault(vault_name=f"{path.split('/')[-1]}_vault", path=path, cccore=self.cccore)
        
     def get_current_vault(self):
         if self.current_vault and isinstance(self.current_vault, Vault):
@@ -456,7 +446,7 @@ class VaultManager:
 
         try:
             os.makedirs(path, exist_ok=True)
-            new_vault = Vault(name, path, self.cccore)
+            new_vault = Vault(vault_name=name, path=path, cccore=self.cccore)
             self.vaults[name] = new_vault
             self.save_vaults_config()
             logging.info(f"Added new vault: {name} at {path}")
@@ -467,17 +457,36 @@ class VaultManager:
 
     def add_vault(self, name, path):
         if name not in self.vaults:
-            self.vaults[name] = Vault(name, path)
+            self.vaults[name] = Vault(vault_name=name, path=path, cccore=self.cccore)
             self.save_vaults()
             return True
         return False
 
-    def add_project(self, vault_name, project_name, project_path):
+    def add_project(self, vault_name, project_name, project_path, language, version):
         vault = self.get_vault(vault_name)
         if vault:
-            return vault.add_project(project_name, project_path)
-        return False
+            return vault.add_project(project_name=project_name, project_path=project_path, language=language, version=version)
+        else:
+            # If the specified vault doesn't exist, create a wrapper vault
+            return self.create_wrapper_vault_project(project_name, project_path, language, version)
+       
+    # def add_project(self, vault_name, project_name, project_path, language=None, version=None):
+    #     if project_name not in self.projects:
+            #
+    #         logging.error(f"self.name: {self.name} vault_name: {vault_name}")
+    #         if vault_name==self.name:
+    #             project = Project(project_name, project_path, language, version)
+    #             return self._add_project(project_name, project)
+    #         else:
+    #             logging.error(f"Vault '{vault_name}' +project_name: {project_name} not found.")
+    #             return False
+    #     else:
+    #         logging.warning(f"Project '{project_name}' already exists in vault '{vault_name}'.")
+    #         return False
 
+    #         self.save_config()
+    #         return True
+    #     return False
     def get_projects(self, vault_name):
         vault = self.get_vault(vault_name)
         return vault.get_projects() if vault else []
@@ -486,3 +495,32 @@ class VaultManager:
         return self.vaults.get(vault_name)
     def get_vault_names(self):
         return list(self.vaults.keys())
+
+    def create_wrapper_vault_project(self, project_name, project_path, language=None, version=None):
+        project_path = Path(project_path)
+        vault_name = f"{project_name}_vault"
+        vault_path = project_path.parent
+
+        # Create a new vault
+        new_vault = self.create_vault(vault_name, str(vault_path))
+        if not new_vault:
+            logging.error(f"Failed to create wrapper vault for project: {project_name}")
+            return False
+
+        # Add the project to the new vault
+        success = new_vault.add_project(project_name, str(project_path), language, version)
+        if not success:
+            logging.error(f"Failed to add project {project_name} to wrapper vault {vault_name}")
+            return False
+
+        logging.info(f"Created wrapper vault {vault_name} for project {project_name}")
+        return True
+
+    def create_vault(self, name, path):
+        path = Path(path)
+        path.mkdir(parents=True, exist_ok=True)
+        new_vault = Vault(vault_name=name, path=str(path), cccore=self.cccore)
+        self.vaults[name] = new_vault
+        self.save_vaults_config()
+        logging.info(f"Created new vault: {name} at {path}")
+        return new_vault

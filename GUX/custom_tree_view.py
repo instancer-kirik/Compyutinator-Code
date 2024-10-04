@@ -91,7 +91,26 @@ class CustomTreeView(QTreeView):
         if index.isValid():
             file_path = self.model().filePath(index)
             if os.path.isfile(file_path):
-                self.file_explorer.play_audio(file_path)
+                if self.is_audio(file_path):
+                    if self.file_explorer:
+                        self.file_explorer.play_audio(file_path)
+                    else:
+                        print(f"Cannot play audio: {file_path}")
+                else:
+                    self.open_file_with_editor(file_path)
+
+    def open_file_with_editor(self, file_path):
+        if self.file_explorer and hasattr(self.file_explorer, 'parent'):
+            if hasattr(self.file_explorer.parent, 'code_editor_widget'):
+                self.file_explorer.parent.code_editor_widget.open_file(file_path)
+            else:
+                print(f"Cannot open file: {file_path}. No code_editor_widget found.")
+        else:
+            print(f"Cannot open file: {file_path}. No file_explorer or parent found.")
+
+    def is_audio(self, file_path):
+        audio_extensions = ['.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a', '.wma', '.aiff', '.au', '.mid', '.midi', '.mpa', '.mpc', '.mp+', '.mp2', '.mp4', '.m4p', '.m4b', '.m4r', '.m4v', '.avi', '.mov', '.wmv', '.mkv', '.webm', '.flv', '.swf', '.vob', '.3gp', '.3g2', '.mxf', '.dv', '.mts', '.m2ts', '.ts', '.m4v', '.mp4', '.m4p', '.m4b', '.m4r', '.m4v', '.avi', '.mov', '.wmv', '.mkv', '.webm', '.flv', '.swf', '.vob', '.3gp', '.3g2', '.mxf', '.dv', '.mts', '.m2ts', '.ts', '.m4v', '.mp4', '.m4p', '.m4b', '.m4r', '.m4v', '.avi', '.mov', '.wmv', '.mkv', '.webm', '.flv', '.swf', '.vob', '.3gp', '.3g2', '.mxf', '.dv', '.mts', '.m2ts', '.ts']
+        return any(file_path.endswith(ext) for ext in audio_extensions)
 
     def open_file_with(self):
         index = self.currentIndex()

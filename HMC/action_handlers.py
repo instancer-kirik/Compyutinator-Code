@@ -274,7 +274,7 @@ class ActionHandlers:
         pass
 
     def notes(self):
-        self.cccore.sticky_note_manager.show()
+        self.cccore.widget_manager.sticky_note_manager.show()
 
     def apply_workspace(self):
         self.cccore.widget_manager.apply_workspace()
@@ -284,4 +284,47 @@ class ActionHandlers:
         if current_editor:
             current_editor.toggle_comment()
 
-    
+    def toggle_diff_merger(self):
+        self.cccore.diff_merger.show()
+    def show_diff_merger(self, diff_blocks):
+        self.cccore.diff_merger.show_diff_merger(diff_blocks)
+    def toggle_terminal(self):
+        logging.info("toggle_terminal")
+        pass
+    def new_project_from_template(self):
+        # Implement the logic for creating a new project from a template
+        pass
+    def new_project_from_vcs(self):
+        pass
+    def close_project(self):
+        self.cccore.project_manager.close_project()
+    def open_project_as_treeview(self):
+        self.cccore.project_manager.open_project_as_treeview()
+    def project_settings(self):
+        self.cccore.project_manager.show_project_settings()
+        #self.cccore.terminal_emulator.toggle_visibility()
+    # def toggle_file_explorer(self):
+    #     self.cccore.file_explorer.toggle_visibility()
+    # def toggle_project_explorer(self):
+    #     self.cccore.project_explorer.toggle_visibility()
+    # def toggle_ai_chat(self):
+    #     self.cccore.ai_chat.toggle_visibility()
+    # def toggle_log_viewer(self):
+    #     self.cccore.log_viewer.toggle_visibility()
+    # def toggle_settings(self):
+    #     self.cccore.settings.toggle_visibility()
+    # def toggle_about(self):
+    #     self.cccore.about.toggle_visibility()
+    # def toggle_plugin_manager(self):
+    #     self.cccore.plugin_manager.toggle_visibility()
+    # def toggle_model_manager(self):
+    #     self.cccore.model_manager.toggle_visibility()
+    # def toggle_download_manager(self):
+    #     self.cccore.download_manager.toggle_visibility()
+    # def toggle_workspace_manager(self):
+    #     self.cccore.workspace_manager.toggle_visibility()
+    # def toggle_theme_manager(self):
+    #     self.cccore.theme_manager.toggle_visibility()
+    # def toggle_settings_manager(self):
+    #     self.cccore.settings_manager.toggle_visibility()
+
