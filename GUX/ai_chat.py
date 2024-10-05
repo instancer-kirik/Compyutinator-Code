@@ -125,6 +125,7 @@ class AIChatWidget(QWidget):
         super().__init__(parent)
         logging.info("Initializing AIChatWidget")
         self.code_block_pattern = re.compile(r'```(\w+)?:?(.*?)\n(.*?)\n```', re.DOTALL)
+        self.editor_manager = editor_manager
         try:
             logging.info(f"Parent: {parent}")
             logging.info(f"Context manager: {context_manager}")
@@ -473,21 +474,21 @@ class AIChatWidget(QWidget):
             QMessageBox.warning(self, "No File Specified", "No file path specified for this code block.")
             return
 
-        current_content = self.mm.editor_manager.get_file_content(file_path)
+        current_content = self.editor_manager.get_file_content(file_path)
         if current_content is None:
             QMessageBox.warning(self, "File Not Found", f"The file {file_path} could not be found or opened.")
             return
 
-        diff_merger = DiffMergerDialog(self.mm, current_content, suggested_code, file_path)
+        diff_merger = DiffMergerDialog(self.editor_manager, current_content, suggested_code, file_path)
         if diff_merger.exec() == QDialog.DialogCode.Accepted:
             merged_content = diff_merger.get_merged_content()
-            self.mm.editor_manager.update_file_content(file_path, merged_content)
+            self.editor_manager.update_file_content(file_path, merged_content)
             QMessageBox.information(self, "Changes Applied", f"Changes have been applied to {file_path}")
 
     def update_file_content(self, new_content):
         self.current_file_content = new_content
         # Update the main editor with the new content
-        self.mm.editor_manager.update_current_editor_content(self.current_file_content)
+        self.editor_manager.update_current_editor_content(self.current_file_content)
 
     def add_references(self):
         open_files = []
@@ -500,7 +501,8 @@ class AIChatWidget(QWidget):
             self,
             recent_files=self.recent_files,
             open_files=open_files,
-            existing_contexts=[desc for desc, _ in self.context_manager.contexts]
+            existing_contexts=[desc for desc, _ in self.context_manager.contexts],
+            editor_manager=self.editor_manager
         )
         if dialog.exec():
             selected_items = dialog.get_selected_items()

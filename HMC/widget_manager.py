@@ -26,14 +26,14 @@ from GUX.widget_vault import VaultWidget, VaultsManagerWidget
 from GUX.theme_builder import ThemeBuilderWidget
 import serial
 import serial.tools.list_ports
-from HMC.project_manager import ProjectsManagerWidget
+from HMC.project_manager import ProjectManagerWidget, ManyProjectsManagerWidget
 from GUX.diff_merger import DiffMergerWidget
 from AuraText.auratext.Core.window import AuraTextWindow
 from AuraText.auratext.Core.TabWidget import TabWidget
 import logging
 import traceback
 from GUX.file_search_widget import FileSearchWidget
-
+from HMC.project_manager import ManyProjectsManagerWidget
 class WidgetManager:
     def __init__(self, cccore):
         self.cccore = cccore
@@ -163,7 +163,7 @@ class WidgetManager:
             return True
         
     def create_startup_docks(self):
-        logging.info("Not creating startup docks")
+        logging.error("Not creating startup docks")
      #   default_docks = [
     #         "File Explorer", "Code Editor", "Terminal", "AI Chat", 
     #         "Symbolic Linker", "Sticky Notes", "Process Manager", 
@@ -326,10 +326,13 @@ class WidgetManager:
         if 'file_explorer' not in self.widgets:
             self.widgets['file_explorer'] = FileExplorerWidget(parent=self.main_window, cccore=cccore)
         return self.widgets['file_explorer']
-
+    def ManyProjectsManagerWidget(self, cccore):
+        if 'many_projects_manager' not in self.widgets:
+            self.widgets['many_projects_manager'] = ManyProjectsManagerWidget(cccore)
+        return self.widgets['many_projects_manager']
     def ProjectsManagerWidget(self, cccore):
         if 'projects_manager' not in self.widgets:
-            self.widgets['projects_manager'] = ProjectsManagerWidget(parent=self.main_window, cccore=self.cccore)
+            self.widgets['projects_manager'] = ProjectManagerWidget(parent=self.main_window, cccore=self.cccore)
         return self.widgets['projects_manager']
 
     def VaultsManagerWidget(self, cccore):

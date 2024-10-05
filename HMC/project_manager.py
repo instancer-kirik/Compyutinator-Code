@@ -5,6 +5,7 @@ from .environment_manager import EnvironmentManager
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QPushButton, 
                              QInputDialog, QMessageBox, QFileDialog, QDialog, QLabel, QLineEdit, QFormLayout)
 from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QListWidget, QListWidgetItem
 import sys
 class ProjectConfigDialog(QDialog):
     def __init__(self, project_name, project_data, parent=None):
@@ -90,6 +91,7 @@ class ProjectManager:
         self.projects = {}
         self.current_project = None
         self.recent_projects = []
+        self.max_recent_projects = 10
         self.env_manager = EnvironmentManager(self.settings_manager.get_value("environments_path", "./environments"))
         self.vaults = {}  # New attribute to store vaults
         self.project_selector = QComboBox()
@@ -105,7 +107,7 @@ class ProjectManager:
             self.projects = {}
         self.current_project = self.settings_manager.get_value("current_project")
         self.recent_projects = self.settings_manager.get_value("recent_projects", [])
-        logging.info(f"Loaded projects: {self.projects}")
+        logging.warning(f"Loaded projects: {self.projects}")
 
     def save_projects(self):
         if isinstance(self.projects, dict):
@@ -134,7 +136,11 @@ class ProjectManager:
         if vault:
             return vault.get_project_names()
         return []
-
+    def get_many_projects(self):
+        many_projects = []
+        for vault in self.cccore.vault_manager.vaults.values():
+            many_projects.extend(vault.projects.keys())
+        return many_projects
     def get_project_path(self, vault_name, project_name):
         vault = self.cccore.vault_manager.get_vault(vault_name)
         if vault:
@@ -168,7 +174,7 @@ class ProjectManager:
             QMessageBox.information(self, "Success", f"Project '{current_project}' closed successfully.")
         else:
             QMessageBox.warning(self, "Error", "No active project to close.")
-
+    
     def rename_project(self, old_name, new_name):
         if old_name in self.projects and new_name not in self.projects:
             self.projects[new_name] = self.projects.pop(old_name)
@@ -217,7 +223,7 @@ class ProjectManager:
         if project_name in self.recent_projects:
             self.recent_projects.remove(project_name)
         self.recent_projects.insert(0, project_name)
-        self.recent_projects = self.recent_projects[:10]  # Keep only the 10 most recent projects
+        self.recent_projects = self.recent_projects[:self.max_recent_projects]  # Keep only the 10 most recent projects
         self.save_projects()
 
     def get_recent_projects(self):
@@ -231,7 +237,7 @@ class ProjectManager:
         return False
 
     def switch_project(self, project_name):
-        logging.info(f"Attempting to switch to project: {project_name}")
+        logging.warning(f"Attempting to switch to project: {project_name}")
         if not project_name:
             logging.warning("Attempted to switch to an empty project name")
             return False, "Empty project name"
@@ -248,7 +254,7 @@ class ProjectManager:
         if self.set_current_project(project_name):
             self.add_recent_project(project_name)
             self.settings_manager.set_value("last_project", project_name)
-            logging.info(f"Successfully switched to project: {project_name}")
+            logging.warning(f"Successfully switched to project: {project_name}")
             return True, project_path
         else:
             logging.error(f"Failed to set current project to: {project_name}")
@@ -380,24 +386,19 @@ class ProjectManager:
     
    
 
-class ProjectsManagerWidget(QWidget):
-    def __init__(self, parent, cccore):
+class ProjectManagerWidget(QWidget):
+    def __init__(self, parent, cccore, window):
         super().__init__(parent)
         self.cccore = cccore
+        self.window = window  # Store the specific window this widget is associated with
         self.setup_ui()
-        self.update_project_list(cccore.vault_manager.get_current_vault())
-        self.setup_vault_selector()
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
         
-        # Project selector
-        selector_layout = QHBoxLayout()
-        selector_layout.addWidget(QLabel("Current Project:"))
-        self.project_selector = QComboBox()
-        self.project_selector.currentTextChanged.connect(self.on_project_selected)
-        selector_layout.addWidget(self.project_selector)
-        layout.addLayout(selector_layout)
+        # Use the project selector from the main window
+        self.project_selector = self.window.project_selector
+        layout.addWidget(self.project_selector)
 
         # Project management buttons
         management_layout = QHBoxLayout()
@@ -434,21 +435,13 @@ class ProjectsManagerWidget(QWidget):
         # Set the layout for the widget
         self.setLayout(layout)
 
-    def setup_vault_selector(self):
-        self.vault_selector = QComboBox()
-        self.vault_selector.addItems(self.cccore.vault_manager.get_vault_names())
-        self.vault_selector.currentTextChanged.connect(self.on_vault_changed)
-        # Add the vault selector to your layout
-
-    def on_vault_changed(self, vault_name):
-        self.update_project_list(vault_name)
-
-    def update_project_list(self, vault_name):
+    def update_project_list(self):
         self.project_selector.clear()
-        projects = self.cccore.vault_manager.get_projects(vault_name)
-        self.project_selector.addItems(projects)
-        logging.debug(f"Updated project list: {projects}")
-
+        current_vault = self.window.get_current_vault()
+        if current_vault:
+            projects = self.cccore.vault_manager.get_projects(current_vault.name)
+            self.project_selector.addItems(projects)
+        
     def add_project(self):
         vault_name = self.cccore.vault_manager.get_current_vault().name
         if not vault_name:
@@ -539,9 +532,64 @@ class ProjectsManagerWidget(QWidget):
             self.cccore.project_manager.set_current_project(project_name)
             
 
-
     def closeEvent(self, event):
         self.update_timer.stop()
         super().closeEvent(event)
-    
-  
+class ManyProjectsManagerWidget(QWidget):
+    def __init__(self, cccore):
+        super().__init__()
+        self.cccore = cccore
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+
+        # Vault selector
+        self.vault_selector = QComboBox()
+        self.vault_selector.currentTextChanged.connect(self.on_vault_changed)
+        layout.addWidget(QLabel("Vault:"))
+        layout.addWidget(self.vault_selector)
+
+        # Project list
+        self.project_list = QListWidget()
+        layout.addWidget(QLabel("Projects:"))
+        layout.addWidget(self.project_list)
+
+        # Buttons
+        button_layout = QHBoxLayout()
+        self.add_button = QPushButton("Add Project")
+        self.add_button.clicked.connect(self.add_project)
+        self.remove_button = QPushButton("Remove Project")
+        self.remove_button.clicked.connect(self.remove_project)
+        self.rename_button = QPushButton("Rename Project")
+        self.rename_button.clicked.connect(self.rename_project)
+        button_layout.addWidget(self.add_button)
+        button_layout.addWidget(self.remove_button)
+        button_layout.addWidget(self.rename_button)
+        layout.addLayout(button_layout)
+
+        self.update_vault_selector()
+
+    def update_vault_selector(self):
+        self.vault_selector.clear()
+        self.vault_selector.addItems(self.cccore.vault_manager.get_vault_names())
+
+    def on_vault_changed(self, vault_name):
+        self.update_project_list(vault_name)
+
+    def update_project_list(self, vault_name):
+        self.project_list.clear()
+        projects = self.cccore.vault_manager.get_projects(vault_name)
+        self.project_list.addItems(projects)
+
+    def add_project(self):
+        # Implementation similar to ProjectManagerWidget.add_project()
+        pass
+
+    def remove_project(self):
+        # Implementation similar to ProjectManagerWidget.remove_project()
+        pass
+
+    def rename_project(self):
+        # Implementation similar to ProjectManagerWidget.rename_project()
+        pass

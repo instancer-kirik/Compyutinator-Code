@@ -1,37 +1,62 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QLineEdit, QLabel, QToolBar
-from PyQt6.QtGui import QFileSystemModel
-from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QLineEdit, QLabel, QToolBar, QPushButton, QFileDialog, QMenu, QStackedWidget
+from PyQt6.QtGui import QFileSystemModel, QAction
+from PyQt6.QtCore import Qt, pyqtSignal
 import os
+import logging
 from PyQt6.QtWidgets import QPushButton, QFileDialog, QMenu
 from PyQt6.QtGui import QAction
 from PyQt6.QtCore import pyqtSignal
 from GUX.custom_tree_view import CustomTreeView
+
 class FileExplorerWidget(QWidget):
     file_selected = pyqtSignal(str)
 
-    def __init__(self, parent=None, cccore= None):
+    def __init__(self, parent=None, cccore=None):
         super().__init__(parent)
         self.parent = parent
+        self.cccore = cccore
+        self.model = QFileSystemModel()
         self.setup_ui()
 
     def setup_ui(self):
         self.layout = QVBoxLayout(self)
-        self.model = QFileSystemModel()
+        
+        # Add a button to cycle views
+        self.cycle_view_button = QPushButton("Cycle View")
+        self.cycle_view_button.clicked.connect(self.cycle_view)
+        self.layout.addWidget(self.cycle_view_button)
+
         self.model.setRootPath('')
+        self.tree1 = CustomTreeView(self)
+        self.tree2 = CustomTreeView(self)
+        
+        self.stack = QStackedWidget()
+        self.stack.addWidget(self.tree1)
+        self.stack.addWidget(self.tree2)
+        
+        self.layout.addWidget(self.stack)
 
-        self.splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.tree1 = self.create_tree_view()
-        self.tree2 = self.create_tree_view()
+        self.setup_trees()
 
-        self.splitter.addWidget(self.create_tree_container(self.tree1, "Tree 1"))
-        self.splitter.addWidget(self.create_tree_container(self.tree2, "Tree 2"))
+    def setup_trees(self):
+        for tree in (self.tree1, self.tree2):
+            tree.setModel(self.model)
+            tree.setRootIndex(self.model.index(''))
+            tree.setAnimated(False)
+            tree.setIndentation(20)
+            tree.setSortingEnabled(True)
+            tree.setColumnWidth(0, 250)
+            tree.doubleClicked.connect(self.on_double_click)
 
-        self.layout.addWidget(self.splitter)
+    def cycle_view(self):
+        current_index = self.stack.currentIndex()
+        next_index = (current_index + 1) % self.stack.count()
+        self.stack.setCurrentIndex(next_index)
 
-    def create_tree_view(self):
+    def create_tree_view(self, model):
         tree = CustomTreeView(self)
-        tree.setModel(self.model)
-        tree.setRootIndex(self.model.index(''))
+        tree.setModel(model)
+        tree.setRootIndex(model.index(''))
         tree.doubleClicked.connect(self.on_double_click)
         tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         tree.customContextMenuRequested.connect(self.show_context_menu)
@@ -92,7 +117,10 @@ class FileExplorerWidget(QWidget):
         open_action = QAction("Open", self)
         open_action.triggered.connect(lambda: self.open_item(index))
         menu.addAction(open_action)
-
+        view_menu = menu.addMenu("View Mode")
+        view_menu.addAction(self.list_view_action)
+        view_menu.addAction(self.tree_view_action)
+        view_menu.addAction(self.column_view_action)
         if os.path.isdir(self.model.filePath(index)):
             set_as_root_action = QAction("Set as Root", self)
             set_as_root_action.triggered.connect(lambda: self.set_as_root(tree, index))
@@ -117,3 +145,17 @@ class FileExplorerWidget(QWidget):
         if indexes:
             return self.model.filePath(indexes[0])
         return None
+    def set_root_path(self, path):
+        if os.path.exists(path):
+            logging.warning(f"Setting file explorer root path to: {path}")
+            self.model.setRootPath(path)
+            root_index = self.model.index(path)
+            if root_index.isValid():
+                self.tree1.setRootIndex(root_index)
+                self.tree2.setRootIndex(root_index)
+                self.update_path_edit(self.tree1, path)
+                self.update_path_edit(self.tree2, path)
+            else:
+                logging.error(f"Invalid root index for path: {path}")
+        else:
+            logging.error(f"Path does not exist: {path}")

@@ -236,8 +236,8 @@ class ThemeManager(QObject):
     def get_current_theme(self):
         return self.current_theme
 
-    def update_theme(self, theme_data):
-        self.current_theme.update(theme_data)
+    def update_theme(self, theme_name, theme_data):
+        self.custom_themes[theme_name] = theme_data
         self.save_config()
 
     def apply_theme_to_widget(self, widget, theme, update_progress):
@@ -268,6 +268,17 @@ class ThemeManager(QObject):
             color: {self.current_theme["editor_fg"]};
             font-family: {self.current_theme["font"]};
         """)
+
+        # Apply line highlight
+        highlight_color = QColor(self.current_theme.get("lineHighlightColor", "#2F3D4E"))
+        highlight_color.setAlpha(40)  # Adjust alpha for transparency
+        editor.setCaretLineVisible(True)
+        editor.setCaretLineBackgroundColor(highlight_color)
+
+        # Apply sidebar (line number area) color
+        sidebar_color = QColor(self.current_theme.get("sidebarColor", "#2E3440"))
+        editor.setMarginsBackgroundColor(sidebar_color)
+        editor.setMarginsForegroundColor(QColor(self.current_theme.get("sidebarTextColor", "#D8DEE9")))
 
     def generate_stylesheet(self, theme):
         colors = theme['colors']
@@ -576,7 +587,26 @@ class ThemeManager(QObject):
                 background-color: {colors.get('disabledBackgroundColor', '#f0f0f0')};
             }}
         """)
-
+         # Toolbar and context menu styles
+        styles.append(f"""
+            QToolBar {{
+                background-color: {colors.get('toolbarColor', colors['backgroundColor'])};
+                border: none;
+            }}
+            QToolBar::separator {{
+                background-color: {colors.get('toolbarSeparatorColor', colors['textColor'])};
+                width: 1px;
+                height: 1px;
+            }}
+            QMenu {{
+                background-color: {colors.get('menuColor', colors['backgroundColor'])};
+                color: {colors.get('menuTextColor', colors['textColor'])};
+                border: 1px solid {colors.get('menuBorderColor', colors['textColor'])};
+            }}
+            QMenu::item:selected {{
+                background-color: {colors.get('menuHoverColor', colors.get('linkColor', colors['textColor']))};
+            }}
+        """)
         # Add animation durations
         # styles.append(f"""
         #     QWidget {{
@@ -585,3 +615,18 @@ class ThemeManager(QObject):
         # """)
 
         return '\n'.join(styles)
+    
+    def update_custom_theme(self, theme_name, theme_data):
+        # Update the theme data in your storage (e.g., JSON file)
+        themes = self.get_available_themes()
+        themes[theme_name] = theme_data
+        self.update_theme(theme_name = theme_name, theme_data = theme_data)
+
+    def get_all_themes(self):
+        # Return a list of all theme names
+        return list(self.get_available_themes())
+
+    def get_theme(self, theme_name):
+        # Return the theme data for a specific theme
+        themes = self.get_available_themes()
+        return themes.get(theme_name, {})

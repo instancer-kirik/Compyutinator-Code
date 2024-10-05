@@ -1,8 +1,7 @@
-
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QLineEdit, QPushButton, QColorDialog, QSlider,
                              QScrollArea, QSpinBox, QComboBox, QFormLayout, QGroupBox,
-                             QListWidget, QStackedWidget)
+                             QListWidget, QStackedWidget, QInputDialog)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 import json
@@ -45,6 +44,7 @@ class ThemeBuilderWidget(QWidget):
     def __init__(self, theme_manager):
         super().__init__()
         self.theme_manager = theme_manager
+        self.current_theme = None  # To store the currently edited theme
         self.setup_ui()
 
     def setup_ui(self):
@@ -92,6 +92,48 @@ class ThemeBuilderWidget(QWidget):
         highlight_group.setLayout(highlight_layout)
         scroll_layout.addWidget(highlight_group)
 
+        # Code Editor Sidebar options
+        sidebar_group = QGroupBox("Code Editor Sidebar")
+        sidebar_layout = QFormLayout()
+        self.sidebar_pickers = {
+            "sidebarBackground": ColorPicker("Sidebar Background"),
+            "sidebarText": ColorPicker("Sidebar Text"),
+            "sidebarHighlight": ColorPicker("Sidebar Highlight"),
+        }
+        for name, picker in self.sidebar_pickers.items():
+            sidebar_layout.addRow(picker)
+        sidebar_group.setLayout(sidebar_layout)
+        scroll_layout.addWidget(sidebar_group)
+
+        # Toolbar and context menu options
+        toolbar_group = QGroupBox("Toolbar and Context Menu")
+        toolbar_layout = QFormLayout()
+        self.toolbar_pickers = {
+            "toolbarColor": ColorPicker("Toolbar Color"),
+            "toolbarSeparatorColor": ColorPicker("Toolbar Separator Color"),
+            "menuColor": ColorPicker("Menu Background Color"),
+            "menuTextColor": ColorPicker("Menu Text Color"),
+            "menuBorderColor": ColorPicker("Menu Border Color"),
+            "menuHoverColor": ColorPicker("Menu Hover Color"),
+        }
+        for name, picker in self.toolbar_pickers.items():
+            toolbar_layout.addRow(picker)
+        toolbar_group.setLayout(toolbar_layout)
+        scroll_layout.addWidget(toolbar_group)
+
+        # Code editor options
+        editor_group = QGroupBox("Code Editor")
+        editor_layout = QFormLayout()
+        self.editor_pickers = {
+            "lineHighlightColor": ColorPicker("Line Highlight Color"),
+            "sidebarColor": ColorPicker("Sidebar Color"),
+            "sidebarTextColor": ColorPicker("Sidebar Text Color"),
+        }
+        for name, picker in self.editor_pickers.items():
+            editor_layout.addRow(picker)
+        editor_group.setLayout(editor_layout)
+        scroll_layout.addWidget(editor_group)
+
         # Qt DOM elements list
         self.elements_list = QListWidget()
         self.elements_list.addItems([
@@ -118,6 +160,11 @@ class ThemeBuilderWidget(QWidget):
         save_button = QPushButton("Save Theme")
         save_button.clicked.connect(self.save_theme)
         layout.addWidget(save_button)
+
+        # Add Load Theme button
+        load_button = QPushButton("Load Existing Theme")
+        load_button.clicked.connect(self.load_theme)
+        layout.addWidget(load_button)
 
     def create_style_pages(self):
         for i in range(self.elements_list.count()):
@@ -172,6 +219,9 @@ class ThemeBuilderWidget(QWidget):
         theme_data = {
             "colors": {name: picker.get_color() for name, picker in self.color_pickers.items()},
             "highlighting": {name: picker.get_color() for name, picker in self.highlight_pickers.items()},
+            "sidebar": {name: picker.get_color() for name, picker in self.sidebar_pickers.items()},
+            "toolbar": {name: picker.get_color() for name, picker in self.toolbar_pickers.items()},
+            "editor": {name: picker.get_color() for name, picker in self.editor_pickers.items()},
         }
 
         for i in range(self.elements_list.count()):
@@ -187,7 +237,59 @@ class ThemeBuilderWidget(QWidget):
             theme_data[element] = element_data
 
         # Save the theme using the ThemeManager
-        self.theme_manager.add_custom_theme(theme_name, theme_data)
+        if self.current_theme:
+            self.theme_manager.update_custom_theme(self.current_theme, theme_data)
+        else:
+            self.theme_manager.add_custom_theme(theme_name, theme_data)
 
         # Optionally, you can show a success message here
         print(f"Theme '{theme_name}' saved successfully.")
+
+    def load_theme(self):
+        themes = self.theme_manager.get_all_themes()
+        theme_name, ok = QInputDialog.getItem(self, "Load Theme", "Select a theme to edit:", themes, 0, False)
+        if ok and theme_name:
+            self.current_theme = theme_name
+            theme_data = self.theme_manager.get_theme(theme_name)
+            self.name_input.setText(theme_name)
+            self.load_theme_data(theme_data)
+
+    def load_theme_data(self, theme_data):
+        # Load general colors
+        for name, picker in self.color_pickers.items():
+            if name in theme_data.get("colors", {}):
+                picker.color_button.setStyleSheet(f"background-color: {theme_data['colors'][name]};")
+
+        # Load highlighting colors
+        for name, picker in self.highlight_pickers.items():
+            if name in theme_data.get("highlighting", {}):
+                picker.color_button.setStyleSheet(f"background-color: {theme_data['highlighting'][name]};")
+
+        # Load sidebar colors
+        for name, picker in self.sidebar_pickers.items():
+            if name in theme_data.get("sidebar", {}):
+                picker.color_button.setStyleSheet(f"background-color: {theme_data['sidebar'][name]};")
+
+        # Load toolbar and context menu colors
+        for name, picker in self.toolbar_pickers.items():
+            if name in theme_data.get("toolbar", {}):
+                picker.color_button.setStyleSheet(f"background-color: {theme_data['toolbar'][name]};")
+
+        # Load editor colors
+        for name, picker in self.editor_pickers.items():
+            if name in theme_data.get("editor", {}):
+                picker.color_button.setStyleSheet(f"background-color: {theme_data['editor'][name]};")
+
+        # Load element-specific styles
+        for i in range(self.elements_list.count()):
+            element = self.elements_list.item(i).text()
+            if element in theme_data:
+                page = self.style_stack.widget(i)
+                for j in range(page.layout().rowCount()):
+                    item = page.layout().itemAt(j, QFormLayout.ItemRole.FieldRole).widget()
+                    key = page.layout().itemAt(j, QFormLayout.ItemRole.LabelRole).widget().text()
+                    if key in theme_data[element]:
+                        if isinstance(item, ColorPicker):
+                            item.color_button.setStyleSheet(f"background-color: {theme_data[element][key]};")
+                        elif isinstance(item, StyleInput):
+                            item.input.setText(str(theme_data[element][key]))

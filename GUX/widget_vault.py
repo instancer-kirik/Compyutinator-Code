@@ -4,7 +4,7 @@ from AuraText.auratext.Core.CodeEditor import CodeEditor
 from GUX.markdown_viewer import MarkdownViewer
 import os
 import hashlib
-
+from GUX.custom_tree_view import CustomTreeView
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog,
                              QLineEdit, QMessageBox, QApplication)
 
@@ -12,7 +12,7 @@ import requests
 from AuraText.auratext.scripts.def_path import resource
 from PyQt6.QtCore import pyqtSignal
 import logging
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QIcon, QFileSystemModel
 
 class VaultsManagerWidget(QWidget):
     vault_selected = pyqtSignal(str)
@@ -177,18 +177,53 @@ class VaultWidget(QWidget):
         self.markdown_viewer.set_vault_path(new_vault_path)
         self.refresh_files()
 class FileExplorerWidget(QWidget):
-    def __init__(self, cccore):
-        super().__init__()
+    file_selected = pyqtSignal(str)
+
+    def __init__(self, parent=None, cccore=None):
+        super().__init__(parent)
+        self.parent = parent
         self.cccore = cccore
-        self.setWindowTitle("File Explorer")
-        self.setGeometry(100, 100, 800, 600)
-        self.setStyleSheet("background-color: #282828; color: #FFFFFF;")
-        self.setWindowIcon(QIcon(resource(r"../media/terminal/new.svg")))
-        self.setWindowIcon(QIcon(resource(r"../media/terminal/remove.svg")))
-        self.setWindowIcon(QIcon(resource(r"../media/terminal/remove.svg")))
-        self.setWindowIcon(QIcon(resource(r"../media/terminal/remove.svg")))
-        self.setWindowIcon(QIcon(resource(r"../media/terminal/remove.svg")))
-            
+        self.setup_ui()
+
+    def setup_ui(self):
+        self.layout = QVBoxLayout(self)
+        self.model = QFileSystemModel()
+        self.model.setRootPath('')
+
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.tree1 = self.create_tree_view()
+        self.tree2 = self.create_tree_view()
+
+        self.splitter.addWidget(self.create_tree_container(self.tree1, "Tree 1"))
+        self.splitter.addWidget(self.create_tree_container(self.tree2, "Tree 2"))
+
+        self.layout.addWidget(self.splitter)
+
+    def create_tree_view(self):
+        tree = CustomTreeView(self)
+        tree.setModel(self.model)
+        tree.setRootIndex(self.model.index(self.model.rootPath()))
+        tree.doubleClicked.connect(self.on_double_click)
+        tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        tree.customContextMenuRequested.connect(self.show_context_menu)
+        return tree
+
+    def set_root_path(self, path):
+        if os.path.exists(path):
+            self.model.setRootPath(path)
+            self.tree1.setRootIndex(self.model.index(path))
+            self.tree2.setRootIndex(self.model.index(path))
+            self.update_path_edit(self.tree1, path)
+            self.update_path_edit(self.tree2, path)
+
+    def update_path_edit(self, tree, path):
+        container = tree.parent()
+        if container:
+            path_edit = container.findChild(QLineEdit)
+            if path_edit:
+                path_edit.setText(path)
+
+    # ... (rest of the methods)
 
 class HashSlingingHasherWidget(QWidget):
     def __init__(self, backend_url):

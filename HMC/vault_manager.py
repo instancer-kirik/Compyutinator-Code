@@ -5,6 +5,7 @@ from pathlib import Path
 from DEV.workspace import Workspace
 import tempfile
 import logging
+from PyQt6.QtCore import QObject, pyqtSignal
 
 from .project_manager import Project
 #WORKSPACES IS UI RELATED, probably, filesets open?
@@ -136,22 +137,31 @@ class Vault:
         relative_path = project_path.relative_to(self.path)
         self.projects[project_name] = str(relative_path)
         self.save_config()
+        logging.warning(f"Added project {project_name} to vault {self.name}")
         return True
- 
+
+    def get_project_names(self):
+        return list(self.projects.keys())
+
     def _add_project(self, project_name, project):
         self.projects[project_name] = project
         self.save_config()
         return True
     def get_project(self, project_name):
         return self.projects.get(project_name)
-
+    def get_project_path(self, project_name):
+        return self.projects.get(project_name)
     def get_project_names(self):
         return list(self.projects.keys())
-
+    
    
 
-class VaultManager:
+class VaultManager(QObject):
+    vault_changed = pyqtSignal(str)
+    project_added = pyqtSignal(str, str) #vault_name, project_name
+
     def __init__(self, settings_manager, cccore):
+        super().__init__()  # Initialize the QObject
         self.settings_manager = settings_manager
         self.cccore = cccore
         self.project_manager = cccore.get_project_manager()
@@ -210,7 +220,7 @@ class VaultManager:
         if not self.current_vault:
             self.set_current_vault(next(iter(self.vaults)))
         
-        logging.info(f"Current vault set to: {self.current_vault.name if self.current_vault else 'None'}")
+        logging.warning(f"Current vault set to: {self.current_vault.name if self.current_vault else 'None'}")
 
     def create_vault(self, name, path):
         path = Path(path)
@@ -218,7 +228,7 @@ class VaultManager:
         new_vault = Vault(vault_name=name, path=str(path), cccore=self.cccore)
         self.vaults[name] = new_vault
         self.save_vaults_config()
-        logging.info(f"Created new vault: {name} at {path}")
+        logging.warning(f"Created new vault: {name} at {path}")
         return new_vault
 
     def add_vault_directory(self, path, name=None):
@@ -247,21 +257,23 @@ class VaultManager:
             logging.error(f"Failed to create vault {name} at {path}: {str(e)}")
             return None
 
-    def set_current_vault(self, name):
-        logging.info(f"Setting current vault to: {name}")
-        if name not in self.vaults:
-            logging.warning(f"Vault '{name}' does not exist.")
-            return False
-        
-        self.current_vault = self.vaults[name]
-        self.save_vaults_config()
-        self.initialize_vault(self.current_vault)
-        logging.info(f"Successfully set current vault to: {name}")
-        return True
+    def set_current_vault(self, vault_name):
+        if isinstance(vault_name, Vault):
+            vault_name = vault_name.name
+        if vault_name in self.vaults:
+            self.current_vault = self.vaults[vault_name]
+            logging.info(f"Successfully set current vault to: {vault_name}")
+            self.vault_changed.emit(vault_name)
+            self.initialize_vault(self.current_vault)
+            self.save_vaults_config()   
+            return True
+        logging.warning(f"Vault not found: {vault_name}")
+        return False
+     
     def ensure_default_vaults(self):
-        logging.info("Ensuring default vaults...")
+        logging.warning("Ensuring default vaults...")
         if not self.vaults:
-            logging.info("No vaults found. Creating default vault.")
+            logging.warning("No vaults found. Creating default vault.")
             local_default_path = self.app_config_dir / "default_vault"
             local_default_name = self.add_vault_directory(str(local_default_path), "Default Vault")
             
@@ -271,7 +283,7 @@ class VaultManager:
             else:
                 logging.error("Failed to create default vault.")
         else:
-            logging.info(f"Existing vaults found: {list(self.vaults.keys())}")
+            logging.warning(f"Existing vaults found: {list(self.vaults.keys())}")
             if not self.current_vault:
                 self.set_current_vault(next(iter(self.vaults)))
 
@@ -462,34 +474,30 @@ class VaultManager:
             return True
         return False
 
-    def add_project(self, vault_name, project_name, project_path, language, version):
-        vault = self.get_vault(vault_name)
+    def add_project(self, vault_name, project_name, project_path, language=None, version=None):
+        vault = self.vaults.get(vault_name)
         if vault:
-            return vault.add_project(project_name=project_name, project_path=project_path, language=language, version=version)
+            success = vault.add_project(project_name, project_path, language, version)
+            if success:
+                self.project_added.emit(vault_name, project_name)
+                logging.info(f"Added project {project_name} to vault {vault_name}")
+            return success
         else:
             # If the specified vault doesn't exist, create a wrapper vault
-            return self.create_wrapper_vault_project(project_name, project_path, language, version)
-       
-    # def add_project(self, vault_name, project_name, project_path, language=None, version=None):
-    #     if project_name not in self.projects:
-            #
-    #         logging.error(f"self.name: {self.name} vault_name: {vault_name}")
-    #         if vault_name==self.name:
-    #             project = Project(project_name, project_path, language, version)
-    #             return self._add_project(project_name, project)
-    #         else:
-    #             logging.error(f"Vault '{vault_name}' +project_name: {project_name} not found.")
-    #             return False
-    #     else:
-    #         logging.warning(f"Project '{project_name}' already exists in vault '{vault_name}'.")
-    #         return False
+            try:
+                return self.create_wrapper_vault_project(project_name, project_path, language, version)
+            except:
+                logging.error(f"Failed to add project {project_name} to vault {vault_name}")
+                return False
 
-    #         self.save_config()
-    #         return True
-    #     return False
     def get_projects(self, vault_name):
-        vault = self.get_vault(vault_name)
-        return vault.get_projects() if vault else []
+        vault = self.vaults.get(vault_name)
+        if vault:
+            projects = vault.get_project_names()
+            logging.info(f"Retrieved projects for vault {vault_name}: {projects}")
+            return projects
+        logging.warning(f"No vault found with name: {vault_name}")
+        return []
 
     def get_vault(self, vault_name):
         return self.vaults.get(vault_name)
@@ -501,19 +509,24 @@ class VaultManager:
         vault_name = f"{project_name}_vault"
         vault_path = project_path.parent
 
-        # Create a new vault
-        new_vault = self.create_vault(vault_name, str(vault_path))
+        # Check if a vault already exists at this location
+        existing_vault = next((v for v in self.vaults.values() if v.path == vault_path), None)
+        if existing_vault:
+            vault_name = existing_vault.name
+            new_vault = existing_vault
+        else:
+            new_vault = self.create_vault(vault_name, str(vault_path))
+
         if not new_vault:
-            logging.error(f"Failed to create wrapper vault for project: {project_name}")
+            logging.error(f"Failed to create or find wrapper vault for project: {project_name}")
             return False
 
-        # Add the project to the new vault
         success = new_vault.add_project(project_name, str(project_path), language, version)
         if not success:
             logging.error(f"Failed to add project {project_name} to wrapper vault {vault_name}")
             return False
 
-        logging.info(f"Created wrapper vault {vault_name} for project {project_name}")
+        logging.info(f"Added project {project_name} to vault {vault_name}")
         return True
 
     def create_vault(self, name, path):
@@ -522,5 +535,5 @@ class VaultManager:
         new_vault = Vault(vault_name=name, path=str(path), cccore=self.cccore)
         self.vaults[name] = new_vault
         self.save_vaults_config()
-        logging.info(f"Created new vault: {name} at {path}")
+        logging.warning(f"Created new vault: {name} at {path}")
         return new_vault

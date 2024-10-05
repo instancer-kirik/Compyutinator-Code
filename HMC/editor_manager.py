@@ -77,9 +77,7 @@ class EditorManager:
         if self.current_window is None:
             logging.warning("No current AuraText window set in EditorManager")
             return None
-        if self.current_editor is None:
-            logging.warning("No current editor set in EditorManager")
-            return None
+       
         if file_path is None:
             logging.warning("No file path provided for new editor tab")
             file_path = "Untitled"

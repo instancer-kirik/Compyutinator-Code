@@ -53,7 +53,6 @@ class FileManager:
             logging.error(f"File not found: {file_path}")
             return
 
-        # Check if the file is already open
         existing_editor = self.cccore.editor_manager.get_editor_by_file_path(file_path)
         if existing_editor:
             self.cccore.editor_manager.set_current_editor(existing_editor)
@@ -69,7 +68,8 @@ class FileManager:
             else:
                 logging.error(f"Failed to create new editor for file: {file_path}")
         except Exception as e:
-            logging.error(f"Error opening file: {e}")
+            logging.error(f"Error opening file {file_path}: {str(e)}")
+            QMessageBox.warning(None, "Error", f"Failed to open file: {file_path}\n\nError: {str(e)}")
 
     def save_file(self, editor=None):
         if editor is None:
