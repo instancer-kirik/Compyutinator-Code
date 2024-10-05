@@ -1,8 +1,14 @@
-How to run it? I do command
+![image](https://github.com/user-attachments/assets/20fb17f9-07f1-4916-92e1-f3f4234f59cd)
+
+![image](https://github.com/user-attachments/assets/b13618f5-e3ca-4fb3-9c04-9d26a23850d8)
+
+How to run it?
+Good luck, still in active development
+I do command
 C:Users/ME/miniconda3/python.exe x:/_WORK/Python/Qt/BigLinks/main.py
 BUILD WITH POETRY
 poetry install, ezpz
-
+might need nix-portable and/or homeManager (both on github)
 ## Big links make big chains
 BigLinks is a widget in a PyQt app Computinator Code, to help users manage limited file storage more by leveraging symbolic links to keep data on other local drives. (Currently only tested on Windows)
 
@@ -55,6 +61,7 @@ pip install keyboard, numpy,  openai, PyAudio, PyAutoGUI, PyOgg, PyQt6-WebEngine
 you can run this to create the exe in dist/
 pyinstaller --onefile --windowed --manifest=app.manifest main.py
 
+Want: system-wide overlay event about the cursor on ctrl+c, so you know you got the text right
 ## Contributing
 We welcome contributions! Whether you're looking to report a bug, propose a feature, or submit a pull request, your input is valuable. Please refer to our contribution guidelines for more information.
 
