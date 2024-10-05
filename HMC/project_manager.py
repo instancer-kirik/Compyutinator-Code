@@ -352,9 +352,12 @@ class ProjectManager:
                 else:
                     QMessageBox.warning(self, "Error", "Failed to rename project. New name may already exist.")
     def open_project(self):
-        selected_project = self.cccore.widget_manager.project_.project_selector.currentText()
-        if selected_project:
-            self.switch_project(selected_project)
+        if self.cccore.widget_manager.projects_manager_widget:
+            selected_project = self.cccore.widget_manager.projects_manager_widget.project_selector.currentText()
+            if selected_project:
+                self.switch_project(selected_project)
+        else:
+            QMessageBox.warning(self, "Error", "No project selector, open in main window.")
     
     def show_project_settings(self):
         dialog = QDialog(self)
@@ -371,6 +374,17 @@ class ProjectManager:
 
     def open_project_as_treeview(self):
         
+        pass
+
+    def is_file_in_project_context(self, file_path):
+        current_project = self.get_current_project()
+        if not current_project:
+            return False
+        return file_path.startswith(current_project.path)
+
+    def handle_file_not_in_context(self, file_path):
+        # Implement logic to handle files not in the current project context
+        # For example, you could add the file to the current project or create a new project
         pass
     
         # Add project path input field
@@ -397,8 +411,9 @@ class ProjectManagerWidget(QWidget):
         layout = QVBoxLayout(self)
         
         # Use the project selector from the main window
-        self.project_selector = self.window.project_selector
-        layout.addWidget(self.project_selector)
+        button = QPushButton("Open Project")
+        button.clicked.connect(self.open_project)
+        layout.addWidget(button)
 
         # Project management buttons
         management_layout = QHBoxLayout()
@@ -530,7 +545,13 @@ class ProjectManagerWidget(QWidget):
     def on_project_selected(self, project_name):
         if project_name:
             self.cccore.project_manager.set_current_project(project_name)
-            
+    def open_project(self):
+        if self.cccore.widget_manager.projects_manager_widget:
+            selected_project = self.cccore.widget_manager.projects_manager_widget.project_selector.currentText()
+            if selected_project:
+                self.switch_project(selected_project)
+        else:
+            QMessageBox.warning(self, "Error", "No project selector, open in main window.")
 
     def closeEvent(self, event):
         self.update_timer.stop()

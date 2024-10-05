@@ -44,7 +44,8 @@ import threading
 from HMC.workspace_manager import WorkspaceManager
 from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, QEvent
 from NITTY_GRITTY.ThreadTrackers import SafeQThread
-
+from HMC.project_manager import ManyProjectsManagerWidget
+from PyQt6.QtWidgets import QDockWidget
 log_directory = os.path.join(os.getcwd(), 'logs')
 if not os.path.exists(log_directory):
     os.makedirs(log_directory)
@@ -193,6 +194,9 @@ class MainApplication(QMainWindow):
         self.create_docks()
         self.auratext_windows = []
         self.cccore.set_main_window(self)
+        
+        self.setup_many_projects_manager()
+
     def dump_thread_info():
         logging.critical("Active threads at exit:")
         for thread in global_thread_tracker.get_active_threads():
@@ -278,12 +282,14 @@ class MainApplication(QMainWindow):
 
     def set_vault(self, vault_path):
         self.setWindowTitle(f"AuraText - Main Vault: {os.path.basename(vault_path)}")
+        self.cccore.vault_manager.set_current_vault(vault_path)
         self.load_vault(vault_path)
 
     def load_vault(self, vault_path):
         # Load main vault-specific data
         workspaces = self.cccore.workspace_manager.get_workspace_names(vault_path)
         self.update_workspace_list(workspaces)
+        self.cccore.project_manager.load_projects(vault_path)
 
     def update_workspace_list(self, workspaces):
         # Update UI with the list of workspaces for the main vault
@@ -310,6 +316,8 @@ class MainApplication(QMainWindow):
             self.tab_widget.currentChanged.connect(self.handle_tab_change)
         self.workspace_selector.currentTextChanged.connect(self.on_workspace_changed)
         self.cccore.theme_manager.theme_changed.connect(self.on_theme_changed)
+        if hasattr(self, 'many_projects_manager'):
+            self.many_projects_manager.project_list.itemClicked.connect(self.on_project_selected)
 
     def load_settings(self):
         self.load_layout()
@@ -611,6 +619,26 @@ class MainApplication(QMainWindow):
         logging.info("Cleanup process completed")
 
         logging.info("Application cleanup complete")
+
+    def setup_many_projects_manager(self):
+        self.many_projects_manager = ManyProjectsManagerWidget(self.cccore)
+        many_projects_dock = QDockWidget("Many Projects Manager", self)
+        many_projects_dock.setWidget(self.many_projects_manager)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, many_projects_dock)
+
+        # Add a toggle action to the View menu
+        self.cccore.menu_manager.view_menu.addAction(many_projects_dock.toggleViewAction())
+
+    def on_project_selected(self, item):
+        project_name = item.text()
+        vault_name = self.many_projects_manager.vault_selector.currentText()
+        self.cccore.project_manager.switch_project(vault_name, project_name)
+        self.update_ui_for_project(project_name)
+
+    def update_ui_for_project(self, project_name):
+        # Update any UI elements that need to change when a project is selected
+        self.setWindowTitle(f"AuraTextIDE - {project_name}")
+        # Update other UI elements as needed
 def post_show_init(self):#
         logging.info("Post show init")
         #$self.create_workspace()
@@ -684,16 +712,16 @@ def main():
         
         logging.info("Initializing managers")
         cccore, overlay = initialize_managers(settings_manager)
-        
+        logging.info("Creating WidgetManager")
+        widget_manager = WidgetManager(cccore)
+
         logging.info("Initializing CCCore managers")
         cccore.init_managers()
         
         logging.info("Setting overlay for CCCore")
         cccore.set_overlay(overlay)
 
-        logging.info("Creating WidgetManager")
-        widget_manager = WidgetManager(cccore)
-
+        
         logging.info("Setting widget_manager for CCCore")
         cccore.set_widget_manager(widget_manager)
         

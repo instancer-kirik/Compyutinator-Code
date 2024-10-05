@@ -91,23 +91,8 @@ class CCCore:  # referred to as mm in other files (auratext)
         self.theme_manager = ThemeManager(self)
         self.lexer_manager = LexerManager(self)
         self.lsp_manager = LSPManager(self)
-      #  self.vault_manager = VaultManager(self.settings_manager, self)
         self.cursor_manager = CursorManager(self)
         
-        # The vault manager is already initialized in __init__, so we don't need to create it here
-        # Just ensure that a current vault is set
-        # if not self.vault_manager.get_current_vault():
-        #     logging.warning("No current vault set. Creating a default vault.")
-        #     default_vault_path = os.path.join(self.settings_manager.get_value('app_data_dir'), 'default_vault')
-        #     self.vault_manager.create_vault("Default Vault", default_vault_path)
-        #     self.vault_manager.set_current_vault("Default Vault")
-        # else:
-        #     logging.warning("No current vault set. Using the first available vault.")
-        #     available_vaults = self.vault_manager.get_vaults()
-        #     if available_vaults:
-        #         self.vault_manager.set_current_vault(available_vaults[0])
-        #     else:
-        #         logging.error("No vaults available. Application may not function correctly.")
         logging.info(f"Current vault: {self.vault_manager.current_vault.name if self.vault_manager.current_vault else 'None'}")
        
         self.env_manager = EnvironmentManager(self.settings_manager.get_value("environments_path", "./environments"))

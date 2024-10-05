@@ -33,6 +33,7 @@ class StyleInput(QWidget):
         self.setLayout(layout)
         layout.addWidget(QLabel(label))
         self.input = input_type()
+      
         layout.addWidget(self.input)
 
     def get_value(self):
@@ -250,7 +251,7 @@ class ThemeBuilderWidget(QWidget):
         theme_name, ok = QInputDialog.getItem(self, "Load Theme", "Select a theme to edit:", themes, 0, False)
         if ok and theme_name:
             self.current_theme = theme_name
-            theme_data = self.theme_manager.get_theme(theme_name)
+            theme_data = self.theme_manager.get_theme_data(theme_name)
             self.name_input.setText(theme_name)
             self.load_theme_data(theme_data)
 
@@ -292,4 +293,4 @@ class ThemeBuilderWidget(QWidget):
                         if isinstance(item, ColorPicker):
                             item.color_button.setStyleSheet(f"background-color: {theme_data[element][key]};")
                         elif isinstance(item, StyleInput):
-                            item.input.setText(str(theme_data[element][key]))
+                            item.input.setItemText(str(theme_data[element][key]))

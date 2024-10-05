@@ -163,7 +163,14 @@ class WidgetManager:
             return True
         
     def create_startup_docks(self):
-        logging.error("Not creating startup docks")
+        try:
+            # Create and add your startup docks here
+            self.create_dock("Projects Manager", self.ProjectsManagerWidget(self.cccore))
+            self.create_dock("Many Projects Manager", self.ManyProjectsManagerWidget(self.cccore))
+            # ... other startup docks
+        except Exception as e:
+            logging.error(f"Error creating startup docks: {e}")
+            logging.error(traceback.format_exc())
      #   default_docks = [
     #         "File Explorer", "Code Editor", "Terminal", "AI Chat", 
     #         "Symbolic Linker", "Sticky Notes", "Process Manager", 
@@ -330,9 +337,9 @@ class WidgetManager:
         if 'many_projects_manager' not in self.widgets:
             self.widgets['many_projects_manager'] = ManyProjectsManagerWidget(cccore)
         return self.widgets['many_projects_manager']
-    def ProjectsManagerWidget(self, cccore):
+    def ProjectManagerWidget(self, cccore):
         if 'projects_manager' not in self.widgets:
-            self.widgets['projects_manager'] = ProjectManagerWidget(parent=self.main_window, cccore=self.cccore)
+            self.widgets['projects_manager'] = ProjectManagerWidget(parent=self.main_window, cccore=self.cccore, window=self.main_window)
         return self.widgets['projects_manager']
 
     def VaultsManagerWidget(self, cccore):

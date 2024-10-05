@@ -11,6 +11,9 @@ import time
 from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QWidget, QComboBox, QPushButton, QColorDialog, QInputDialog
 from PyQt6.QtWidgets import QProgressDialog, QFormLayout, QDialogButtonBox, QLineEdit, QDialog
 import traceback
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QPushButton, QMessageBox, QTabWidget
+from GUX.theme_builder import ThemeBuilderWidget  # Import the ThemeBuilderWidget
+
 import json
 import os
 class CustomThemeDialog(QDialog):
@@ -41,15 +44,20 @@ class ThemeManagerWidget(QWidget):
         self.update_theme_list()
         self.apply_button = QPushButton("Apply Theme")
         self.add_custom_button = QPushButton("Add Custom Theme")
-        
+        theme_builder = ThemeBuilderWidget(self.theme_manager)
         layout.addWidget(self.theme_combo)
         layout.addWidget(self.apply_button)
         layout.addWidget(self.add_custom_button)
+        layout.addWidget(theme_builder)
         self.setLayout(layout)
 
         self.apply_button.clicked.connect(self.on_apply_theme)
         self.add_custom_button.clicked.connect(self.on_add_custom_theme)
-
+  
+       
+        
+        
+   
     def update_theme_list(self):
         self.theme_combo.clear()
         self.theme_combo.addItems(self.theme_manager.get_available_themes())
@@ -270,15 +278,18 @@ class ThemeManager(QObject):
         """)
 
         # Apply line highlight
-        highlight_color = QColor(self.current_theme.get("lineHighlightColor", "#2F3D4E"))
+        highlight_color = QColor(self.current_theme.get("lineHighlightColor", "#8B8000"))  # Dark yellow
         highlight_color.setAlpha(40)  # Adjust alpha for transparency
         editor.setCaretLineVisible(True)
-        editor.setCaretLineBackgroundColor(highlight_color)
+        editor.setCaretLineBackgroundColor(QColor(0, 0, 0, .5))
 
         # Apply sidebar (line number area) color
         sidebar_color = QColor(self.current_theme.get("sidebarColor", "#2E3440"))
         editor.setMarginsBackgroundColor(sidebar_color)
         editor.setMarginsForegroundColor(QColor(self.current_theme.get("sidebarTextColor", "#D8DEE9")))
+
+        # Ensure the changes are applied
+        editor.update()
 
     def generate_stylesheet(self, theme):
         colors = theme['colors']
@@ -626,7 +637,57 @@ class ThemeManager(QObject):
         # Return a list of all theme names
         return list(self.get_available_themes())
 
-    def get_theme(self, theme_name):
-        # Return the theme data for a specific theme
-        themes = self.get_available_themes()
-        return themes.get(theme_name, {})
+    def get_theme_data(self, theme_name):
+        # Check if it's a custom theme
+        if theme_name in self.custom_themes:
+            return self.custom_themes[theme_name]
+        
+        # Check if it's a built-in theme
+        if theme_name in list_themes():
+            # For built-in themes, we need to create a basic theme data structure
+            # This is because built-in themes don't have the same detailed structure as custom themes
+            return {
+                "name": theme_name,
+                "type": "built-in",
+                "colors": {
+                    "backgroundColor": "#FFFFFF",  # Default values, adjust as needed
+                    "textColor": "#000000",
+                    # Add more color keys as needed
+                },
+                "fonts": {
+                    "main": "Arial",
+                    "size": "12",
+                    # Add more font keys as needed
+                },
+                "dimensions": {
+                    # Add dimension keys as needed
+                },
+                # Add more theme data as needed
+            }
+        
+        # If the theme is not found
+        return None
+
+    def update_custom_theme(self, theme_name, theme_data):
+        self.custom_themes[theme_name] = theme_data
+        self.save_custom_themes()
+        self.theme_changed.emit(theme_data)
+
+    def get_all_themes(self):
+        # Combine custom themes and built-in themes
+        return list(self.custom_themes.keys()) + list_themes()
+
+    def save_custom_themes(self):
+        for theme_name, theme_data in self.custom_themes.items():
+            theme_file = os.path.join(self.custom_themes_dir, f"{theme_name}.json")
+            with open(theme_file, 'w') as f:
+                json.dump(theme_data, f, indent=2)
+
+    def load_custom_themes(self):
+        for filename in os.listdir(self.custom_themes_dir):
+            if filename.endswith('.json'):
+                theme_name = os.path.splitext(filename)[0]
+                with open(os.path.join(self.custom_themes_dir, filename), 'r') as f:
+                    self.custom_themes[theme_name] = json.load(f)
+
+  

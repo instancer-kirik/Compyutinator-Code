@@ -58,6 +58,7 @@ class ContextPickerDialog(QDialog):
                       f"{len(self.recent_files)} recent files, and {len(self.existing_contexts)} existing contexts")
         self.initUI()
         self.setAcceptDrops(True)
+        self.resize(1000, 800)
 
     def initUI(self):
         layout = QVBoxLayout(self)
