@@ -95,6 +95,8 @@ class EditorManager:
             
             index = self.current_window.add_new_tab(editor, os.path.basename(file_path))
             if index is not None:
+                if self.current_window not in self.window_editors:
+                    self.window_editors[self.current_window] = []#mAYBE this deletes old editors
                 self.window_editors[self.current_window].append(editor)
                 self.set_current_editor(editor)
             
@@ -138,26 +140,41 @@ class EditorManager:
         return False
 
     def close_tab(self, index):
-        if not self.current_window:
+        if self.current_window is None:
+            logging.error("No current window set in EditorManager")
             return False
-        
+
         editor = self.current_window.tab_widget.widget(index)
-        if editor.isModified():
-            reply = QMessageBox.question(self.current_window, "Save Changes?",
-                                         "Do you want to save your changes?",
-                                         QMessageBox.StandardButton.Save | 
-                                         QMessageBox.StandardButton.Discard | 
-                                         QMessageBox.StandardButton.Cancel)
-            if reply == QMessageBox.StandardButton.Save:
-                if not self.save_file(editor):
-                    return False
-            elif reply == QMessageBox.StandardButton.Cancel:
+        if editor is None:
+            logging.error(f"No editor found at index {index}")
+            return False
+
+        # Check if the file needs to be saved
+        if editor.document().isModified():
+            # Implement save prompt logic here
+            save_prompt = QMessageBox.question(self.current_window, "Save File", "Do you want to save the file?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel)
+            if save_prompt == QMessageBox.StandardButton.Yes:
+                self.save_file(editor)
+            elif save_prompt == QMessageBox.StandardButton.Cancel:
                 return False
-        
-        self.current_window.close_tab(index)
-        self.window_editors[self.current_window].remove(editor)
+
+        # Remove the editor from the list safely
+        if self.current_window in self.window_editors:
+            if editor in self.window_editors[self.current_window]:
+                self.window_editors[self.current_window].remove(editor)
+            else:
+                logging.warning(f"Editor not found in window_editors list for the current window")
+
+        # Close the tab
+        self.current_window.tab_widget.removeTab(index)
+
+        # If it was the current editor, set current_editor to None
         if editor == self.current_editor:
-            self.set_current_editor(self.current_window.get_current_tab())
+            self.current_editor = None
+
+        # Clean up the editor
+        editor.deleteLater()
+
         return True
 
     def apply_lexer(self, editor, file_extension):
@@ -288,8 +305,15 @@ class EditorManager:
 
     def get_open_files(self):
         open_files = []
-        for editors in self.window_editors.values():
-            open_files.extend([editor.file_path for editor in editors if editor.file_path])
+        for window, editors in self.window_editors.items():
+            for editor in editors:
+                if editor.file_path:
+                    open_files.append(editor.file_path)
+                else:
+                    # For untitled files, we'll use a placeholder name
+                    open_files.append(f"Untitled_{id(editor)}")
+        
+        logging.info(f"Open files: {open_files}")
         return open_files
 
     
@@ -327,7 +351,7 @@ class EditorManager:
             except ValueError:
                 # Paths are on different drives, so we'll compare them as strings
                 return file_path.lower().startswith(project_path.lower())
-        return False
+        return True  # If no vault or project is set, consider all files in context
 
     def update_current_editor_content(self, new_content):
         if self.current_editor:
@@ -373,3 +397,19 @@ class EditorManager:
             except IOError as e:
                 logging.error(f"Error writing to file {file_path}: {str(e)}")
                 raise
+    def get_editor_by_id(self, editor_id):
+        for window, editors in self.window_editors.items():
+            for editor in editors:
+                if id(editor) == editor_id:
+                    return editor
+        return None
+    def get_open_file_paths(self):
+        open_files = []
+        for window, editors in self.window_editors.items():
+            for editor in editors:
+                if editor.file_path:
+                    open_files.append(editor.file_path)
+                else:
+                    # For untitled files, we'll use a placeholder name
+                    open_files.append(f"Untitled_{id(editor)}")
+        return open_files

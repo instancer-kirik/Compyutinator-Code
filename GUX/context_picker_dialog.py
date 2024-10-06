@@ -1,16 +1,19 @@
 import os
-from PyQt6.QtWidgets import QInputDialog
-from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QTableWidget, QPushButton, QFileDialog, 
-                             QTextEdit, QLabel, QLineEdit, QTreeWidgetItem, QSplitter, 
-                             QWidget, QHBoxLayout, QInputDialog, QMessageBox, QTableWidget, QTableWidgetItem, QHeaderView)
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QDragEnterEvent, QDropEvent
-import os
 import importlib
 import inspect
 import math
 import logging
-from PyQt6.QtGui import QFont
+import requests
+from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTableWidget, QPushButton, QFileDialog, 
+                             QTextEdit, QLabel, QLineEdit, QTreeWidgetItem, QSplitter, 
+                             QWidget, QInputDialog, QMessageBox, QTableWidgetItem, QHeaderView,
+                             QTabWidget)
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QFont, QFileSystemModel
+
+from GUX.file_search_widget import FileSearchWidget
+from GUX.file_tree_view import FileTreeView
+
 class FileItemWidget(QWidget):
     def __init__(self, file_path, file_type, parent=None):
         super().__init__(parent)
@@ -47,119 +50,148 @@ class FileItemWidget(QWidget):
 class ContextPickerDialog(QDialog):
     context_added = pyqtSignal(str, str)  # context_type, context_content
 
-    def __init__(self, parent=None, recent_files=None, open_files=None, existing_contexts=None, editor_manager=None):
+    def __init__(self, parent=None, recent_files=None, open_files=None, existing_contexts=None, editor_manager=None, vault_manager=None):
         super().__init__(parent)
         self.setWindowTitle("Add Context")
         self.recent_files = recent_files or []
         self.open_files = open_files or []
         self.existing_contexts = existing_contexts or []
         self.editor_manager = editor_manager
-        logging.debug(f"Initializing ContextPickerDialog with {len(self.open_files)} open files, "
-                      f"{len(self.recent_files)} recent files, and {len(self.existing_contexts)} existing contexts")
+        self.vault_manager = vault_manager
+        logging.info(f"Initializing ContextPickerDialog with {len(self.open_files)} open files, "
+                     f"{len(self.recent_files)} recent files, and {len(self.existing_contexts)} existing contexts")
         self.initUI()
         self.setAcceptDrops(True)
-        self.resize(1000, 800)
+        self.resize(1200, 800)
 
     def initUI(self):
         layout = QVBoxLayout(self)
 
-        # Search bar
-        self.search_bar = QLineEdit()
-        self.search_bar.setPlaceholderText("Search contexts...")
-        self.search_bar.textChanged.connect(self.filter_contexts)
-        layout.addWidget(self.search_bar)
+        # Create a tab widget
+        self.tab_widget = QTabWidget()
+        layout.addWidget(self.tab_widget)
 
-        # Splitter for grid view and preview
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        layout.addWidget(splitter)
+        # File Explorer Tab
+        file_explorer_widget = QWidget()
+        file_explorer_layout = QVBoxLayout(file_explorer_widget)
+        self.file_model = QFileSystemModel()
+        self.file_model.setRootPath("")
+        self.file_tree_view = FileTreeView(self.file_model)
+        self.file_tree_view.file_selected.connect(self.preview_file)
+        file_explorer_layout.addWidget(self.file_tree_view)
+        self.tab_widget.addTab(file_explorer_widget, "File Explorer")
 
-        # Grid view for filenames
-        self.grid_widget = QTableWidget()
-        self.grid_widget.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.grid_widget.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.grid_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.grid_widget.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectItems)
-        self.grid_widget.itemSelectionChanged.connect(self.preview_context)
-        splitter.addWidget(self.grid_widget)
+        # Search Tab
+        search_widget = FileSearchWidget(self.vault_manager, parent=self)
+        search_widget.file_selected.connect(self.preview_file)
+        self.tab_widget.addTab(search_widget, "Search")
+
+        # Recent and Open Files Tab
+        recent_open_widget = QWidget()
+        recent_open_layout = QVBoxLayout(recent_open_widget)
+        self.recent_open_table = QTableWidget()
+        self.recent_open_table.setColumnCount(2)
+        self.recent_open_table.setHorizontalHeaderLabels(["File", "Type"])
+        self.recent_open_table.horizontalHeader().setStretchLastSection(True)
+        self.recent_open_table.itemSelectionChanged.connect(self.preview_selected_file)
+        recent_open_layout.addWidget(self.recent_open_table)
+        self.tab_widget.addTab(recent_open_widget, "Recent & Open Files")
+
+        # Existing Contexts Tab
+        existing_contexts_widget = QWidget()
+        existing_contexts_layout = QVBoxLayout(existing_contexts_widget)
+        self.existing_contexts_table = QTableWidget()
+        self.existing_contexts_table.setColumnCount(1)
+        self.existing_contexts_table.setHorizontalHeaderLabels(["Context"])
+        self.existing_contexts_table.itemSelectionChanged.connect(self.preview_selected_context)
+        existing_contexts_layout.addWidget(self.existing_contexts_table)
+        self.tab_widget.addTab(existing_contexts_widget, "Existing Contexts")
 
         # Preview area
         self.preview_area = QTextEdit()
         self.preview_area.setReadOnly(True)
-        splitter.addWidget(self.preview_area)
 
-        # Populate grid
-        self.populate_grid()
+        # Create a splitter for the tab widget and preview area
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.addWidget(self.tab_widget)
+        splitter.addWidget(self.preview_area)
+        splitter.setSizes([600, 600])  # Adjust these values as needed
+        layout.addWidget(splitter)
 
         # Buttons
         button_layout = QHBoxLayout()
         add_button = QPushButton("Add Selected")
         add_button.clicked.connect(self.add_selected_contexts)
         button_layout.addWidget(add_button)
-
         layout.addLayout(button_layout)
 
-    def populate_grid(self):
-        all_files = [(f, "Open Files") for f in self.open_files] + \
-                    [(f, "Recent Files") for f in self.recent_files] + \
-                    [(ctx[0], "Existing Contexts") for ctx in self.existing_contexts]
-        
-        num_files = len(all_files)
-        num_cols = max(1, int(math.sqrt(num_files * 2)))  # Increase number of columns
-        num_rows = math.ceil(num_files / num_cols)
+        self.populate_tables()
 
-        self.grid_widget.setRowCount(num_rows)
-        self.grid_widget.setColumnCount(num_cols)
-        self.grid_widget.horizontalHeader().setVisible(False)
-        self.grid_widget.verticalHeader().setVisible(False)
+    def populate_tables(self):
+        # Populate Recent and Open Files table
+        self.recent_open_table.setRowCount(len(self.recent_files) + len(self.open_files))
+        row = 0
+        for file in self.recent_files:
+            self.recent_open_table.setItem(row, 0, QTableWidgetItem(file))
+            self.recent_open_table.setItem(row, 1, QTableWidgetItem("Recent"))
+            self.recent_open_table.item(row, 0).setData(Qt.ItemDataRole.UserRole, (file, "Recent"))
+            row += 1
+        for file in self.open_files:
+            if file.startswith("Untitled_"):
+                display_name = "Untitled"
+            else:
+                display_name = file
+            self.recent_open_table.setItem(row, 0, QTableWidgetItem(display_name))
+            self.recent_open_table.setItem(row, 1, QTableWidgetItem("Open"))
+            self.recent_open_table.item(row, 0).setData(Qt.ItemDataRole.UserRole, (file, "Open"))
+            row += 1
 
-        for i, (file, file_type) in enumerate(all_files):
-            row = i // num_cols
-            col = i % num_cols
-            
-            file_widget = FileItemWidget(file, file_type)
-            self.grid_widget.setCellWidget(row, col, file_widget)
-            
-            # Store the file and file_type in the cell's data
-            item = QTableWidgetItem()
-            item.setData(Qt.ItemDataRole.UserRole, (file, file_type))
-            self.grid_widget.setItem(row, col, item)
-
-        self.grid_widget.resizeColumnsToContents()
-        self.grid_widget.resizeRowsToContents()
-
-        logging.debug(f"Populated grid with {num_files} files in a {num_rows}x{num_cols} grid")
+        # Populate Existing Contexts table
+        self.existing_contexts_table.setRowCount(len(self.existing_contexts))
+        for i, context in enumerate(self.existing_contexts):
+            self.existing_contexts_table.setItem(i, 0, QTableWidgetItem(context[0]))
 
     def filter_contexts(self, text):
-        for row in range(self.grid_widget.rowCount()):
-         #  $# match = False
-            for col in range(self.grid_widget.columnCount()):
-                item = self.grid_widget.item(row, col)
+        for row in range(self.recent_open_table.rowCount()):
+            for col in range(self.recent_open_table.columnCount()):
+                item = self.recent_open_table.item(row, col)
                 if item:
                     item.setHidden(text.lower() not in item.text().lower())
 
-    def preview_context(self):
-        selected_items = self.grid_widget.selectedItems()
+    def preview_file(self, file_path):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as file:
+                content = file.read()
+            self.preview_area.setPlainText(content)
+        except Exception as e:
+            self.preview_area.setPlainText(f"Error reading file: {str(e)}")
+
+    def preview_selected_file(self):
+        selected_items = self.recent_open_table.selectedItems()
         if selected_items:
-            item = selected_items[0]
-            row, col = item.row(), item.column()
-            file_widget = self.grid_widget.cellWidget(row, col)
-            file, file_type = item.data(Qt.ItemDataRole.UserRole)
-            logging.debug(f"Previewing context: {file_type} - {file}")
-            try:
-                content = self.get_context_content(file_type, file, preview=True)
-                self.preview_area.setPlainText(content)
-            except Exception as e:
-                error_message = f"Error previewing content: {str(e)}"
-                self.preview_area.setPlainText(error_message)
-                logging.error(error_message)
+            file_path = selected_items[0].text()
+            self.preview_file(file_path)
+
+    def preview_selected_context(self):
+        selected_items = self.existing_contexts_table.selectedItems()
+        if selected_items:
+            context_name = selected_items[0].text()
+            context_content = next((content for name, content in self.existing_contexts if name == context_name), "")
+            self.preview_area.setPlainText(context_content)
 
     def get_context_content(self, context_type, context_name, preview=False):
         try:
-            if context_type == "Open Files":
-                return self.editor_manager.get_editor_by_path(context_name).text()
-            elif context_type == "Recent Files":
-                with open(context_name, 'r', encoding='utf-8') as file:
-                    return file.read()
+            if context_type in ["Recent", "Open"]:
+                editor = self.editor_manager.get_editor_by_file_path(context_name)
+                if editor:
+                    return editor.toPlainText()
+                elif os.path.exists(context_name):
+                    with open(context_name, 'r', encoding='utf-8') as file:
+                        return file.read()
+                else:
+                    return f"Error: File not found - {context_name}"
+            elif context_type == "Search":
+                return self.vault_manager.get_vault_item_by_path(context_name).content
             elif context_type == "Existing Contexts":
                 return next(content for desc, content in self.existing_contexts if desc == context_name)
             return ""
@@ -168,14 +200,36 @@ class ContextPickerDialog(QDialog):
             return f"Error loading content: {str(e)}"
 
     def add_selected_contexts(self):
-        selected_items = self.grid_widget.selectedItems()
+        selected_items = self.recent_open_table.selectedItems()
         for item in selected_items:
-            file, file_type = item.data(Qt.ItemDataRole.UserRole)
-            content = self.get_context_content(file_type, file)
-            self.context_added.emit(f"[{file_type}] {os.path.basename(file)}", content)
+            if item.column() == 0:  # Only process the first column
+                data = item.data(Qt.ItemDataRole.UserRole)
+                if data:
+                    file, file_type = data
+                else:
+                    file = item.text()
+                    file_type = self.recent_open_table.item(item.row(), 1).text()  # Get type from second column
+                
+                content = self.get_context_content(file_type, file)
+                if content.startswith("Error:"):
+                    QMessageBox.warning(self, "Error", content)
+                else:
+                    self.context_added.emit(f"[{file_type}] {file}", content)
+                    logging.warning(f"Emitting context: [{file_type}] {file}")
+
+        # Process selected items from existing contexts
+        selected_contexts = self.existing_contexts_table.selectedItems()
+        for item in selected_contexts:
+            if item.column() == 0:  # Only process the first column
+                context_name = item.text()
+                content = self.get_context_content("Existing Contexts", context_name)
+                self.context_added.emit(f"[Context] {context_name}", content)
+                logging.warning(f"Emitting context: [Context] {context_name}")
+
         self.accept()
 
-    def add_file(self):
+    # Implement drag and drop methods if needed
+    
         file_path, _ = QFileDialog.getOpenFileName(self, "Select File")
         if file_path:
             with open(file_path, 'r') as file:
@@ -198,7 +252,6 @@ class ContextPickerDialog(QDialog):
                 QMessageBox.warning(self, "Import Error", f"Failed to import {module_name}: {str(e)}")
 
     def add_url(self):
-        import requests
         url, ok = QInputDialog.getText(self, "Add URL", "Enter URL:")
         if ok and url:
             try:
@@ -222,4 +275,4 @@ class ContextPickerDialog(QDialog):
         event.acceptProposedAction()
 
     def get_selected_items(self):
-        return [item.data(Qt.ItemDataRole.UserRole) for item in self.grid_widget.selectedItems()]
+        return [item.data(Qt.ItemDataRole.UserRole) for item in self.recent_open_table.selectedItems() if item.data(Qt.ItemDataRole.UserRole) is not None]

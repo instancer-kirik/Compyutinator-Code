@@ -12,14 +12,14 @@
         "Sticky Notes",
         "Process Manager",
         "Vaults Manager",
-        
-        "Projects Manager"
+        "Projects Manager",
+        "Many Projects Manager"
         
     ],
     "layout": {
-        "left": ["File Explorer", "Symbolic Linker"],
-        "right": ["Code Editor", "Sticky Notes"],
-        "bottom": ["Terminal", "Process Manager"]
+        "left": ["File Explorer", "Symbolic Linker", "Many Projects Manager"],
+        "right": ["Code Editor", "Sticky Notes", "Projects Manager"],
+        "bottom": ["Terminal", "Process Manager", "Vaults Manager"]
     }
       
 }

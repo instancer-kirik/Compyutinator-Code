@@ -97,6 +97,7 @@ class ModelManager(QObject):
         if not self.model:
             raise RuntimeError("Model not loaded. Please load a model first.")
         
+        logging.warning(f"Generating response for messages: {messages}")
         self.generate_worker = GenerateWorker(self.model, messages, max_tokens)
         self.generate_worker.finished.connect(self.on_generation_finished)
         self.generate_worker.error.connect(self.on_generation_error)
@@ -106,6 +107,7 @@ class ModelManager(QObject):
         self.generation_finished.emit(response)
 
     def on_generation_error(self, error):
+        logging.error(f"Generation error: {error}")
         self.generation_error.emit(str(error))
 
     def get_model_size(self, model_name=None):

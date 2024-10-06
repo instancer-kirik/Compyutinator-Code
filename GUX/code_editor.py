@@ -30,6 +30,9 @@ class PythonHighlighter(QSyntaxHighlighter):
         self.highlighting_rules.append((r'"[^"]*"', self.string_format))
         self.highlighting_rules.append((r"'[^']*'", self.string_format))
 
+        self.current_line_color = QColor("#E8F2FF")  # Light blue
+        self.current_line_color.setAlpha(80)  # Set transparency
+
     def highlightBlock(self, text):
         for pattern, fmt in self.highlighting_rules:
             expression = QRegularExpression(pattern)
@@ -231,14 +234,15 @@ class CompEditor(QWidget):
         self.ui_update_timer.setSingleShot(True)
         self.ui_update_timer.timeout.connect(self.update_highlights)
        
-       
-        
         # Initialize start and end lines for highlighting
         self.start_line = 0
         self.end_line = 0
 
         self.last_update_time = 0
         self.update_interval = 100  # milliseconds
+
+        self.current_line_color = QColor("#3B4252")  # Default color
+        self.current_line_color.setAlpha(80)  # Set transparency
 
     def update_file_outline(self):
         text = self.text_edit.toPlainText()
@@ -249,8 +253,7 @@ class CompEditor(QWidget):
         extra_selections = []
         if not self.text_edit.isReadOnly():
             selection = QTextEdit.ExtraSelection()
-            line_color = QColor(Qt.GlobalColor.yellow).lighter(160)
-            selection.format.setBackground(line_color)
+            selection.format.setBackground(self.current_line_color)
             selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
             selection.cursor = self.text_edit.textCursor()
             selection.cursor.clearSelection()
@@ -261,8 +264,6 @@ class CompEditor(QWidget):
         # Create the worker
         worker = LineComparisonWorker(self.text_edit.toPlainText(), self.other_file_lines)
         worker.signals.result.connect(self.on_comparison_finished)
-        
-       
         
         # Submit the worker to the thread pool
         QThreadPool.globalInstance().start(worker)  
@@ -409,7 +410,22 @@ class CompEditor(QWidget):
         painter.setOpacity(0.2)
         painter.fillRect(QRect(0, self.start_line * self.fontMetrics().height(),
                                self.width(), (self.end_line - self.start_line + 1) * self.fontMetrics().height()),
-                         QColor(255, 255, 0))  # Light yellow background
+                         QColor(255, 0, 0))  # Light red background
+
+    def apply_theme(self, theme_data):
+        if not theme_data:
+            logging.error("Theme data is None, cannot apply theme")
+            return
+
+        colors = theme_data.get("colors", {})
+        
+        # Apply current line highlight
+        self.current_line_color = QColor(colors.get("currentLineColor", "#3B4252"))
+        self.current_line_color.setAlpha(80)  # Set transparency
+        logging.info(f"Applying current line color: {self.current_line_color.name()}, Alpha: {self.current_line_color.alpha()}")
+        
+        # Update the highlight_current_line method to use the new color
+        self.highlight_current_line()
 
 class LineNumberArea(QWidget):
     def __init__(self, editor):

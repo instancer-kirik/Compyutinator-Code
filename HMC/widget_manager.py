@@ -78,38 +78,49 @@ class WidgetManager:
     def set_main_window(self, main_window):
         self.main_window = main_window
 
-    def get_or_create_dock(self, name):
+    def get_or_create_dock(self, name,widget=None, area=Qt.DockWidgetArea.LeftDockWidgetArea, parent=None):#also makes widgets?
         logging.info(f"Attempting to get or create dock: {name}")
         if name in self.dock_widgets and self.is_dock_valid(self.dock_widgets[name]):
             logging.info(f"Existing valid dock found for {name}")
             return self.dock_widgets[name]
-        
-        widget_method = getattr(self, f"{name.replace(' ', '')}Widget", None)
-        if widget_method:
-            logging.info(f"Creating widget for {name}")
-            try:
-                widget = widget_method(self.cccore)
-                if widget:
-                    logging.info(f"Widget created successfully for {name}")
-                    dock = self.create_dock(name, widget, self.main_window)
-                    if dock:
-                        self.dock_widgets[name] = dock
-                        logging.info(f"Dock created successfully for {name}")
-                        return dock
+        if widget is None:
+            widget_method = getattr(self, f"{name.replace(' ', '')}Widget", None)
+            if widget_method:
+                logging.info(f"Creating widget for {name}")
+                try:
+                    if parent is None:
+                        widget = widget_method(self.cccore)
                     else:
-                        logging.error(f"Failed to create dock for {name}")
-                else:
-                    logging.error(f"Widget creation returned None for {name}")
-            except Exception as e:
-                logging.error(f"Error creating widget for {name}: {str(e)}")
-                logging.error(traceback.format_exc())
+                        widget = widget_method(self.cccore, parent)
+                    if widget:
+                        logging.info(f"Widget created successfully for {name}")
+                        dock = self.create_dock(name, widget, self.main_window)
+                        if dock:
+                            self.dock_widgets[name] = dock
+                            logging.info(f"Dock created successfully for {name}")
+                            return dock
+                        else:
+                            logging.error(f"Failed to create dock for {name}")
+                    else:
+                        logging.error(f"Widget creation returned None for {name}")
+                except Exception as e:
+                    logging.error(f"Error creating widget for {name}: {str(e)}")
+                    logging.error(traceback.format_exc())
+            else:
+                logging.error(f"No widget method found for {name}")
         else:
-            logging.error(f"No widget method found for {name}")
-
+            logging.warning(f"Widget already created for {name}")
+            dock = self.create_dock(name, widget, self.main_window)
+            if dock:
+                self.dock_widgets[name] = dock
+                logging.info(f"Dock created successfully for {name}")
+                return dock
+            else:
+                logging.error(f"Failed to create dock for {name}")
         logging.warning(f"Failed to create or retrieve dock: {name}")
         return None
 
-    def create_dock(self, name, widget, parent):
+    def create_dock(self, name, widget, parent=None):
         if name in self.docks and self.is_dock_valid(self.docks[name]):
             logging.info(f"Valid dock {name} already exists. Returning existing dock.")
             return self.docks[name]
@@ -165,8 +176,8 @@ class WidgetManager:
     def create_startup_docks(self):
         try:
             # Create and add your startup docks here
-            self.create_dock("Projects Manager", self.ProjectsManagerWidget(self.cccore))
-            self.create_dock("Many Projects Manager", self.ManyProjectsManagerWidget(self.cccore))
+            self.create_dock("Projects Manager", self.ProjectManagerWidget(self.cccore, parent =self.main_window),parent=self.main_window)
+            self.create_dock("Many Projects Manager", self.ManyProjectsManagerWidget(self.cccore),parent=self.main_window)
             # ... other startup docks
         except Exception as e:
             logging.error(f"Error creating startup docks: {e}")
@@ -323,7 +334,7 @@ class WidgetManager:
 
     def add_file_search_dock(self):
         if self.file_search_dock is None:
-            self.file_search_widget = FileSearchWidget(self.cccore.vault_manager)
+            self.file_search_widget = FileSearchWidget(self.cccore.vault_manager, parent=self.main_window)
             self.file_search_dock = self.add_dock_widget(self.file_search_widget, "File Search", Qt.DockWidgetArea.RightDockWidgetArea)
             self.file_search_widget.file_selected.connect(self.open_file_from_search)
         return self.file_search_dock
@@ -337,9 +348,9 @@ class WidgetManager:
         if 'many_projects_manager' not in self.widgets:
             self.widgets['many_projects_manager'] = ManyProjectsManagerWidget(cccore)
         return self.widgets['many_projects_manager']
-    def ProjectManagerWidget(self, cccore):
+    def ProjectManagerWidget(self, cccore, parent):
         if 'projects_manager' not in self.widgets:
-            self.widgets['projects_manager'] = ProjectManagerWidget(parent=self.main_window, cccore=self.cccore, window=self.main_window)
+            self.widgets['projects_manager'] = ProjectManagerWidget(parent=parent, cccore=cccore, window=self.main_window)
         return self.widgets['projects_manager']
 
     def VaultsManagerWidget(self, cccore):
@@ -363,7 +374,8 @@ class WidgetManager:
                 editor_manager=cccore.editor_manager,
                 model_manager=cccore.model_manager,
                 download_manager=cccore.download_manager,
-                settings_manager=cccore.settings_manager
+                settings_manager=cccore.settings_manager,
+                vault_manager=  cccore.vault_manager
             )
         return self._ai_chat_widget
 

@@ -56,7 +56,6 @@ class ThemeManagerWidget(QWidget):
   
        
         
-        
    
     def update_theme_list(self):
         self.theme_combo.clear()
@@ -155,6 +154,72 @@ class ThemeManager(QObject):
         self.load_config()
         self.load_custom_themes()
 
+    def apply_theme(self, theme_name):
+        logging.info(f"Applying theme: {theme_name}")
+        try:
+            theme_data = self.get_theme_data(theme_name)
+            if not theme_data:
+                logging.error(f"Invalid theme data for {theme_name}")
+                return
+
+            # Apply Qt Material stylesheet if it's a built-in theme
+            if theme_data.get('type') == 'built-in':
+                apply_stylesheet(QApplication.instance(), theme=theme_name)
+            else:
+                # Apply custom stylesheet
+                stylesheet = self.generate_stylesheet(theme_data)
+                QApplication.instance().setStyleSheet(stylesheet)
+
+            # Apply theme to all CodeEditor instances
+            editors = self.get_all_code_editors()
+            if editors:
+                for editor in editors:
+                    try:
+                        editor.apply_theme(theme_data)
+                    except Exception as e:
+                        logging.error(f"Error applying theme to editor: {e}")
+            else:
+                logging.warning("No editors found to apply theme")
+
+            self.current_theme = theme_name
+            self.save_config()
+            self.theme_changed.emit(theme_data)
+            logging.info("Theme applied successfully")
+        except Exception as e:
+            logging.error(f"Error applying theme: {str(e)}")
+            logging.error(traceback.format_exc())
+
+    def get_theme_data(self, theme_name):
+        if theme_name in self.custom_themes:
+            return self.custom_themes[theme_name]
+        elif theme_name in list_themes():
+            return {
+                "name": theme_name,
+                "type": "built-in",
+                "colors": {
+                    "backgroundColor": "#FFFFFF",
+                    "textColor": "#000000",
+                    "currentLineColor": "#E8F2FF",
+                    "currentLineAlpha": 40,
+                },
+            }
+        return None
+
+    def generate_stylesheet(self, theme_data):
+        # Generate QSS based on theme_data
+        # This is a basic example, expand as needed
+        colors = theme_data.get('colors', {})
+        return f"""
+            QWidget {{
+                background-color: {colors.get('backgroundColor', '#FFFFFF')};
+                color: {colors.get('textColor', '#000000')};
+            }}
+            /* Add more QSS rules based on your theme data */
+        """
+
+    def get_all_code_editors(self):
+        return self.cccore.editor_manager.get_all_editors()
+
     def load_config(self):
         try:
             with open(self.config_file, 'r') as f:
@@ -191,25 +256,6 @@ class ThemeManager(QObject):
             json.dump(theme_data, f, indent=2)
         self.theme_changed.emit({'style': name})  # Emit the theme changed signal
 
-    def apply_theme(self, theme_name):
-        logging.info(f"Applying theme: {theme_name}")
-        try:
-            if theme_name in self.custom_themes:
-                theme = self.custom_themes[theme_name]
-                self.apply_custom_theme(theme)
-            elif theme_name in list_themes():
-                apply_stylesheet(QApplication.instance(), theme=theme_name)
-            else:
-                logging.error(f"Theme {theme_name} not found. Using default theme.")
-                apply_stylesheet(QApplication.instance(), theme='dark_amber.xml')
-            
-            self.current_theme = theme_name
-            self.save_config()
-            self.theme_changed.emit({'style': theme_name})
-            logging.info("Theme applied successfully")
-        except Exception as e:
-            logging.error(f"Error applying theme: {e}")
-
     def apply_custom_theme(self, theme):
         app = QApplication.instance()
         stylesheet = self.generate_stylesheet(theme)
@@ -227,11 +273,6 @@ class ThemeManager(QObject):
             highlighter = editor.syntax_highlighter
             if highlighter:
                 highlighter.set_colors(highlight_colors)
-
-    def get_all_code_editors(self):
-        # This method should return all active code editor instances
-        # The implementation will depend on how you manage your editor instances
-        pass
 
     def get_available_themes(self):
         return list(self.custom_themes.keys()) + list_themes()
@@ -278,7 +319,7 @@ class ThemeManager(QObject):
         """)
 
         # Apply line highlight
-        highlight_color = QColor(self.current_theme.get("lineHighlightColor", "#8B8000"))  # Dark yellow
+        highlight_color = QColor(self.current_theme.get("lineHighlightColor", "#111111"))  # Dark yellow
         highlight_color.setAlpha(40)  # Adjust alpha for transparency
         editor.setCaretLineVisible(True)
         editor.setCaretLineBackgroundColor(QColor(0, 0, 0, .5))
@@ -290,6 +331,12 @@ class ThemeManager(QObject):
 
         # Ensure the changes are applied
         editor.update()
+    def get_current_theme_color(self, color_key, default_color):
+        # Ensure current_theme is a dictionary containing theme data
+        theme_data = self.get_theme_data(self.current_theme)
+        if theme_data and 'colors' in theme_data:
+            return theme_data['colors'].get(color_key, default_color)
+        return default_color
 
     def generate_stylesheet(self, theme):
         colors = theme['colors']
@@ -636,37 +683,6 @@ class ThemeManager(QObject):
     def get_all_themes(self):
         # Return a list of all theme names
         return list(self.get_available_themes())
-
-    def get_theme_data(self, theme_name):
-        # Check if it's a custom theme
-        if theme_name in self.custom_themes:
-            return self.custom_themes[theme_name]
-        
-        # Check if it's a built-in theme
-        if theme_name in list_themes():
-            # For built-in themes, we need to create a basic theme data structure
-            # This is because built-in themes don't have the same detailed structure as custom themes
-            return {
-                "name": theme_name,
-                "type": "built-in",
-                "colors": {
-                    "backgroundColor": "#FFFFFF",  # Default values, adjust as needed
-                    "textColor": "#000000",
-                    # Add more color keys as needed
-                },
-                "fonts": {
-                    "main": "Arial",
-                    "size": "12",
-                    # Add more font keys as needed
-                },
-                "dimensions": {
-                    # Add dimension keys as needed
-                },
-                # Add more theme data as needed
-            }
-        
-        # If the theme is not found
-        return None
 
     def update_custom_theme(self, theme_name, theme_data):
         self.custom_themes[theme_name] = theme_data

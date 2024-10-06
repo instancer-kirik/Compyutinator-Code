@@ -628,16 +628,27 @@ class MainApplication(QMainWindow):
 
         # Add a toggle action to the View menu
         self.cccore.menu_manager.view_menu.addAction(many_projects_dock.toggleViewAction())
+        self.cccore.widget_manager.dock_widgets["Many Projects Manager"] = many_projects_dock
 
-    def on_project_selected(self, item):
-        project_name = item.text()
-        vault_name = self.many_projects_manager.vault_selector.currentText()
-        self.cccore.project_manager.switch_project(vault_name, project_name)
-        self.update_ui_for_project(project_name)
+    def open_project_in_new_window(self, vault_name, project_name):
+        # Create a new AuraText window
+        new_window = self.cccore.create_auratext_window()
+        
+        # Set the vault for the new window
+        vault = self.cccore.vault_manager.get_vault(vault_name)
+        if vault:
+            new_window.set_vault(vault)
+        
+        # Switch to the selected project in the new window
+        new_window.cccore.project_manager.switch_project(vault_name, project_name)
+        
+        # Update the UI of the new window
+        new_window.update_ui_for_project(project_name)
+        
+        # Show the new window
+        new_window.show()
 
-    def update_ui_for_project(self, project_name):
-        # Update any UI elements that need to change when a project is selected
-        self.setWindowTitle(f"AuraTextIDE - {project_name}")
+    # ... (other methods remain the same)
         # Update other UI elements as needed
 def post_show_init(self):#
         logging.info("Post show init")

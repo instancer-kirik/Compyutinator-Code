@@ -25,7 +25,7 @@ class ActionPadWidget(QWidget):
 
         self.flash_label = QLabel("", self)
         self.flash_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.flash_label.setStyleSheet("color: yellow; background-color: black;")
+        self.flash_label.setStyleSheet("color: violet; background-color: black;")
         self.layout.addWidget(self.flash_label)
         self.flash_label.hide()  # Hide it initially
 

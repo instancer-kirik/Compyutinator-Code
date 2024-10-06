@@ -1,11 +1,13 @@
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QListWidget, QLabel
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import QMessageBox
+import logging
 
 class FileSearchWidget(QWidget):
     file_selected = pyqtSignal(str)
 
-    def __init__(self, vault_manager, parent=None):
+    def __init__(self, vault_manager=None, parent=None):
         super().__init__(parent)
         self.vault_manager = vault_manager
         self.setup_ui()
@@ -37,7 +39,22 @@ class FileSearchWidget(QWidget):
             return
 
         self.results_list.clear()
-        vault_path = self.vault_manager.get_current_vault_path()
+
+        if self.vault_manager is None:
+            logging.error("Vault manager is not initialized")
+            QMessageBox.warning(self, "Error", "Vault manager is not initialized. Unable to perform search.")
+            return
+
+        try:
+            vault_path = self.vault_manager.get_current_vault_path()
+            if not vault_path:
+                logging.error("No current vault path")
+                QMessageBox.warning(self, "Error", "No current vault selected. Please select a vault first.")
+                return
+        except AttributeError as e:
+            logging.error(f"Error getting current vault path: {e}")
+            QMessageBox.warning(self, "Error", "Unable to access vault manager. Please check the application setup.")
+            return
 
         # First, search for filename matches
         filename_matches = []

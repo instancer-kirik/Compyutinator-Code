@@ -121,7 +121,7 @@ class AIChatWidget(QWidget):
     file_clicked = pyqtSignal(str)
     merge_requested = pyqtSignal(str, str)
 
-    def __init__(self, parent=None, context_manager=None, editor_manager=None, model_manager=None, download_manager=None, settings_manager=None):
+    def __init__(self, parent=None, context_manager=None, editor_manager=None, model_manager=None, download_manager=None, settings_manager=None, vault_manager=None):
         super().__init__(parent)
         logging.info("Initializing AIChatWidget")
         self.code_block_pattern = re.compile(r'```(\w+)?:?(.*?)\n(.*?)\n```', re.DOTALL)
@@ -140,7 +140,7 @@ class AIChatWidget(QWidget):
             self.editor_manager = editor_manager    
             self.settings_manager = settings_manager
             self.context_manager = context_manager if context_manager else ContextManager()
-            
+            self.vault_manager = vault_manager
             
             logging.info("Creating NoveltyDetector")
             self.novelty_detector = NoveltyDetector()
@@ -224,11 +224,14 @@ class AIChatWidget(QWidget):
         layout.addWidget(self.chat_reference_widget)
         
         # Chat display
-        self.chat_display = QTextBrowser()
-        self.chat_display.setReadOnly(True)
-        self.chat_display.setOpenLinks(False)
-        self.chat_display.anchorClicked.connect(self.handle_link_click)
-        layout.addWidget(self.chat_display)
+        self.chat_scroll_area = QScrollArea(self)
+        self.chat_content_widget = QWidget()
+        self.chat_layout = QVBoxLayout(self.chat_content_widget)
+        self.chat_scroll_area.setWidget(self.chat_content_widget)
+        self.chat_scroll_area.setWidgetResizable(True)
+
+        # Add the chat_scroll_area to your main layout
+        self.layout().addWidget(self.chat_scroll_area)
         
         # User input
         self.user_input = QTextEdit()
@@ -388,51 +391,75 @@ class AIChatWidget(QWidget):
         self.status_label.setText(f"Model path changed to: {new_path}")
         self.model_manager.update_models_list()  # Refresh the list of available models
 
+    def on_context_added(self, context_type, context_content):
+        logging.info(f"Received context: {context_type}")
+        if context_type.startswith("[File]") or context_type.startswith("[Recent]") or context_type.startswith("[Open]"):
+            file_name = context_type.split("] ", 1)[1]
+            self.add_file_reference(file_name, context_content)
+        elif context_type.startswith("[Context]"):
+            context_name = context_type.split("] ", 1)[1]
+            self.add_context_reference(context_name, context_content)
+        elif context_type.startswith("[Text]"):
+            self.add_text_reference(context_content)
+        else:
+            logging.warning(f"Unknown context type: {context_type}")
+
+    def add_file_reference(self, file_name, content):
+        self.context_manager.add_context(content, f"File: {file_name}")
+        self.chat_reference_widget.add_reference(file_name, content)
+        logging.info(f"Added file reference: {file_name}")
+
+    def add_context_reference(self, context_name, content):
+        self.context_manager.add_context(content, f"Context: {context_name}")
+        self.chat_reference_widget.add_reference(context_name, content)
+        logging.warning(f"Added context reference: {context_name}")
+
+    def add_text_reference(self, content):
+        self.context_manager.add_context(content, "Custom Text")
+        self.chat_reference_widget.add_reference("Custom Text", content)
+        logging.info("Added custom text reference")
+
     def send_message(self):
-        user_input = self.user_input.toPlainText()
-        if not user_input.strip():
-            return  # Don't send empty messages
-
-        self.chat_display.append(f"You: {user_input}")
-        self.user_input.clear()
-
-        if not self.model_manager.model:
-            self.chat_display.append("AI: Model not loaded. Please load a model first.")
+        user_input = self.user_input.toPlainText().strip()
+        if not user_input:
             return
 
-        # Get relevant context
-        relevant_context = self.context_manager.get_most_relevant_context(user_input)
-        
-        # Prepare the full prompt with context
+        self.display_message(user_input, is_user=True)
+        self.user_input.clear()
+
+        context = self.context_manager.get_context()
+        logging.info(f"Context being sent to model: {context[:100]}...")  # Log first 100 chars of context
+
         messages = [
-            {"role": "system", "content": f"Context:\n{relevant_context}"},
-            {"role": "user", "content": user_input}
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": f"Context:\n{context}\n\nUser Query: {user_input}"}
         ]
 
-        self.send_button.setEnabled(False)
-        self.chat_display.append("AI is thinking...")
-        self.model_manager.generate(messages)
+        try:
+            self.model_manager.generate(messages)
+        except Exception as e:
+            error_msg = f"Error during generation: {str(e)}"
+            logging.error(error_msg)
+            self.display_message(f"An error occurred: {error_msg}", is_user=False)
 
     def on_generation_finished(self, response):
-        self.chat_display.append(f"AI: {response}")
+        self.display_message(response, is_user=False)
+        # #self.chat_display.append(f"AI: {response}")
         
-        # Detect novel parts in the response
-        novel_parts = self.novelty_detector.get_novel_parts(response)
+        # # Detect novel parts in the response
+        # novel_parts = self.novelty_detector.get_novel_parts(response)
         
-        # Add novel parts to context
-        for part in novel_parts:
-            self.context_manager.add_context(part, "AI Response")
+        # # Add novel parts to context
+        # for part in novel_parts:
+        #     self.context_manager.add_context(part, "AI Response")
 
-        self.send_button.setEnabled(True)
-        # Scroll to the bottom of the chat display
-        self.chat_display.verticalScrollBar().setValue(
-            self.chat_display.verticalScrollBar().maximum()
-        )
-
+        # self.send_button.setEnabled(True)
+        # # Scroll to the bottom of the chat display
+        # self.chat_display.verticalScrollBar().setValue(
+        #     self.chat_display.verticalScrollBar().maximum()
+        # )
     def on_generation_error(self, error):
-        self.chat_display.append(f"Error: {error}")
-        self.send_button.setEnabled(True)
-        logging.error(f"Generation error: {error}")
+        QMessageBox.critical(self, "Generation Error", f"An error occurred during generation: {error}")
 
     def display_response(self, response):
         formatted_response = self.format_response_with_file_references(response)
@@ -497,46 +524,36 @@ class AIChatWidget(QWidget):
         else:
             logging.warning("Editor manager is not available. Open files won't be included in the context picker.")
 
-        dialog = ContextPickerDialog(
-            self,
-            recent_files=self.recent_files,
-            open_files=open_files,
-            existing_contexts=[desc for desc, _ in self.context_manager.contexts],
-            editor_manager=self.editor_manager
-        )
-        if dialog.exec():
+        dialog = ContextPickerDialog(self, self.recent_files, open_files, self.context_manager.get_contexts(), self.editor_manager, self.vault_manager)
+        dialog.context_added.connect(self.on_context_added)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             selected_items = dialog.get_selected_items()
             for item in selected_items:
-                item_type, item_content = item.split("] ", 1)
-                item_type = item_type[1:]  # Remove the leading '['
-                
-                if item_type in ["Open", "Recent", "File"]:
+                if isinstance(item, tuple):
+                    item_type, item_content = item
+                elif isinstance(item, str):
+                    try:
+                        item_type, item_content = item.split("] ", 1)
+                        item_type = item_type.strip("[")
+                    except ValueError:
+                        # If splitting fails, treat the whole item as content
+                        item_type = "Unknown"
+                        item_content = item
+                else:
+                    logging.warning(f"Unexpected item type in add_references: {type(item)}")
+                    continue
+
+                if item_type == "File":
                     self.add_file_reference(item_content)
                 elif item_type == "Text":
-                    self.add_text_reference()
+                    self.context_manager.add_context(item_content, "Custom Text")
+                    self.chat_reference_widget.add_reference("Custom Text", item_content)
                 elif item_type == "Import":
                     self.add_import_reference(item_content)
-                elif item_type == "Context":
+                elif item_type in ["Open Files", "Recent Files", "Existing Contexts"]:
                     self.add_existing_context(item_content)
-
-    def add_file_reference(self, file_path):
-        if self.context_manager.is_file_too_large(file_path):
-            QMessageBox.warning(self, "File Too Large", f"The file {file_path} is too large to add as reference.")
-            return
-        
-        try:
-            with open(file_path, 'r', encoding='utf-8') as file:
-                content = file.read()
-            self.context_manager.add_context(content, f"File: {file_path}")
-            self.chat_reference_widget.add_reference(os.path.basename(file_path), content)
-        except Exception as e:
-            SelectableMessageBox.warning(self, "Error", f"Failed to add file reference: {str(e)}").exec()
-
-    def add_text_reference(self):
-        text, ok = QInputDialog.getMultiLineText(self, "Add Custom Text", "Enter your text:")
-        if ok and text:
-            self.context_manager.add_context(text, "Custom Text")
-            self.chat_reference_widget.add_reference("Custom Text", text)
+                else:
+                    logging.warning(f"Unknown item type in add_references: {item_type}")
 
     def add_import_reference(self, module_name):
         try:
@@ -612,9 +629,16 @@ class AIChatWidget(QWidget):
         parts = self.process_message(message)
         for part_type, *content in parts:
             if part_type == 'text':
-                self.chat_display.append(content[0])
+                text_label = QLabel(content[0])
+                text_label.setWordWrap(True)
+                self.chat_layout.addWidget(text_label)
             elif part_type == 'code':
                 self.add_code_block_widget(*content)
+    
+        # Scroll to the bottom to show the latest message
+        self.chat_scroll_area.verticalScrollBar().setValue(
+            self.chat_scroll_area.verticalScrollBar().maximum()
+        )
 
     def process_message(self, message):
         parts = []
@@ -647,4 +671,4 @@ class AIChatWidget(QWidget):
         layout.addWidget(code_display)
         layout.addWidget(apply_button)
         
-        self.chat_display.addWidget(code_widget)
+        self.chat_layout.addWidget(code_widget)

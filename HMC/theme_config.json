@@ -1,5 +1,5 @@
 {
-  "current_theme": "dark_amber.xml",
+  "current_theme": "dark_red.xml",
   "custom_themes": {
     "test": {
       "style": "test"
@@ -853,7 +853,8 @@
       "editor": {
         "lineHighlightColor": "#cbe5c9",
         "sidebarColor": "#b6aeca",
-        "sidebarTextColor": "#a58ec4"
+        "sidebarTextColor": "#a58ec4",
+        "currentLineColor": "#cbe5c9"
       },
       "QWidget": {
         "Background Color": "#7b8871",

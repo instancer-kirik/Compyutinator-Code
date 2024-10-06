@@ -29,7 +29,8 @@
   "editor": {
     "lineHighlightColor": "#cbe5c9",
     "sidebarColor": "#b6aeca",
-    "sidebarTextColor": "#a58ec4"
+    "sidebarTextColor": "#a58ec4",
+    "currentLineColor": "#cbe5c9"
   },
   "QWidget": {
     "Background Color": "#7b8871",

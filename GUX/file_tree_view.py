@@ -187,3 +187,13 @@ class FileTreeView(QTreeView):
             index = self.model.index(path)
             self.tree_view.setRootIndex(index)
             self.breadcrumb.set_path(path)
+
+    def get_selected_files(self):
+        selected_indexes = self.selectedIndexes()
+        selected_files = []
+        for index in selected_indexes:
+            if index.column() == 0:  # Assuming the file path is in the first column
+                file_path = self.model().filePath(index)
+                if os.path.isfile(file_path):
+                    selected_files.append(file_path)
+        return selected_files

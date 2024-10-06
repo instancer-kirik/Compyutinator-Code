@@ -7,6 +7,8 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QPush
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QListWidget, QListWidgetItem
 import sys
+from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtWidgets import QDialogButtonBox
 class ProjectConfigDialog(QDialog):
     def __init__(self, project_name, project_data, parent=None):
         super().__init__(parent)
@@ -16,31 +18,61 @@ class ProjectConfigDialog(QDialog):
         self.setup_ui()
 
     def setup_ui(self):
-        layout = QFormLayout(self)
-        
-        self.path_edit = QLineEdit(self.project_data.get('path', ''))
-        layout.addRow("Project Path:", self.path_edit)
+        layout = QVBoxLayout(self)
 
+        # Project Name and Path (read-only)
+        form_layout = QFormLayout()
+        form_layout.addRow("Project Name:", QLabel(self.project_name))
+        form_layout.addRow("Project Path:", QLabel(self.project_data.get('path', 'N/A')))
+        layout.addLayout(form_layout)
+
+        # Build Command
         self.build_command_edit = QLineEdit(self.project_data.get('build_command', ''))
-        layout.addRow("Build Command:", self.build_command_edit)
+        form_layout.addRow("Build Command:", self.build_command_edit)
 
+        # Run Command
         self.run_command_edit = QLineEdit(self.project_data.get('run_command', ''))
-        layout.addRow("Run Command:", self.run_command_edit)
+        form_layout.addRow("Run Command:", self.run_command_edit)
 
-        buttons = QHBoxLayout()
-        save_button = QPushButton("Save")
-        save_button.clicked.connect(self.accept)
-        cancel_button = QPushButton("Cancel")
-        cancel_button.clicked.connect(self.reject)
-        buttons.addWidget(save_button)
-        buttons.addWidget(cancel_button)
-        layout.addRow(buttons)
+        # Registered Scripts
+        self.scripts_list = QListWidget()
+        self.scripts_list.addItems(self.project_data.get('registered_scripts', []))
+        form_layout.addRow("Registered Scripts:", self.scripts_list)
 
-    def get_config(self):
+        # Add and Remove Script buttons
+        script_buttons_layout = QHBoxLayout()
+        self.add_script_button = QPushButton("Add Script")
+        self.remove_script_button = QPushButton("Remove Script")
+        script_buttons_layout.addWidget(self.add_script_button)
+        script_buttons_layout.addWidget(self.remove_script_button)
+        layout.addLayout(script_buttons_layout)
+
+        self.add_script_button.clicked.connect(self.add_script)
+        self.remove_script_button.clicked.connect(self.remove_script)
+
+        # Buttons
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def add_script(self):
+        script, ok = QInputDialog.getText(self, "Add Script", "Enter script name:")
+        if ok and script:
+            self.scripts_list.addItem(script)
+
+    def remove_script(self):
+        current_item = self.scripts_list.currentItem()
+        if current_item:
+            self.scripts_list.takeItem(self.scripts_list.row(current_item))
+
+    def get_updated_data(self):
         return {
-            'path': self.path_edit.text(),
+            'name': self.project_name,
+            'path': self.project_data.get('path'),
             'build_command': self.build_command_edit.text(),
-            'run_command': self.run_command_edit.text()
+            'run_command': self.run_command_edit.text(),
+            'registered_scripts': [self.scripts_list.item(i).text() for i in range(self.scripts_list.count())]
         }
 
 class Project:
@@ -95,20 +127,52 @@ class ProjectManager:
         self.env_manager = EnvironmentManager(self.settings_manager.get_value("environments_path", "./environments"))
         self.vaults = {}  # New attribute to store vaults
         self.project_selector = QComboBox()
-        self.load_projects()
+       # self.load_projects()
         self.update_project_selector()
-    def load_projects(self):
-        projects_data = self.settings_manager.get_value("projects", {})
-        logging.debug(f"Projects data from settings: {projects_data}")
-        if isinstance(projects_data, dict):
-            self.projects = projects_data
-        else:
-            logging.error(f"Invalid projects data: {projects_data}")
-            self.projects = {}
-        self.current_project = self.settings_manager.get_value("current_project")
-        self.recent_projects = self.settings_manager.get_value("recent_projects", [])
         logging.warning(f"Loaded projects: {self.projects}")
+        self.project_config_filename = "project_config.json"
 
+    def create_project(self, project_name, project_path):
+        full_path = os.path.join(project_path, project_name)
+        os.makedirs(full_path, exist_ok=True)
+        config_path = os.path.join(full_path, self.project_config_filename)
+        
+        config = {
+            "name": project_name,
+            "path": full_path,
+            "files": []
+        }
+        
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=4)
+        
+        return full_path
+
+    def load_project(self, project_path):
+        config_path = os.path.join(project_path, self.project_config_filename)
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(f"Project configuration file not found: {config_path}")
+        
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+        
+        self.current_project = config
+        return config
+
+    def get_project_files(self):
+        if not self.current_project:
+            return []
+        
+        project_path = self.current_project['path']
+        config_file = os.path.join(project_path, self.project_config_filename)
+        
+        files = [config_file]  # Always include the config file
+        for root, dirs, filenames in os.walk(project_path):
+            for filename in filenames:
+                if filename != self.project_config_filename:
+                    files.append(os.path.join(root, filename))
+        
+        return files
     def save_projects(self):
         if isinstance(self.projects, dict):
             self.settings_manager.set_value("projects", self.projects)
@@ -136,11 +200,13 @@ class ProjectManager:
         if vault:
             return vault.get_project_names()
         return []
+
     def get_many_projects(self):
         many_projects = []
         for vault in self.cccore.vault_manager.vaults.values():
             many_projects.extend(vault.projects.keys())
         return many_projects
+
     def get_project_path(self, vault_name, project_name):
         vault = self.cccore.vault_manager.get_vault(vault_name)
         if vault:
@@ -166,6 +232,7 @@ class ProjectManager:
             self.save_projects()
             return True
         return False
+
     def close_project(self):
         current_project = self.project_selector.currentText()
         if current_project:
@@ -227,6 +294,8 @@ class ProjectManager:
         self.save_projects()
 
     def get_recent_projects(self):
+        self.recent_projects = self.settings_manager.get_value("recent_projects", [])
+   
         return self.recent_projects
 
     def switch_environment(self, project_name, env_name):
@@ -259,6 +328,15 @@ class ProjectManager:
         else:
             logging.error(f"Failed to set current project to: {project_name}")
             return False, "Failed to set current project"
+
+    def update_project_config(self, project_name, updated_data):
+        project_path = self.get_project_path(project_name)
+        if project_path:
+            config_file = os.path.join(project_path, 'project_config.json')
+            with open(config_file, 'w') as f:
+                json.dump(updated_data, f, indent=4)
+        else:
+            logging.error(f"Project not found: {project_name}")
 
     def build_project(self, name):
         if name in self.projects:
@@ -351,13 +429,21 @@ class ProjectManager:
                     self.update_project_selector()
                 else:
                     QMessageBox.warning(self, "Error", "Failed to rename project. New name may already exist.")
+
     def open_project(self):
-        if self.cccore.widget_manager.projects_manager_widget:
-            selected_project = self.cccore.widget_manager.projects_manager_widget.project_selector.currentText()
-            if selected_project:
-                self.switch_project(selected_project)
-        else:
-            QMessageBox.warning(self, "Error", "No project selector, open in main window.")
+        dialog = QDialog(self.cccore.main_window)
+        dialog.setWindowTitle("Open Project")
+        layout = QVBoxLayout(dialog)
+
+        many_projects_widget = self.cccore.widget_manager.ManyProjectsManagerWidget(self.cccore)
+        layout.addWidget(many_projects_widget)
+
+        many_projects_widget.project_selected.connect(dialog.accept)
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            vault_name = many_projects_widget.vault_selector.currentText()
+            project_name = many_projects_widget.project_list.currentItem().text()
+            self.switch_project(vault_name, project_name)
     
     def show_project_settings(self):
         dialog = QDialog(self)
@@ -367,6 +453,7 @@ class ProjectManager:
         # Add project path label
         path_label = QLabel("Project Path:")
         layout.addWidget(path_label)
+
     def update_project_selector(self):
         self.project_selector.clear()
         self.project_selector.addItems(self.get_projects(self.cccore.vault_manager.get_current_vault()))
@@ -379,13 +466,37 @@ class ProjectManager:
     def is_file_in_project_context(self, file_path):
         current_project = self.get_current_project()
         if not current_project:
-            return False
-        return file_path.startswith(current_project.path)
+            return True  # Allow opening files if no project is active
+        project_path = os.path.dirname(current_project.path)
+        return file_path.startswith(project_path) or "Daily Notes" in file_path
 
     def handle_file_not_in_context(self, file_path):
         # Implement logic to handle files not in the current project context
         # For example, you could add the file to the current project or create a new project
         pass
+
+    def switch_project(self, vault_name, project_name):
+        # Implement the logic to switch to the selected project
+        # This might involve updating the current project in the cccore,
+        # updating the UI, loading project files, etc.
+        self.cccore.vault_manager.set_current_vault(vault_name)
+        self.cccore.set_current_project(project_name)
+        QMessageBox.information(self.cccore.main_window, "Project Opened", f"Opened project: {project_name} in vault: {vault_name}")
+
+    def get_project_data(self, project_name):
+        project_path = self.get_project_path(project_name)
+        if project_path:
+            config_file = os.path.join(project_path, 'project_config.json')
+            if os.path.exists(config_file):
+                with open(config_file, 'r') as f:
+                    return json.load(f)
+        return {
+            'name': project_name,
+            'path': project_path,
+            'build_command': '',
+            'run_command': '',
+            'registered_scripts': []
+        }  # Return an empty dict if no data is found
     
         # Add project path input field
         # current_project = self.get_current_project()
@@ -450,12 +561,12 @@ class ProjectManagerWidget(QWidget):
         # Set the layout for the widget
         self.setLayout(layout)
 
-    def update_project_list(self):
-        self.project_selector.clear()
-        current_vault = self.window.get_current_vault()
-        if current_vault:
-            projects = self.cccore.vault_manager.get_projects(current_vault.name)
-            self.project_selector.addItems(projects)
+    # def update_project_list(self):
+    #     self.project_selector.clear()
+    #     current_vault = self.window.get_current_vault()
+    #     if current_vault:
+    #         projects = self.cccore.vault_manager.get_projects(current_vault.name)
+    #         self.project_selector.addItems(projects)
         
     def add_project(self):
         vault_name = self.cccore.vault_manager.get_current_vault().name
@@ -487,12 +598,12 @@ class ProjectManagerWidget(QWidget):
             return
 
         if self.cccore.vault_manager.add_project(vault_name=vault_name, project_name=project_name, project_path=path, language=language, version=version):
-            self.update_project_list()
+            self.cccore.widget_manager.ManyProjectsManagerWidget.update_project_list()
             QMessageBox.information(self, "Success", f"Project '{project_name}' added successfully.")
         else:
             QMessageBox.warning(self, "Error", f"Failed to add project '{project_name}'.")
     def remove_project(self):
-        current_project = self.project_selector.currentText()
+        current_project = self.cccore.project_manager.get_current_project()
         if current_project:
             reply = QMessageBox.question(self, "Remove Project", f"Are you sure you want to remove the project '{current_project}'?",
                                          QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
@@ -504,7 +615,7 @@ class ProjectManagerWidget(QWidget):
                     QMessageBox.warning(self, "Error", f"Failed to remove project '{current_project}'.")
 
     def rename_project(self):
-        old_name = self.project_selector.currentText()
+        old_name = self.cccore.project_manager.get_current_project()
         if old_name:
             new_name, ok = QInputDialog.getText(self, "Rename Project", "Enter new project name:", text=old_name)
             if ok and new_name and new_name != old_name:
@@ -515,7 +626,7 @@ class ProjectManagerWidget(QWidget):
                     QMessageBox.warning(self, "Error", "Failed to rename project. New name may already exist.")
 
     def configure_project(self):
-        current_project = self.project_selector.currentText()
+        current_project = self.cccore.project_manager.get_current_project()
         if current_project:
             project_data = self.cccore.project_manager.get_project_data(current_project)
             dialog = ProjectConfigDialog(current_project, project_data, self)
@@ -525,7 +636,7 @@ class ProjectManagerWidget(QWidget):
                 QMessageBox.information(self, "Success", f"Project '{current_project}' configuration updated.")
 
     def build_project(self):
-        current_project = self.project_selector.currentText()
+        current_project = self.cccore.project_manager.get_current_project()
         if current_project:
             success, message = self.cccore.project_manager.build_project(current_project)
             if success:
@@ -534,7 +645,7 @@ class ProjectManagerWidget(QWidget):
                 QMessageBox.warning(self, "Build Error", message)
 
     def run_project(self):
-        current_project = self.project_selector.currentText()
+        current_project = self.cccore.project_manager.get_current_project()
         if current_project:
             success, message = self.cccore.project_manager.run_project(current_project)
             if success:
@@ -557,6 +668,8 @@ class ProjectManagerWidget(QWidget):
         self.update_timer.stop()
         super().closeEvent(event)
 class ManyProjectsManagerWidget(QWidget):
+    project_selected = pyqtSignal(str, str)  # Signal to emit (vault_name, project_name)
+
     def __init__(self, cccore):
         super().__init__()
         self.cccore = cccore
@@ -578,6 +691,9 @@ class ManyProjectsManagerWidget(QWidget):
 
         # Buttons
         button_layout = QHBoxLayout()
+        self.open_button = QPushButton("Open")
+        self.open_button.clicked.connect(self.open_selected_project)
+        button_layout.addWidget(self.open_button)
         self.add_button = QPushButton("Add Project")
         self.add_button.clicked.connect(self.add_project)
         self.remove_button = QPushButton("Remove Project")
@@ -602,6 +718,15 @@ class ManyProjectsManagerWidget(QWidget):
         self.project_list.clear()
         projects = self.cccore.vault_manager.get_projects(vault_name)
         self.project_list.addItems(projects)
+
+    def open_selected_project(self):
+        selected_project = self.project_list.currentItem()
+        if selected_project:
+            project_name = selected_project.text()
+            vault_name = self.vault_selector.currentText()
+            self.project_selected.emit(vault_name, project_name)
+        else:
+            QMessageBox.warning(self, "No Project Selected", "Please select a project to open.")
 
     def add_project(self):
         # Implementation similar to ProjectManagerWidget.add_project()
