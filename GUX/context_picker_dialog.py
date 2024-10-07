@@ -115,14 +115,17 @@ class ContextPickerDialog(QDialog):
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self.tab_widget)
         splitter.addWidget(self.preview_area)
-        splitter.setSizes([600, 600])  # Adjust these values as needed
+        splitter.setSizes([600, 600])  # Adjust these values to make the name splitter larger
         layout.addWidget(splitter)
 
         # Buttons
         button_layout = QHBoxLayout()
-        add_button = QPushButton("Add Selected")
+        add_button = QPushButton("Search")
         add_button.clicked.connect(self.add_selected_contexts)
         button_layout.addWidget(add_button)
+        add_selected_button = QPushButton("Add Selected")
+        add_selected_button.clicked.connect(self.add_selected_contexts)
+        button_layout.addWidget(add_selected_button)
         layout.addLayout(button_layout)
 
         self.populate_tables()

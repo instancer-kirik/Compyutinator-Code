@@ -25,7 +25,7 @@ import subprocess
 from PyQt6.QtCore import QObject
 from HMC.ai_model_manager import ModelManager
 from PyQt6.QtCore import QSettings
-
+from GUX.widget_vault import MergeWidget
 from HMC.download_manager import DownloadManager
 from requests.exceptions import RequestException
 import requests
@@ -89,7 +89,20 @@ class ChatReferenceWidget(QWidget):
         reference = ReferenceItem(text, context, self)
         self.references.append(reference)
         self.scroll_layout.addWidget(reference)
+    def add_references(self):
+    # Ensure this logic only triggers the dialog when necessary
+        open_files = []
+        if hasattr(self, 'editor_manager') and self.editor_manager is not None:
+            open_files = self.editor_manager.get_open_files()
+        else:
+            logging.warning("Editor manager is not available. Open files won't be included in the context picker.")
 
+        dialog = ContextPickerDialog(self, self.recent_files, open_files, self.context_manager.get_contexts(), self.editor_manager, self.vault_manager)
+        dialog.context_added.connect(self.on_context_added)
+        dialog.exec()
+    def on_context_added(self, context_type, context_content):
+        logging.info(f"ChatReferenceWidget: Received context: {context_type}")
+        self.context_reference_widget.add_reference(context_type, context_content)
     def remove_reference(self, reference):
         self.references.remove(reference)
         logging.info(f"Removing reference: {reference}")
@@ -197,79 +210,107 @@ class AIChatWidget(QWidget):
 
     def initUI(self):
         logging.info("Initializing UI")
-        layout = QVBoxLayout()
-        self.setLayout(layout)
+        
+        # Main layout
+        main_layout = QVBoxLayout(self)
+        
+        # Splitter for resizable sections
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        main_layout.addWidget(splitter)
+        
+        # Top section for model controls and status
+        top_widget = QWidget()
+        top_layout = QVBoxLayout(top_widget)
+        splitter.addWidget(top_widget)
         
         self.status_label = QLabel("Model not loaded")
-        layout.addWidget(self.status_label)
+        top_layout.addWidget(self.status_label)
 
         self.load_button = QPushButton("Load Model")
-        layout.addWidget(self.load_button)
+        top_layout.addWidget(self.load_button)
 
         self.progress_display = QTextEdit()
         self.progress_display.setReadOnly(True)
-        self.progress_display.setFixedHeight(100)  # Adjust as needed
+        self.progress_display.setFixedHeight(100)
         self.progress_display.setVisible(False)
-        layout.addWidget(self.progress_display)
+        top_layout.addWidget(self.progress_display)
         
-        # Add References button and context display
-        ref_layout = QHBoxLayout()
-        self.add_ref_button = QPushButton("Add References")
-        self.add_ref_button.clicked.connect(self.add_references)
-        ref_layout.addWidget(self.add_ref_button)
-        ref_layout.addStretch()
-        layout.addLayout(ref_layout)
+        # Middle section for chat display
+        chat_widget = QWidget()
+        self.chat_layout = QVBoxLayout(chat_widget)  # Initialize chat_layout
+        splitter.addWidget(chat_widget)
         
-        self.chat_reference_widget = ChatReferenceWidget(self)
-        layout.addWidget(self.chat_reference_widget)
+        self.chat_display = QTextBrowser()
+        self.chat_layout.addWidget(self.chat_display)
         
-        # Chat display
-        self.chat_scroll_area = QScrollArea(self)
-        self.chat_content_widget = QWidget()
-        self.chat_layout = QVBoxLayout(self.chat_content_widget)
-        self.chat_scroll_area.setWidget(self.chat_content_widget)
-        self.chat_scroll_area.setWidgetResizable(True)
-
-        # Add the chat_scroll_area to your main layout
-        self.layout().addWidget(self.chat_scroll_area)
+        # Loading spinner
+        self.loading_spinner = QLabel()
+        self.loading_spinner.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.loading_spinner.setVisible(False)
+        self.chat_layout.addWidget(self.loading_spinner)
         
-        # User input
+        # Bottom section for user input
+        bottom_widget = QWidget()
+        bottom_layout = QHBoxLayout(bottom_widget)
+        splitter.addWidget(bottom_widget)
+        
         self.user_input = QTextEdit()
         self.user_input.setFixedHeight(100)
-        layout.addWidget(self.user_input)
+        bottom_layout.addWidget(self.user_input)
         
         # Send button
         self.send_button = QPushButton("Send")
         self.send_button.clicked.connect(self.send_message)
-        layout.addWidget(self.send_button)
+        bottom_layout.addWidget(self.send_button)
+
+        # Add Context Button
+        self.add_context_button = QPushButton("Add Context")
+        self.add_context_button.clicked.connect(self.add_references)
+        bottom_layout.addWidget(self.add_context_button)
         
-        # Collapsible Model Section
-        self.model_section = CollapsibleSection("Model Controls")
-        layout.addWidget(self.model_section)
-
-        # Change Model Directory button
-        change_dir_button = QPushButton("Change Model Directory")
-        change_dir_button.clicked.connect(self.change_download_path)
-        self.model_section.add_widget(change_dir_button)
-
-        # Download Model section
-        self.download_url_input = QLineEdit()
-        self.download_url_input.setPlaceholderText("Enter model URL or leave blank for default")
-        self.model_section.add_widget(QLabel("Download Model:"))
-        self.model_section.add_widget(self.download_url_input)
-
-        self.download_model_button = QPushButton("Download Model")
-        self.download_model_button.clicked.connect(self.download_model)
-        self.model_section.add_widget(self.download_model_button)
-
-        # Set default model URL hint
-        self.set_default_model_url_hint()
+        # Context Reference Display
+        self.context_reference_widget = ChatReferenceWidget()
+        main_layout.addWidget(self.context_reference_widget)
+        
+        # Set initial splitter sizes
+        splitter.setSizes([100, 300, 100])
+        
+        # Apply styles
+        self.apply_styles()
+        
         logging.info("UI initialized successfully")
 
-    def set_default_model_url_hint(self):
-        default_model_name = "Llama-3.1-SuperNova-Lite-8.0B-OF32.EF32.IQ6_K.gguf"
-        default_model_url = f"https://huggingface.co/Joseph717171/Llama-3.1-SuperNova-Lite-8.0B-OQ8_0.EF32.IQ4_K-Q8_0-GGUF/resolve/main/{default_model_name}"
-        self.download_url_input.setPlaceholderText(f"Default: {default_model_url}")
+    def apply_styles(self):
+        self.setStyleSheet("""
+            QWidget {
+                font-family: Arial, sans-serif;
+                font-size: 14px;
+            }
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 10px;
+                text-align: center;
+                text-decoration: none;
+                display: inline-block;
+                font-size: 14px;
+                margin: 4px 2px;
+                cursor: pointer;
+                border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QTextEdit, QTextBrowser {
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                padding: 8px;
+            }
+            QLabel {
+                font-weight: bold;
+            }
+        """)
 
     def update_status(self, message):
         self.status_label.setText(message)
@@ -436,28 +477,20 @@ class AIChatWidget(QWidget):
         ]
 
         try:
-            self.model_manager.generate(messages)
+            self.model_manager.generate(messages,tokens = 256,  self.on_partial_response)
         except Exception as e:
             error_msg = f"Error during generation: {str(e)}"
             logging.error(error_msg)
             self.display_message(f"An error occurred: {error_msg}", is_user=False)
+            self.hide_loading_spinner()
+
+    def on_partial_response(self, partial_response):
+        self.display_message(partial_response, is_user=False)
 
     def on_generation_finished(self, response):
         self.display_message(response, is_user=False)
-        # #self.chat_display.append(f"AI: {response}")
-        
-        # # Detect novel parts in the response
-        # novel_parts = self.novelty_detector.get_novel_parts(response)
-        
-        # # Add novel parts to context
-        # for part in novel_parts:
-        #     self.context_manager.add_context(part, "AI Response")
+        self.hide_loading_spinner()
 
-        # self.send_button.setEnabled(True)
-        # # Scroll to the bottom of the chat display
-        # self.chat_display.verticalScrollBar().setValue(
-        #     self.chat_display.verticalScrollBar().maximum()
-        # )
     def on_generation_error(self, error):
         QMessageBox.critical(self, "Generation Error", f"An error occurred during generation: {error}")
 
@@ -523,7 +556,7 @@ class AIChatWidget(QWidget):
             open_files = self.editor_manager.get_open_files()
         else:
             logging.warning("Editor manager is not available. Open files won't be included in the context picker.")
-
+#dialog.exec()
         dialog = ContextPickerDialog(self, self.recent_files, open_files, self.context_manager.get_contexts(), self.editor_manager, self.vault_manager)
         dialog.context_added.connect(self.on_context_added)
         if dialog.exec() == QDialog.DialogCode.Accepted:
@@ -636,8 +669,8 @@ class AIChatWidget(QWidget):
                 self.add_code_block_widget(*content)
     
         # Scroll to the bottom to show the latest message
-        self.chat_scroll_area.verticalScrollBar().setValue(
-            self.chat_scroll_area.verticalScrollBar().maximum()
+        self.chat_display.verticalScrollBar().setValue(
+            self.chat_display.verticalScrollBar().maximum()
         )
 
     def process_message(self, message):
