@@ -10,10 +10,10 @@ from PyQt6.QtCore import QThread, pyqtSignal, QObject
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QSplitter, QHBoxLayout, QVBoxLayout
 from PyQt6.QtGui import QMovie
-from HMC.context_manager import ContextManager, NoveltyDetector
+from HMC.context_manager import ContextManager
 from GUX.context_picker_dialog import ContextPickerDialog
 from GUX.diff_merger import DiffMergerWidget
-from HMC.LSP_manager import LSPManager
+
 from SPARE_PARTS.aModel import AModel
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QFrame
 from GUX.status_dialog import StatusDialog
@@ -169,9 +169,7 @@ class AIChatWidget(QWidget):
             self.context_manager = context_manager if context_manager else ContextManager()
             self.vault_manager = vault_manager
             
-            logging.info("Creating NoveltyDetector")
-            self.novelty_detector = NoveltyDetector()
-            
+           
             logging.info("Creating ChatReferenceWidget")
             self.chat_reference_widget = ChatReferenceWidget()
          
@@ -396,25 +394,24 @@ class AIChatWidget(QWidget):
         return relevant_contexts, message_tokens
     def send_message(self):
         user_input = self.input_field.toPlainText().strip()
-        if not user_input:
+        if not user_input or not self.model_manager.model:
             return
 
-        if not self.model_manager.model:
-            QMessageBox.warning(self, "Model Not Loaded", "Please load a model before sending a message.")
-            return
-        
         self.display_message(user_input, is_user=True)
         self.input_field.clear()
-
-        # Show loading spinner
         self.show_loading_spinner()
 
-        relevant_contexts, message_tokens = self.preprocess_user_message(user_input)
-        logging.info(f"Context being sent to model: {relevant_contexts[:100]}...")  # Log first 100 chars of context
-        self.model_manager.add_memory("User Query", user_input)
+        processed_message, processed_contexts = self.context_manager.preprocess_message(user_input)
+        
+        # Change this line to handle both 2 and 3-element tuples
+        context_string = "\n\n".join([f"{item[0]}:\n{item[1]}" for item in processed_contexts])
+        
+        logging.info(f"Processed context being sent to model: {context_string[:100]}...")
+        
+        self.model_manager.memory_manager.add_memory("User Query", user_input)
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": f"Context:\n{relevant_contexts}\n\nUser Query: {user_input}"}
+            {"role": "user", "content": f"Context:\n{context_string}\n\nUser Query: {user_input}"}
         ]
 
         try:
@@ -737,6 +734,7 @@ class AIChatWidget(QWidget):
         return parts
 
     def add_code_block_widget(self, language, file_path, code):
+        logging.debug(f"Adding code block widget - Language: {language}, File: {file_path}")
         code_widget = QWidget()
         layout = QVBoxLayout(code_widget)
         
@@ -754,25 +752,37 @@ class AIChatWidget(QWidget):
         self.chat_layout.addWidget(code_widget)
 
     def extract_code_suggestions(self, response):
-        # Use a regex pattern to extract code blocks with file paths and class names
         code_blocks = re.findall(r'```(.*?)```', response, re.DOTALL)
         for code in code_blocks:
-            # Parse the code block to extract language, file path, and code content
             language, file_path, code_content = self.parse_code_block(code)
+            logging.debug(f"Extracted code block - Language: {language}, File: {file_path}")
             self.add_code_block_widget(language, file_path, code_content)
     def parse_code_block(self, code_block):
         lines = code_block.strip().split('\n')
-        if lines:
-            first_line = lines[0].strip()
-            if ':' in first_line:
-                language, file_path = first_line.split(':', 1)
-                file_path = file_path.strip()
-            else:
-                language = first_line
-                file_path = "unknown_file.py"
-        else:
-            language = 'text'
-            file_path = "unknown_file.py"
-        
-        code_content = '\n'.join(lines[1:])
+        if not lines:
+            return 'text', "unknown_file.py", ""
+
+        file_path = "unknown_file.py"
+        language = 'text'
+        content_start = 0
+
+        # Look for file path in the first few lines
+        for i, line in enumerate(lines[:5]):
+            if line.startswith('File:'):
+                file_path = line.split(':', 1)[1].strip()
+                content_start = i + 1
+                break
+            elif ':' in line and not language:
+                language, potential_path = line.split(':', 1)
+                if '/' in potential_path or '\\' in potential_path:
+                    file_path = potential_path.strip()
+                    content_start = i + 1
+                    break
+
+        # If we haven't found a language yet, use the first line
+        if language == 'text' and lines[content_start].strip():
+            language = lines[content_start].strip()
+            content_start += 1
+
+        code_content = '\n'.join(lines[content_start:])
         return language, file_path, code_content

@@ -7,6 +7,9 @@ import hashlib
 from GUX.custom_tree_view import CustomTreeView
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog,
                              QLineEdit, QMessageBox, QApplication)
+from PyQt6.QtCore import Qt, QAbstractItemModel, QModelIndex
+from PyQt6.QtGui import QStandardItemModel, QStandardItem
+import inspect
 
 import requests
 from AuraText.auratext.scripts.def_path import resource
@@ -425,3 +428,225 @@ class PomodoroTimerWidget(QWidget):
         minutes = seconds // 60
         seconds = seconds % 60
         return f"{minutes:02}:{seconds:02}"
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QTableView, QTreeView, QSplitter, QPushButton, QComboBox, QLineEdit
+from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from NITTY_GRITTY.object_tree import ObjectTreeModel
+class DataTableModel(QAbstractTableModel):
+    def __init__(self, data):
+        super().__init__()
+        self._data = data
+
+    def rowCount(self, parent=QModelIndex()):
+        return len(self._data)
+
+    def columnCount(self, parent=QModelIndex()):
+        return len(self._data.columns)
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if role == Qt.ItemDataRole.DisplayRole:
+            return str(self._data.iloc[index.row(), index.column()])
+        return None
+
+    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
+        if role == Qt.ItemDataRole.DisplayRole:
+            if orientation == Qt.Orientation.Horizontal:
+                return str(self._data.columns[section])
+            if orientation == Qt.Orientation.Vertical:
+                return str(self._data.index[section])
+        return None
+
+class AdvancedDataViewerWidget(QWidget):
+    def __init__(self, cccore, parent=None):
+        super().__init__(parent)
+        self.cccore = cccore
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+
+        # Data loading controls
+        load_controls = QHBoxLayout()
+        self.file_combo = QComboBox()
+        self.file_combo.addItems(["Sample Data 1", "Sample Data 2", "Load CSV..."])
+        load_controls.addWidget(self.file_combo)
+        self.load_button = QPushButton("Load Data")
+        load_controls.addWidget(self.load_button)
+        layout.addLayout(load_controls)
+
+        # Main splitter
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+
+        # Left side: Tree view for data structure
+        self.tree_view = QTreeView()
+        splitter.addWidget(self.tree_view)
+
+        # Right side: Table view and plotting area
+        right_widget = QWidget()
+        right_layout = QVBoxLayout(right_widget)
+
+        # Table view
+        self.table_view = QTableView()
+        right_layout.addWidget(self.table_view)
+
+        # Plotting area
+        self.figure = plt.figure(figsize=(5, 4))
+        self.canvas = FigureCanvas(self.figure)
+        right_layout.addWidget(self.canvas)
+
+        # Plotting controls
+        plot_controls = QHBoxLayout()
+        self.x_combo = QComboBox()
+        self.y_combo = QComboBox()
+        self.plot_type_combo = QComboBox()
+        self.plot_type_combo.addItems(["Scatter", "Line", "Bar", "Histogram"])
+        self.plot_button = QPushButton("Plot")
+        plot_controls.addWidget(self.x_combo)
+        plot_controls.addWidget(self.y_combo)
+        plot_controls.addWidget(self.plot_type_combo)
+        plot_controls.addWidget(self.plot_button)
+        right_layout.addLayout(plot_controls)
+
+        splitter.addWidget(right_widget)
+        layout.addWidget(splitter)
+
+        # Connect signals
+        self.load_button.clicked.connect(self.load_data)
+        self.plot_button.clicked.connect(self.plot_data)
+
+    def load_data(self):
+        # For demonstration, we'll create a sample DataFrame
+        self.data = pd.DataFrame({
+            'A': np.random.rand(100),
+            'B': np.random.rand(100),
+            'C': np.random.rand(100)
+        })
+        self.update_views()
+
+    def update_views(self):
+        # Update table view
+        model = DataTableModel(self.data)
+        self.table_view.setModel(model)
+
+        # Update tree view (simplified for demonstration)
+        # In a real implementation, you'd create a proper tree model
+        from PyQt6.QtGui import QStandardItemModel, QStandardItem
+        tree_model = QStandardItemModel()
+        root = tree_model.invisibleRootItem()
+        for column in self.data.columns:
+            item = QStandardItem(column)
+            root.appendRow(item)
+        self.tree_view.setModel(tree_model)
+
+        # Update plot controls
+        self.x_combo.clear()
+        self.y_combo.clear()
+        self.x_combo.addItems(self.data.columns)
+        self.y_combo.addItems(self.data.columns)
+
+    def plot_data(self):
+        x = self.x_combo.currentText()
+        y = self.y_combo.currentText()
+        plot_type = self.plot_type_combo.currentText()
+
+        self.figure.clear()
+        ax = self.figure.add_subplot(111)
+
+        if plot_type == "Scatter":
+            ax.scatter(self.data[x], self.data[y])
+        elif plot_type == "Line":
+            ax.plot(self.data[x], self.data[y])
+        elif plot_type == "Bar":
+            ax.bar(self.data[x], self.data[y])
+        elif plot_type == "Histogram":
+            ax.hist(self.data[x], bins=20)
+
+        ax.set_xlabel(x)
+        ax.set_ylabel(y)
+        ax.set_title(f"{plot_type} Plot: {y} vs {x}")
+        self.canvas.draw()
+
+class StateInspectorWidget(QWidget):
+    def __init__(self, cccore, parent=None):
+        super().__init__(parent)
+        self.cccore = cccore
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+
+        # Object selection
+        select_layout = QHBoxLayout()
+        self.object_input = QLineEdit()
+        self.inspect_button = QPushButton("Inspect")
+        self.lsp_state_button = QPushButton("Inspect LSP State")
+        select_layout.addWidget(self.object_input)
+        select_layout.addWidget(self.inspect_button)
+        select_layout.addWidget(self.lsp_state_button)
+        layout.addLayout(select_layout)
+
+        # Main splitter
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+
+        # Tree view for object structure
+        self.tree_view = QTreeView()
+        splitter.addWidget(self.tree_view)
+
+        # Text area for detailed information
+        self.detail_view = QTextEdit()
+        self.detail_view.setReadOnly(True)
+        splitter.addWidget(self.detail_view)
+
+        layout.addWidget(splitter)
+
+        # Connect signals
+        self.inspect_button.clicked.connect(self.inspect_object)
+        self.lsp_state_button.clicked.connect(self.inspect_lsp_state)
+        self.tree_view.clicked.connect(self.show_details)
+
+    def inspect_object(self):
+        object_name = self.object_input.text()
+        try:
+            obj = eval(object_name, vars(self.cccore))
+            model = ObjectTreeModel(obj)
+            self.tree_view.setModel(model)
+            self.tree_view.expandToDepth(1)
+        except Exception as e:
+            self.detail_view.setText(f"Error: {str(e)}")
+
+    def inspect_lsp_state(self):
+        lsp_manager = self.cccore.lsp_manager
+        state_info = {
+            "Is LSP Running": lsp_manager.is_running(),
+            "Current Language": lsp_manager.current_language,
+            "Supported Languages": lsp_manager.supported_languages,
+            "Active Clients": {lang: client.state for lang, client in lsp_manager.clients.items()},
+            "Last Error": lsp_manager.last_error,
+        }
+        model = ObjectTreeModel(state_info)
+        self.tree_view.setModel(model)
+        self.tree_view.expandAll()
+
+    def show_details(self, index):
+        item = index.internalPointer()
+        obj = item.obj
+        details = f"Type: {type(obj)}\n\n"
+        
+        if hasattr(obj, '__dict__'):
+            details += "Attributes:\n"
+            for attr, value in obj.__dict__.items():
+                if not attr.startswith('_'):
+                    details += f"{attr}: {value}\n"
+        
+        if isinstance(obj, (int, float, str, bool)):
+            details += f"Value: {obj}\n"
+        
+        if callable(obj):
+            details += f"Signature: {inspect.signature(obj)}\n"
+            if obj.__doc__:
+                details += f"Docstring: {obj.__doc__}\n"
+
+        self.detail_view.setText(details)

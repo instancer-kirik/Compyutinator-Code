@@ -1,0 +1,1241 @@
+         27262 function calls (26164 primitive calls) in 1.080 seconds
+
+   Ordered by: cumulative time
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        2    0.013    0.007    0.880    0.440 x:\_WORK\Python\Qt\BigLinks\HMC\cccore.py:89(init_managers)
+        2    0.000    0.000    0.857    0.429 x:\_WORK\Python\Qt\BigLinks\HMC\context_manager.py:11(__init__)
+        2    0.000    0.000    0.857    0.429 x:\_WORK\Python\Qt\BigLinks\HMC\context_manager.py:19(load_tokenizer)
+        2    0.000    0.000    0.857    0.429 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\models\auto\tokenization_auto.py:707(from_pretrained)
+        1    0.000    0.000    0.620    0.620 x:\_WORK\Python\Qt\BigLinks\main.py:102(initialize_managers)
+        1    0.000    0.000    0.599    0.599 x:\_WORK\Python\Qt\BigLinks\HMC\cccore.py:36(__init__)
+        2    0.000    0.000    0.545    0.273 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_base.py:2034(from_pretrained)
+        2    0.001    0.000    0.541    0.270 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_base.py:2285(_from_pretrained)
+        2    0.002    0.001    0.538    0.269 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_fast.py:97(__init__)
+        2    0.534    0.267    0.534    0.267 {built-in method from_file}
+       12    0.000    0.000    0.313    0.026 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\utils\hub.py:269(cached_file)
+    22/12    0.000    0.000    0.313    0.026 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_validators.py:98(_inner_fn)
+        2    0.000    0.000    0.312    0.156 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\models\auto\tokenization_auto.py:582(get_tokenizer_config)
+        2    0.000    0.000    0.310    0.155 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_deprecation.py:75(inner_f)
+        2    0.000    0.000    0.310    0.155 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\file_download.py:1001(hf_hub_download)
+        2    0.000    0.000    0.310    0.155 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\file_download.py:1260(_hf_hub_download_to_cache_dir)
+        2    0.000    0.000    0.308    0.154 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\file_download.py:1699(_get_metadata_or_catch_error)
+        2    0.000    0.000    0.308    0.154 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\file_download.py:1624(get_hf_file_metadata)
+      4/2    0.000    0.000    0.308    0.154 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\file_download.py:356(_request_wrapper)
+        2    0.000    0.000    0.307    0.154 C:\Users\thewi\miniconda3\Lib\site-packages\requests\sessions.py:500(request)
+        2    0.000    0.000    0.304    0.152 C:\Users\thewi\miniconda3\Lib\site-packages\requests\sessions.py:673(send)
+        2    0.000    0.000    0.303    0.152 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_http.py:63(send)
+        2    0.000    0.000    0.303    0.152 C:\Users\thewi\miniconda3\Lib\site-packages\requests\adapters.py:613(send)
+        2    0.000    0.000    0.302    0.151 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connectionpool.py:594(urlopen)
+        2    0.000    0.000    0.301    0.151 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connectionpool.py:379(_make_request)
+        2    0.000    0.000    0.209    0.105 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connectionpool.py:1087(_validate_conn)
+        1    0.000    0.000    0.209    0.209 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connection.py:658(connect)
+        1    0.000    0.000    0.178    0.178 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connection.py:835(_ssl_wrap_socket_and_match_hostname)
+        1    0.000    0.000    0.176    0.176 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\ssl_.py:399(ssl_wrap_socket)
+        1    0.150    0.150    0.150    0.150 {method 'load_verify_locations' of '_ssl._SSLContext' objects}
+        1    0.000    0.000    0.142    0.142 x:\_WORK\Python\Qt\BigLinks\main.py:132(__init__)
+        2    0.000    0.000    0.092    0.046 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connection.py:481(getresponse)
+        2    0.000    0.000    0.091    0.045 C:\Users\thewi\miniconda3\Lib\http\client.py:1384(getresponse)
+        2    0.000    0.000    0.091    0.045 C:\Users\thewi\miniconda3\Lib\http\client.py:324(begin)
+       48    0.000    0.000    0.090    0.002 {method 'readline' of '_io.BufferedReader' objects}
+        2    0.000    0.000    0.090    0.045 C:\Users\thewi\miniconda3\Lib\http\client.py:291(_read_status)
+        2    0.000    0.000    0.090    0.045 C:\Users\thewi\miniconda3\Lib\socket.py:694(readinto)
+        2    0.000    0.000    0.090    0.045 C:\Users\thewi\miniconda3\Lib\ssl.py:1237(recv_into)
+        2    0.000    0.000    0.090    0.045 C:\Users\thewi\miniconda3\Lib\ssl.py:1095(read)
+        2    0.090    0.045    0.090    0.045 {method 'read' of '_ssl._SSLSocket' objects}
+        1    0.000    0.000    0.054    0.054 x:\_WORK\Python\Qt\BigLinks\HMC\cccore.py:245(set_main_window)
+        1    0.000    0.000    0.054    0.054 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:205(set_main_window_and_create_docks)
+        1    0.000    0.000    0.052    0.052 x:\_WORK\Python\Qt\BigLinks\HMC\input_manager.py:16(__init__)
+        1    0.050    0.050    0.051    0.051 x:\_WORK\Python\Qt\BigLinks\HMC\audio_handler.py:7(__init__)
+        1    0.050    0.050    0.050    0.050 {built-in method show}
+        1    0.001    0.001    0.038    0.038 x:\_WORK\Python\Qt\BigLinks\main.py:216(setup_ui)
+        1    0.000    0.000    0.032    0.032 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:150(apply_layout)
+        1    0.000    0.000    0.032    0.032 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connection.py:193(_new_conn)
+        1    0.000    0.000    0.032    0.032 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\connection.py:27(create_connection)
+        9    0.000    0.000    0.032    0.004 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:83(get_or_create_dock)
+        9    0.019    0.002    0.031    0.003 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:125(create_dock)
+        1    0.029    0.029    0.029    0.029 {method 'connect' of '_socket.socket' objects}
+        1    0.000    0.000    0.026    0.026 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\ssl_.py:497(_ssl_wrap_socket_impl)
+        1    0.000    0.000    0.026    0.026 C:\Users\thewi\miniconda3\Lib\ssl.py:449(wrap_socket)
+        1    0.000    0.000    0.026    0.026 C:\Users\thewi\miniconda3\Lib\ssl.py:956(_create)
+        1    0.000    0.000    0.026    0.026 C:\Users\thewi\miniconda3\Lib\ssl.py:1313(do_handshake)
+        1    0.026    0.026    0.026    0.026 {method 'do_handshake' of '_ssl._SSLSocket' objects}
+        1    0.000    0.000    0.024    0.024 x:\_WORK\Python\Qt\BigLinks\main.py:377(set_dark_background)
+        1    0.000    0.000    0.022    0.022 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:178(create_startup_docks)
+        1    0.000    0.000    0.021    0.021 x:\_WORK\Python\Qt\BigLinks\GUX\overlay.py:111(__init__)
+        1    0.000    0.000    0.013    0.013 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:411(TerminalWidget)
+        1    0.000    0.000    0.013    0.013 x:\_WORK\Python\Qt\BigLinks\GUX\terminal_widget.py:10(__init__)
+        1    0.000    0.000    0.012    0.012 x:\_WORK\Python\Qt\BigLinks\GUX\terminal_widget.py:27(add_terminal)
+      7/5    0.012    0.002    0.012    0.002 {built-in method setGeometry}
+        9    0.012    0.001    0.012    0.001 {built-in method setWidget}
+        2    0.012    0.006    0.012    0.006 {built-in method setParent}
+        1    0.000    0.000    0.010    0.010 x:\_WORK\Python\Qt\BigLinks\AuraText\auratext\Core\powershell.py:33(__init__)
+        3    0.000    0.000    0.009    0.003 x:\_WORK\Python\Qt\BigLinks\GUX\overlay.py:12(__init__)
+        3    0.008    0.003    0.008    0.003 {built-in method winId}
+       28    0.000    0.000    0.005    0.000 C:\Users\thewi\miniconda3\Lib\json\__init__.py:274(load)
+        2    0.000    0.000    0.005    0.002 x:\_WORK\Python\Qt\BigLinks\HMC\theme_manager.py:145(__init__)
+        5    0.000    0.000    0.005    0.001 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1660(_log)
+        5    0.000    0.000    0.004    0.001 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1686(handle)
+        5    0.000    0.000    0.004    0.001 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1746(callHandlers)
+        5    0.000    0.000    0.004    0.001 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1011(handle)
+        5    0.000    0.000    0.004    0.001 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1148(emit)
+       42    0.004    0.000    0.004    0.000 {built-in method _io.open}
+        1    0.002    0.002    0.004    0.004 x:\_WORK\Python\Qt\BigLinks\AuraText\auratext\Core\powershell.py:119(setup_toolbar)
+        1    0.000    0.000    0.004    0.004 C:\Users\thewi\miniconda3\Lib\subprocess.py:807(__init__)
+        1    0.000    0.000    0.004    0.004 C:\Users\thewi\miniconda3\Lib\subprocess.py:1436(_execute_child)
+        1    0.004    0.004    0.004    0.004 {built-in method _winapi.CreateProcess}
+        1    0.000    0.000    0.004    0.004 x:\_WORK\Python\Qt\BigLinks\AuraText\auratext\Core\powershell.py:186(addNewTab)
+       51    0.004    0.000    0.004    0.000 {built-in method addWidget}
+        1    0.000    0.000    0.004    0.004 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:2175(error)
+        1    0.000    0.000    0.004    0.004 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1558(error)
+        1    0.000    0.000    0.003    0.003 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:402(CodeEditorWidget)
+        1    0.000    0.000    0.003    0.003 x:\_WORK\Python\Qt\BigLinks\GUX\code_editor.py:45(__init__)
+        1    0.000    0.000    0.003    0.003 x:\_WORK\Python\Qt\BigLinks\AuraText\auratext\Core\powershell.py:219(start_powershell)
+       28    0.000    0.000    0.003    0.000 C:\Users\thewi\miniconda3\Lib\json\__init__.py:299(loads)
+       28    0.000    0.000    0.003    0.000 C:\Users\thewi\miniconda3\Lib\json\decoder.py:332(decode)
+        1    0.000    0.000    0.003    0.003 x:\_WORK\Python\Qt\BigLinks\HMC\vault_manager.py:168(__init__)
+        1    0.000    0.000    0.003    0.003 x:\_WORK\Python\Qt\BigLinks\GUX\code_editor.py:108(add_tab)
+       28    0.003    0.000    0.003    0.000 C:\Users\thewi\miniconda3\Lib\json\decoder.py:343(raw_decode)
+        1    0.000    0.000    0.003    0.003 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:361(FileExplorerWidget)
+        1    0.003    0.003    0.003    0.003 {built-in method start}
+        1    0.000    0.000    0.003    0.003 x:\_WORK\Python\Qt\BigLinks\GUX\file_explorer.py:14(__init__)
+        2    0.000    0.000    0.003    0.001 x:\_WORK\Python\Qt\BigLinks\HMC\theme_manager.py:702(load_custom_themes)
+        1    0.000    0.000    0.003    0.003 x:\_WORK\Python\Qt\BigLinks\GUX\file_explorer.py:21(setup_ui)
+        2    0.000    0.000    0.003    0.001 C:\Users\thewi\miniconda3\Lib\site-packages\requests\sessions.py:457(prepare_request)
+        5    0.000    0.000    0.003    0.001 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:988(format)
+        5    0.000    0.000    0.003    0.001 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:690(format)
+        1    0.000    0.000    0.002    0.002 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:649(formatException)
+        1    0.000    0.000    0.002    0.002 C:\Users\thewi\miniconda3\Lib\traceback.py:111(print_exception)
+        1    0.000    0.000    0.002    0.002 x:\_WORK\Python\Qt\BigLinks\GUX\overlay.py:75(__init__)
+        1    0.000    0.000    0.002    0.002 x:\_WORK\Python\Qt\BigLinks\HMC\vault_manager.py:183(load_vaults)
+        1    0.000    0.000    0.002    0.002 C:\Users\thewi\miniconda3\Lib\socket.py:947(getaddrinfo)
+        1    0.002    0.002    0.002    0.002 {built-in method _socket.getaddrinfo}
+       10    0.000    0.000    0.002    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\file_download.py:1531(try_to_load_from_cache)
+       29    0.002    0.000    0.002    0.000 {built-in method nt.stat}
+       30    0.002    0.000    0.002    0.000 {method 'read' of '_io.TextIOWrapper' objects}
+        1    0.000    0.000    0.002    0.002 C:\Users\thewi\miniconda3\Lib\traceback.py:718(__init__)
+        1    0.000    0.000    0.002    0.002 C:\Users\thewi\miniconda3\Lib\traceback.py:399(_extract_from_extended_frame_gen)
+       35    0.002    0.000    0.002    0.000 {built-in method nt._path_exists}
+        1    0.000    0.000    0.002    0.002 x:\_WORK\Python\Qt\BigLinks\GUX\code_editor.py:201(__init__)
+        1    0.000    0.000    0.002    0.002 x:\_WORK\Python\Qt\BigLinks\GUX\overlay.py:36(__init__)
+       34    0.002    0.000    0.002    0.000 {method 'write' of '_io.TextIOWrapper' objects}
+       19    0.000    0.000    0.002    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:835(stat)
+       48    0.000    0.000    0.002    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:318(line)
+        8    0.000    0.000    0.002    0.000 C:\Users\thewi\miniconda3\Lib\linecache.py:26(getline)
+       16    0.000    0.000    0.002    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:852(exists)
+        8    0.000    0.000    0.002    0.000 C:\Users\thewi\miniconda3\Lib\linecache.py:36(getlines)
+        4    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\linecache.py:80(updatecache)
+        2    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\HMC\project_manager.py:119(__init__)
+       46    0.001    0.000    0.001    0.000 {built-in method nt._path_isdir}
+        2    0.000    0.000    0.001    0.001 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:204(get_netrc_auth)
+        8    0.000    0.000    0.001    0.000 <frozen os>:200(makedirs)
+        2    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\HMC\theme_manager.py:223(load_config)
+5696/5688    0.001    0.000    0.001    0.000 {built-in method builtins.isinstance}
+        1    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\main.py:374(init_menu_bar)
+        1    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\HMC\menu_manager.py:21(create_menu_bar)
+        1    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:366(ManyProjectsManagerWidget)
+        1    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\HMC\project_manager.py:675(__init__)
+        1    0.000    0.000    0.001    0.001 <frozen importlib._bootstrap>:1349(_find_and_load)
+        1    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\HMC\project_manager.py:680(setup_ui)
+  125/107    0.001    0.000    0.001    0.000 {built-in method __new__ of type object at 0x00007FFFF9177A20}
+        5    0.000    0.000    0.001    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\environment_manager.py:11(__init__)
+       71    0.001    0.000    0.001    0.000 {method 'connect' of 'PyQt6.QtCore.pyqtBoundSignal' objects}
+       76    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:726(__call__)
+        1    0.000    0.000    0.001    0.001 <frozen importlib._bootstrap>:1304(_find_and_load_unlocked)
+        4    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:2193(warning)
+        4    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1541(warning)
+        2    0.001    0.001    0.001    0.001 {built-in method setFont}
+        1    0.000    0.000    0.001    0.001 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\ssl_.py:223(create_urllib3_context)
+        2    0.001    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\GUX\custom_tree_view.py:9(__init__)
+        2    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\HMC\workspace_manager.py:18(__init__)
+        4    0.000    0.000    0.001    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\vault_manager.py:24(__init__)
+      135    0.001    0.000    0.001    0.000 <frozen ntpath>:107(join)
+        1    0.001    0.001    0.001    0.001 {built-in method addTab}
+       14    0.001    0.000    0.001    0.000 {built-in method nt.listdir}
+        4    0.000    0.000    0.001    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\vault_manager.py:47(load_config)
+        1    0.000    0.000    0.001    0.001 C:\Users\thewi\miniconda3\Lib\ssl.py:430(__new__)
+        2    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:245(parse_headers)
+        2    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\file_download.py:949(_cache_commit_hash_for_specific_revision)
+        4    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:863(_create_)
+       23    0.000    0.000    0.001    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\settings_manager.py:15(get_value)
+       23    0.001    0.000    0.001    0.000 {built-in method value}
+        2    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:351(prepare)
+        2    0.000    0.000    0.001    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\workspace_manager.py:27(load_config)
+        1    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\AuraText\auratext\Core\powershell.py:96(setup_terminal)
+        2    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:231(_parse_header_lines)
+       53    0.000    0.000    0.001    0.000 <frozen abc>:117(__instancecheck__)
+        2    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\email\parser.py:56(parsestr)
+        2    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\sessions.py:750(merge_environment_settings)
+       53    0.000    0.000    0.001    0.000 {built-in method _abc._abc_instancecheck}
+        2    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\email\parser.py:41(parse)
+        1    0.000    0.000    0.001    0.001 <frozen importlib._bootstrap>:911(_load_unlocked)
+        2    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_fast.py:362(_add_tokens)
+        2    0.001    0.000    0.001    0.000 {method 'add_special_tokens' of 'tokenizers.Tokenizer' objects}
+       52    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:437(__str__)
+   209/14    0.000    0.000    0.001    0.000 <frozen abc>:121(__subclasscheck__)
+   209/14    0.001    0.000    0.001    0.000 {built-in method _abc._abc_subclasscheck}
+       38    0.001    0.000    0.001    0.000 {method '__exit__' of '_io._IOBase' objects}
+        3    0.001    0.000    0.001    0.000 {built-in method appendPlainText}
+        1    0.000    0.000    0.001    0.001 <frozen importlib._bootstrap_external>:989(exec_module)
+       30    0.001    0.000    0.001    0.000 {built-in method nt._path_isfile}
+       35    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:551(drive)
+        1    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\AuraText\auratext\Core\powershell.py:109(set_terminal_font)
+       11    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\structures.py:40(__init__)
+        1    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\HMC\menu_manager.py:61(create_view_menu)
+        1    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:429(StickyNotesWidget)
+        1    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\HMC\sticky_note_manager.py:7(__init__)
+       15    0.000    0.000    0.001    0.000 <frozen _collections_abc>:974(update)
+        5    0.000    0.000    0.001    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\environment_manager.py:18(load_environments)
+        6    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:1022(read_text)
+    536/2    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_base.py:2527(convert_added_tokens)
+        1    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\HMC\sticky_note_manager.py:12(initUI)
+       14    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\sessions.py:61(merge_setting)
+        2    0.000    0.000    0.001    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\secrets_manager.py:13(__init__)
+      361    0.000    0.000    0.001    0.000 <frozen ntpath>:179(splitroot)
+        1    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:375(VaultsManagerWidget)
+        2    0.000    0.000    0.001    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\font_manager.py:10(__init__)
+       11    0.001    0.000    0.001    0.000 {built-in method nt.mkdir}
+        2    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\email\feedparser.py:171(feed)
+        1    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\GUX\widget_vault.py:23(__init__)
+        1    0.000    0.000    0.001    0.001 <frozen importlib._bootstrap_external>:1062(get_code)
+        1    0.000    0.000    0.001    0.001 C:\Users\thewi\miniconda3\Lib\traceback.py:1045(print)
+        4    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\tokenize.py:445(open)
+       33    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:407(_load_parts)
+       39    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:447(__fspath__)
+        1    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:384(ProcessManagerWidget)
+        1    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\HMC\vault_manager.py:449(cleanup_temp_vaults)
+        1    0.000    0.000    0.001    0.001 x:\_WORK\Python\Qt\BigLinks\HMC\process_manager.py:89(__init__)
+        1    0.000    0.000    0.001    0.001 <frozen importlib._bootstrap>:1240(_find_spec)
+        5    0.000    0.000    0.001    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\environment_manager.py:29(ensure_nix_portable)
+        4    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\email\feedparser.py:176(_call_parse)
+        4    0.000    0.000    0.001    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:528(__new__)
+        8    0.000    0.000    0.001    0.000 {method 'readlines' of '_io._IOBase' objects}
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\widget_vault.py:28(setup_ui)
+       11    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:944(format)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\vault_manager.py:340(save_vaults_config)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:826(get_environ_proxies)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connection.py:365(request)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\radial_menu.py:9(__init__)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\feedparser.py:216(_parsegen)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:1520(find_spec)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:1491(_get_spec)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:370(ProjectManagerWidget)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\project_manager.py:517(__init__)
+        4    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:1593(find_spec)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\url.py:369(parse_url)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\adapters.py:446(get_connection_with_tls_context)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:40(__init__)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\project_manager.py:523(setup_ui)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\adapters.py:359(build_response)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:409(prepare_url)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_base.py:1569(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1510(setLevel)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\vault_manager.py:210(ensure_default_vault)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1465(_clear_cache)
+        1    0.000    0.000    0.000    0.000 {built-in method addItem}
+        2    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\secrets_manager.py:19(_load_or_create_key)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_headers.py:38(build_hf_headers)
+       16    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:1551(__or__)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:406(SymbolicLinkerWidget)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\AuraText\auratext\Core\powershell.py:206(switchTab)
+       12    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\utils\hub.py:255(extract_commit_hash)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\code_editor.py:442(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\response.py:573(__init__)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\NITTY_GRITTY\big_links.py:68(__init__)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:1183(get_data)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\file_download.py:1985(_get_pointer_path)
+        6    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:1005(open)
+        6    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\url.py:227(_encode_invalid_chars)
+       25    0.000    0.000    0.000    0.000 {built-in method addAction}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:525(format)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\NITTY_GRITTY\big_links.py:75(initUI)
+       34    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:387(_parse_path)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:460(format_frame_summary)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\AuraText\auratext\Core\powershell.py:285(display_prompt)
+       21    0.000    0.000    0.000    0.000 {built-in method builtins.next}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:765(should_bypass_proxies)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:890(content)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\settings_manager.py:9(__init__)
+       22    0.000    0.000    0.000    0.000 {method 'join' of 'bytes' objects}
+     90/2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\copy.py:118(deepcopy)
+       72    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:1129(__new__)
+        1    0.000    0.000    0.000    0.000 {built-in method setPlainText}
+        1    0.000    0.000    0.000    0.000 {built-in method _io.open_code}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_headers.py:142(get_token_to_send)
+        6    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:140(_path_stat)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\_collections.py:242(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:816(generate)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\response.py:315(__init__)
+      6/2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\copy.py:217(_deepcopy_dict)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_token.py:31(get_token)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_fast.py:240(added_tokens_encoder)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\response.py:1038(stream)
+       24    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\encodings\cp1252.py:22(decode)
+        3    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:1306(mkdir)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\poolmanager.py:276(connection_from_host)
+       41    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\overlay.py:31(event)
+     1024    0.000    0.000    0.000    0.000 {built-in method builtins.repr}
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:70(load_config)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\request.py:2505(getproxies_environment)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\_collections.py:337(extend)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_fast.py:248(added_tokens_decoder)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\response.py:910(read)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1645(makeRecord)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\poolmanager.py:305(connection_from_context)
+        4    0.000    0.000    0.000    0.000 {method 'get_added_tokens_decoder' of 'tokenizers.Tokenizer' objects}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\__init__.py:174(search)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\menu_manager.py:39(create_file_menu)
+        9    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:351(_walk_tb_with_full_positions)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_http.py:133(get_session)
+       88    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:2208(info)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:298(__init__)
+      162    0.000    0.000    0.000    0.000 {method 'match' of 're.Pattern' objects}
+       24    0.000    0.000    0.000    0.000 <frozen ntpath>:236(split)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:114(proxy_bypass)
+       24    0.000    0.000    0.000    0.000 {built-in method _codecs.charmap_decode}
+        9    0.000    0.000    0.000    0.000 {built-in method builtins.sorted}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_token.py:116(_get_token_from_file)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:365(_get_code_position)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\__init__.py:280(_compile)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\response.py:343(<genexpr>)
+       18    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:254(__set_name__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_http.py:174(_get_session_from_cache)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_http.py:82(_default_backend_factory)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\feedparser.py:469(_parse_headers)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:1414(_missing_)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\response.py:858(_raw_read)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\visual_effects.py:15(__init__)
+       22    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\parse.py:374(urlparse)
+       53    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:1157(__init__)
+       30    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:390(__setitem__)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\input_manager.py:110(load_device_index)
+        7    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\code_editor.py:350(line_number_area_width)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\poolmanager.py:330(connection_from_pool_key)
+        2    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\workspace_manager.py:56(load_workspaces)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\cookies.py:124(extract_cookies_to_jar)
+        3    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\cursor_manager.py:13(__init__)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\file_explorer.py:41(setup_trees)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\code_editor.py:251(highlight_current_line)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_compiler.py:740(compile)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:1320(endheaders)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:1082(_send_output)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\sessions.py:390(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\structures.py:76(copy)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\menu_manager.py:49(create_edit_menu)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:589(_extract_caret_anchors_from_line_segment)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:1027(send)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\poolmanager.py:229(_new_pool)
+       49    0.000    0.000    0.000    0.000 <frozen _collections_abc>:804(get)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\copy.py:247(_reconstruct)
+       11    0.000    0.000    0.000    0.000 <frozen ntpath>:275(dirname)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\overlay.py:85(initUI)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\request.py:2751(getproxies)
+     1031    0.000    0.000    0.000    0.000 {method 'append' of 'list' objects}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connectionpool.py:982(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\ssl.py:1200(sendall)
+        2    0.000    0.000    0.000    0.000 <frozen _collections_abc>:1032(__contains__)
+       26    0.000    0.000    0.000    0.000 <frozen codecs>:319(decode)
+        3    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:870(is_dir)
+       24    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:719(__truediv__)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1611(findCaller)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connectionpool.py:177(__init__)
+1056/1043    0.000    0.000    0.000    0.000 {built-in method builtins.len}
+       31    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:380(with_segments)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\tokenize.py:352(detect_encoding)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\ast.py:34(parse)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connectionpool.py:258(_get_conn)
+      466    0.000    0.000    0.000    0.000 {method 'replace' of 'str' objects}
+       24    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:711(joinpath)
+       13    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:665(emit)
+        8    0.000    0.000    0.000    0.000 {built-in method builtins.compile}
+       41    0.000    0.000    0.000    0.000 {built-in method type}
+       53    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:358(__init__)
+       20    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:96(_path_join)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\settings_manager.py:39(ensure_vault_path)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:610(prepare_cookies)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_http.py:50(add_headers)
+        3    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\code_editor.py:435(sizeHint)
+      117    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1790(isEnabledFor)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\ssl.py:1173(send)
+      624    0.000    0.000    0.000    0.000 {method 'lower' of 'str' objects}
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\cookies.py:521(cookiejar_from_dict)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\cookies.py:140(get_cookie_header)
+        3    0.000    0.000    0.000    0.000 {built-in method setWindowFlags}
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\NITTY_GRITTY\text_workers.py:17(run)
+        2    0.000    0.000    0.000    0.000 {method 'write' of '_ssl._SSLSocket' objects}
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\AuraText\auratext\Core\powershell.py:464(load_typing_effect_settings)
+      184    0.000    0.000    0.000    0.000 {built-in method builtins.hasattr}
+       12    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connection.py:351(putheader)
+      340    0.000    0.000    0.000    0.000 <frozen _collections_abc>:868(__iter__)
+       26    0.000    0.000    0.000    0.000 {built-in method _codecs.utf_8_decode}
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\code_editor.py:263(start_comparison)
+       37    0.000    0.000    0.000    0.000 <frozen os>:709(__getitem__)
+        6    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\cookies.py:35(__init__)
+        3    0.000    0.000    0.000    0.000 {method 'read' of '_io.BufferedReader' objects}
+        7    0.000    0.000    0.000    0.000 {built-in method horizontalAdvance}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\cookiejar.py:1680(extract_cookies)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\adapters.py:396(build_connection_pool_key_attributes)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\json\__init__.py:120(dump)
+        3    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\code_editor.py:377(resizeEvent)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connection.py:331(putrequest)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\typing.py:392(inner)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:969(parse)
+     1026    0.000    0.000    0.000    0.000 {built-in method builtins.hash}
+       16    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_validators.py:119(validate_repo_id)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\adapters.py:90(_urllib3_request_context)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\settings_manager.py:79(ensure_app_data_dir)
+        2    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\font_manager.py:16(load_custom_fonts)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\project_manager.py:712(update_vault_selector)
+       98    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1529(info)
+        2    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\project_manager.py:459(update_project_selector)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:658(__init__)
+      142    0.000    0.000    0.000    0.000 {built-in method sys.intern}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1206(__init__)
+      183    0.000    0.000    0.000    0.000 {built-in method builtins.getattr}
+        3    0.000    0.000    0.000    0.000 {built-in method addItems}
+       17    0.000    0.000    0.000    0.000 <frozen ntpath>:257(splitext)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\terminal_widget.py:22(setup_shortcuts)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:741(parents)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:1136(putrequest)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:483(prepare_headers)
+      2/1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:452(_parse_sub)
+       14    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:345(to_key_val_list)
+      207    0.000    0.000    0.000    0.000 {method 'startswith' of 'str' objects}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:2149(getLogger)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:751(_compile_bytecode)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\adapters.py:202(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:268(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\url.py:351(_encode_target)
+        2    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\ai_model_manager.py:154(__init__)
+       40    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\_policybase.py:293(header_source_parse)
+        6    0.000    0.000    0.000    0.000 {built-in method addLayout}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\tokenize.py:376(read_or_stop)
+       20    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:200(_is_internal_frame)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\adapters.py:304(cert_verify)
+        1    0.000    0.000    0.000    0.000 {built-in method setPalette}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\cookiejar.py:1599(make_cookies)
+        6    0.000    0.000    0.000    0.000 {built-in method setLayout}
+       12    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\queue.py:122(put)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\typing.py:1467(__getitem__)
+        1    0.000    0.000    0.000    0.000 {built-in method marshal.loads}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:731(parent)
+       16    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\message.py:494(get)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:213(_read_headers)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\message.py:596(get_content_type)
+        6    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\code_editor.py:362(update_line_number_area)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:513(__prepare__)
+       52    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\_policybase.py:311(header_fetch_parse)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:76(proxy_bypass_registry)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_headers.py:191(_http_user_agent)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:869(format_exception_only)
+        2    0.000    0.000    0.000    0.000 {built-in method setModel}
+      183    0.000    0.000    0.000    0.000 {method 'join' of 'str' objects}
+       42    0.000    0.000    0.000    0.000 <frozen _collections_abc>:892(__iter__)
+        3    0.000    0.000    0.000    0.000 {built-in method primaryScreen}
+       12    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:1292(putheader)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1377(getLogger)
+      2/1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:512(_parse)
+       19    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:1404(_iter_member_by_def_)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1257(_open)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\adapters.py:546(request_url)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\contextlib.py:141(__exit__)
+      622    0.000    0.000    0.000    0.000 {built-in method nt.fspath}
+        1    0.000    0.000    0.000    0.000 {built-in method setStyleSheet}
+        7    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\cookiejar.py:1261(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:450(as_posix)
+       17    0.000    0.000    0.000    0.000 <frozen genericpath>:133(_splitext)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\response.py:801(_fp_read)
+      314    0.000    0.000    0.000    0.000 {method 'get' of 'dict' objects}
+      447    0.000    0.000    0.000    0.000 {method 'decode' of 'bytes' objects}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:838(select_proxy)
+  129/127    0.000    0.000    0.000    0.000 {method 'encode' of 'str' objects}
+        2    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:480(_call_with_frames_removed)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\message.py:483(items)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\feedparser.py:182(close)
+      340    0.000    0.000    0.000    0.000 <frozen os>:732(__iter__)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:519(__eq__)
+        6    0.000    0.000    0.000    0.000 <frozen _collections_abc>:1022(__iter__)
+        3    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\parse.py:452(urlsplit)
+       15    0.000    0.000    0.000    0.000 <frozen _collections_abc>:811(__contains__)
+       37    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:429(_format_parsed_parts)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_base.py:1327(all_special_tokens_extended)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:261(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\utils\hub.py:232(http_user_agent)
+        1    0.000    0.000    0.000    0.000 {built-in method builtins.exec}
+       52    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\_policybase.py:281(_sanitize_header)
+       46    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\feedparser.py:127(__next__)
+       44    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:202(__get__)
+       20    0.000    0.000    0.000    0.000 <frozen ntpath>:51(normcase)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\code_editor.py:359(update_line_number_area_width)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\message.py:529(get_all)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:463(read)
+        9    0.000    0.000    0.000    0.000 {built-in method addDockWidget}
+      108    0.000    0.000    0.000    0.000 {method 'split' of 'str' objects}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\netrc.py:1(<module>)
+        2    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\download_manager.py:46(__init__)
+       40    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\_collections.py:302(add)
+       53    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:1164(__new__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connectionpool.py:1046(_new_conn)
+        6    0.000    0.000    0.000    0.000 <frozen ntpath>:350(expanduser)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\difflib.py:833(compare)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:484(_str_normcase)
+        6    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\url.py:303(_normalize_host)
+       18    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\parse.py:164(hostname)
+       76    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\structures.py:46(__setitem__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\typing.py:1476(copy_with)
+       14    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1517(debug)
+       48    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\_collections.py:259(__getitem__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_compiler.py:573(_code)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:277(__getitem__)
+        4    0.000    0.000    0.000    0.000 {built-in method viewport}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\response.py:735(_error_catcher)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\cccore.py:111(late_init)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\settings_manager.py:57(get_typing_effect_enabled)
+        3    0.000    0.000    0.000    0.000 {built-in method builtins.__build_class__}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:1197(home)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\typing.py:1260(__init__)
+       12    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:967(_get_mixins_)
+        9    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:2218(debug)
+        7    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:420(_from_parsed_parts)
+       54    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:1544(_get_value)
+        6    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\message.py:620(get_content_maintype)
+       58    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\structures.py:51(__getitem__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\feedparser.py:100(push)
+        5    0.000    0.000    0.000    0.000 <frozen ntpath>:268(basename)
+        3    0.000    0.000    0.000    0.000 {built-in method clear}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\utils\hub.py:162(is_remote_url)
+       37    0.000    0.000    0.000    0.000 <frozen os>:783(encodekey)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\response.py:635(release_conn)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\socket.py:304(makefile)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:900(default_headers)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\socket.py:221(__init__)
+        7    0.000    0.000    0.000    0.000 <frozen ntpath>:588(abspath)
+       29    0.000    0.000    0.000    0.000 {built-in method builtins.setattr}
+        1    0.000    0.000    0.000    0.000 {method '_wrap_socket' of '_ssl._SSLContext' objects}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\uuid.py:723(uuid4)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1137(flush)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:806(module_from_spec)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:416(__enter__)
+        1    0.000    0.000    0.000    0.000 {built-in method moveCursor}
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\settings_manager.py:49(ensure_typing_effect_settings)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\feedparser.py:137(__init__)
+      299    0.000    0.000    0.000    0.000 {method 'clear' of 'dict' objects}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:425(_close_conn)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\cookiejar.py:1356(add_cookie_header)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\file_download.py:188(hf_hub_url)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:1398(expanduser)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\response.py:40(assert_header_parsing)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\connection.py:15(is_connection_dropped)
+        6    0.000    0.000    0.000    0.000 {built-in method winreg.QueryValueEx}
+        4    0.000    0.000    0.000    0.000 {built-in method winreg.OpenKey}
+        2    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\AuraText\auratext\Core\Lexers.py:92(__init__)
+       38    0.000    0.000    0.000    0.000 {built-in method builtins.delattr}
+        6    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\parse.py:855(quote)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connectionpool.py:296(_put_conn)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\cryptography\fernet.py:28(__init__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connection.py:299(is_connected)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\adapters.py:240(init_poolmanager)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\settings_manager.py:33(get_vault_path)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:106(_encode_params)
+       46    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\feedparser.py:77(readline)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\poolmanager.py:95(_default_key_normalizer)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\visual_effects.py:43(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\sessions.py:159(resolve_redirects)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\project_manager.py:716(on_vault_changed)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:733(_init_module_attrs)
+       29    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\parse.py:119(_coerce_args)
+        2    0.000    0.000    0.000    0.000 {method 'close' of '_io.BufferedReader' objects}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\wait.py:113(wait_for_read)
+       12    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:1008(_find_data_type_)
+       30    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\json\encoder.py:414(_iterencode)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\AuraText\auratext\Core\powershell.py:235(find_powershell_core)
+       31    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:850(__setattr__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:588(prepare_auth)
+       13    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\threading.py:124(RLock)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connection.py:556(__init__)
+        9    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:214(get_qt_dock_area)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\project_manager.py:719(update_project_list)
+        2    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:482(cache_from_source)
+        1    0.000    0.000    0.000    0.000 {built-in method singleShot}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\wait.py:95(wait_for_socket)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_token.py:111(_get_token_from_environment)
+       28    0.000    0.000    0.000    0.000 {built-in method builtins.max}
+       41    0.000    0.000    0.000    0.000 {function Overlay.event at 0x00000219CC3E3920}
+      111    0.000    0.000    0.000    0.000 {method 'endswith' of 'str' objects}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:630(prepare_hooks)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\difflib.py:492(get_opcodes)
+        1    0.000    0.000    0.000    0.000 {method 'emit' of 'PyQt6.QtCore.pyqtBoundSignal' objects}
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\ai_model_manager.py:27(__init__)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\widget_vault.py:54(refresh_vaults)
+       19    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:1394(_iter_member_by_value_)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:1034(check_header_validity)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\process_manager.py:12(__init__)
+      133    0.000    0.000    0.000    0.000 {method 'rstrip' of 'str' objects}
+       10    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\textwrap.py:470(indent)
+       25    0.000    0.000    0.000    0.000 {method 'search' of 're.Pattern' objects}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:1018(get_auth_from_url)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\request.py:2702(getproxies_registry)
+       20    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\parse.py:205(_hostinfo)
+       10    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\socket.py:100(_intenum_converter)
+       18    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:234(_acquireLock)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:1202(path_stats)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\base64.py:121(urlsafe_b64decode)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:207(register_hook)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:159(_path_isfile)
+        2    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:632(cached)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\parse.py:509(urlunparse)
+        3    0.000    0.000    0.000    0.000 {built-in method fill}
+       38    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:785(__delattr__)
+        1    0.000    0.000    0.000    0.000 {built-in method setHeaderHidden}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\poolmanager.py:199(__init__)
+        2    0.000    0.000    0.000    0.000 {built-in method setColor}
+       54    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\utils.py:51(_has_surrogates)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\code_editor.py:126(check_for_unsaved_changes)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:539(get_encoding_from_headers)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_base.py:1311(special_tokens_map_extended)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\difflib.py:421(get_matching_blocks)
+        1    0.000    0.000    0.000    0.000 {built-in method setCentralWidget}
+        7    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\timeout.py:109(__init__)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:150(_path_is_mode_type)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connectionpool.py:81(__init__)
+       61    0.000    0.000    0.000    0.000 {method 'rfind' of 'str' objects}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1428(_fixupParents)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_base.py:848(__init__)
+      426    0.000    0.000    0.000    0.000 {built-in method builtins.ord}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:611(_get_cached)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\subprocess.py:576(list2cmdline)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\contextlib.py:299(helper)
+        2    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\AuraText\auratext\Core\powershell.py:393(resizeEvent)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:52(_ignore_error)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_headers.py:235(_deduplicate_user_agent)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\uuid.py:139(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\utils\import_utils.py:1039(is_training_run_on_sagemaker)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\NITTY_GRITTY\text_workers.py:11(__init__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\wait.py:33(select_wait_for_socket)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\response.py:679(_init_length)
+       16    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:1045(_validate_header_part)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:304(acquire)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:85(path_url)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_base.py:1348(all_special_tokens)
+       20    0.000    0.000    0.000    0.000 {built-in method _winapi.LCMapStringEx}
+       30    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:79(_is_private)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:674(formatMessage)
+      110    0.000    0.000    0.000    0.000 {method 'strip' of 'str' objects}
+        6    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\parse.py:931(quote_from_bytes)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\message.py:243(get_payload)
+        6    0.000    0.000    0.000    0.000 {method 'count' of 'bytes' objects}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connection.py:134(__init__)
+       16    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:573(_byte_offset_to_character_offset)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\typing_extensions.py:3029(_collect_parameters)
+    50/30    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\json\encoder.py:334(_iterencode_dict)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\typing.py:1212(__instancecheck__)
+       98    0.000    0.000    0.000    0.000 {method 'items' of 'dict' objects}
+        9    0.000    0.000    0.000    0.000 {built-in method setObjectName}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\retry.py:202(__init__)
+       36    0.000    0.000    0.000    0.000 {method 'acquire' of '_thread.RLock' objects}
+      122    0.000    0.000    0.000    0.000 {method 'pop' of 'dict' objects}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\url.py:263(_remove_path_dot_segments)
+        4    0.000    0.000    0.000    0.000 {method '__reduce_ex__' of 'object' objects}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\ctypes\__init__.py:389(__getattr__)
+       11    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:171(is_dock_deleted)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\linecache.py:147(lazycache)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\ssl.py:504(set_alpn_protocols)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\queue.py:154(get)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:660(requote_uri)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_compiler.py:511(_compile_info)
+      512    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_fast.py:183(<lambda>)
+      512    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_fast.py:246(<lambda>)
+        7    0.000    0.000    0.000    0.000 {method 'settimeout' of '_socket.socket' objects}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\socket.py:771(close)
+       42    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:1292(value)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:462(format)
+        7    0.000    0.000    0.000    0.000 {built-in method nt._getfullpathname}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connectionpool.py:348(_get_timeout)
+       14    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\threading.py:394(notify)
+        2    0.000    0.000    0.000    0.000 {built-in method setSortingEnabled}
+       10    0.000    0.000    0.000    0.000 <frozen codecs>:309(__init__)
+       56    0.000    0.000    0.000    0.000 {method 'find' of 'str' objects}
+        1    0.000    0.000    0.000    0.000 {built-in method setRootPath}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1126(__init__)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\code_editor.py:247(update_file_outline)
+        1    0.000    0.000    0.000    0.000 {built-in method today}
+       56    0.000    0.000    0.000    0.000 {built-in method builtins.issubclass}
+       40    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\message.py:511(set_raw)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\subprocess.py:1282(_close_pipe_fds)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:335(add_advanced_data_viewer_dock)
+      3/1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_compiler.py:37(_compile)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\settings_manager.py:63(get_typing_effect_speed)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\contextlib.py:132(__enter__)
+       73    0.000    0.000    0.000    0.000 {method 'setdefault' of 'dict' objects}
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\process_manager.py:116(update_process_list)
+       12    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connection.py:400(<genexpr>)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:928(__init__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\sklearn\feature_extraction\text.py:1938(__init__)
+       29    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\encodings\cp1252.py:18(encode)
+       10    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\structures.py:57(__iter__)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_validators.py:173(smoothly_deprecate_use_auth_token)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\sessions.py:107(get_redirect_target)
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+       28    0.000    0.000    0.000    0.000 <frozen ntpath>:35(_get_bothseps)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\cookies.py:542(merge_cookies)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:1035(_find_new_)
+        1    0.000    0.000    0.000    0.000 {built-in method setText}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\url.py:100(__new__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:1562(__and__)
+       34    0.000    0.000    0.000    0.000 <frozen codecs>:260(__init__)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\typing.py:1483(__subclasscheck__)
+        2    0.000    0.000    0.000    0.000 {built-in method setMouseTracking}
+        3    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\encodings\idna.py:155(encode)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\queue.py:34(__init__)
+        1    0.000    0.000    0.000    0.000 {built-in method globalInstance}
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\message.py:29(_splitparam)
+       10    0.000    0.000    0.000    0.000 <frozen ntpath>:156(splitdrive)
+        8    0.000    0.000    0.000    0.000 <frozen _collections_abc>:823(items)
+        1    0.000    0.000    0.000    0.000 {built-in method setExtraSelections}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:774(get_proxy)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:455(_format)
+      192    0.000    0.000    0.000    0.000 <frozen _collections_abc>:435(__subclasshook__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\difflib.py:120(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\ssl.py:670(verify_mode)
+       10    0.000    0.000    0.000    0.000 {method 'update' of 'dict' objects}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:1588(_get_spec)
+       18    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:38(_is_descriptor)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\typing.py:1472(<genexpr>)
+       19    0.000    0.000    0.000    0.000 {method 'format' of 'str' objects}
+       22    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\util.py:19(to_str)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\ssl.py:441(_encode_hostname)
+       33    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\textwrap.py:482(prefixed_lines)
+       10    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:968(acquire)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\ctypes\__init__.py:396(__getitem__)
+        1    0.000    0.000    0.000    0.000 {built-in method setLineWrapMode}
+        7    0.000    0.000    0.000    0.000 {built-in method setAttribute}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\timeout.py:188(clone)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:865(__init__)
+        5    0.000    0.000    0.000    0.000 {built-in method setAcceptDrops}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connectionpool.py:1149(_normalize_host)
+       24    0.000    0.000    0.000    0.000 {method 'count' of 'str' objects}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:494(prepare_body)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\tokenize.py:382(find_cookie)
+        7    0.000    0.000    0.000    0.000 {built-in method fontMetrics}
+       14    0.000    0.000    0.000    0.000 {built-in method builtins.any}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:426(_get_module_lock)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:668(usesTime)
+       10    0.000    0.000    0.000    0.000 {built-in method builtins.print}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\parse.py:520(urlunsplit)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\code_editor.py:446(populate_file_outline)
+       30    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:59(_is_sunder)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\ssl.py:542(minimum_version)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\ssl_.py:473(is_ipaddress)
+        2    0.000    0.000    0.000    0.000 {built-in method setContextMenuPolicy}
+       37    0.000    0.000    0.000    0.000 <frozen os>:777(check_str)
+       54    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\structures.py:58(<genexpr>)
+        4    0.000    0.000    0.000    0.000 {built-in method setShortcut}
+        1    0.000    0.000    0.000    0.000 {built-in method document}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\base64.py:65(b64decode)
+       11    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\cookiejar.py:1227(deepvalues)
+        6    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\typing.py:1206(__setattr__)
+       18    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:243(_releaseLock)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:514(_parse_content_type_header)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_base.py:1041(bos_token)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\url.py:332(_idna_encode)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\contextlib.py:104(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:769(is_redirect)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:258(__init__)
+        2    0.000    0.000    0.000    0.000 {built-in method addSeparator}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\connection.py:93(_set_socket_options)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\settings_manager.py:69(get_typing_effect_particle_count)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\typing.py:175(_type_check)
+       26    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:48(_is_dunder)
+       73    0.000    0.000    0.000    0.000 {method 'get' of 'mappingproxy' objects}
+       55    0.000    0.000    0.000    0.000 {method 'lstrip' of 'str' objects}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\sessions.py:799(mount)
+       14    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\threading.py:299(__enter__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\difflib.py:184(set_seqs)
+       16    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_runtime.py:77(is_package_available)
+      119    0.000    0.000    0.000    0.000 {built-in method builtins.id}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\typing.py:1165(__init__)
+        7    0.000    0.000    0.000    0.000 {built-in method nt._path_normpath}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\_collections.py:84(__init__)
+       12    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\copy.py:231(_keep_alive)
+       19    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:117(_iter_bits_lsb)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:430(close)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\retry.py:387(is_retry)
+       16    0.000    0.000    0.000    0.000 {method 'copy' of 'dict' objects}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\json\encoder.py:205(iterencode)
+        2    0.000    0.000    0.000    0.000 {built-in method setCurrentText}
+       19    0.000    0.000    0.000    0.000 {built-in method time.time}
+       51    0.000    0.000    0.000    0.000 {method 'upper' of 'str' objects}
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\widget_vault.py:463(__init__)
+       11    0.000    0.000    0.000    0.000 {built-in method objectName}
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\vault_manager.py:498(get_projects)
+        2    0.000    0.000    0.000    0.000 {built-in method setColumnWidth}
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\copy.py:252(<genexpr>)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:396(_check_close)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\response.py:446(_init_decoder)
+        1    0.000    0.000    0.000    0.000 {built-in method setTabsClosable}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:802(spec_from_file_location)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_errors.py:248(hf_raise_for_status)
+       21    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\timeout.py:130(_validate_timeout)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\GUX\code_editor.py:431(__init__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\sklearn\feature_extraction\text.py:1150(__init__)
+       66    0.000    0.000    0.000    0.000 {method 'partition' of 'str' objects}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:162(__enter__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\feedparser.py:52(__init__)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:170(<lambda>)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\feedparser.py:69(close)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:799(iter_content)
+       56    0.000    0.000    0.000    0.000 {method 'end' of 're.Match' objects}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\socket.py:682(__init__)
+        3    0.000    0.000    0.000    0.000 {built-in method setEnabled}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1497(__init__)
+       30    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:70(_is_internal_class)
+        2    0.000    0.000    0.000    0.000 {built-in method setWindowTitle}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\socket.py:517(family)
+        4    0.000    0.000    0.000    0.000 {function SocketIO.close at 0x000002198175D1C0}
+       43    0.000    0.000    0.000    0.000 {method 'extend' of 'list' objects}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\parse.py:413(_splitnetloc)
+       14    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\threading.py:314(_is_owned)
+       34    0.000    0.000    0.000    0.000 {method 'rpartition' of 'str' objects}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\weakref.py:568(__init__)
+        5    0.000    0.000    0.000    0.000 {built-in method _asyncio.current_task}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:420(__exit__)
+        7    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\cookiejar.py:884(__init__)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:447(usesTime)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\request.py:189(body_to_chunks)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\_distutils_hack\__init__.py:102(find_spec)
+        7    0.000    0.000    0.000    0.000 {built-in method blockCount}
+        2    0.000    0.000    0.000    0.000 {built-in method setFocusPolicy}
+        2    0.000    0.000    0.000    0.000 <string>:2(__init__)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_runtime.py:256(is_torch_available)
+        2    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:144(is_dock_valid)
+        1    0.000    0.000    0.000    0.000 {built-in method palette}
+       29    0.000    0.000    0.000    0.000 {built-in method _codecs.charmap_encode}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:334(__init__)
+        6    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connection.py:164(host)
+        2    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:132(_path_split)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\message.py:150(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\response.py:244(__init__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\difflib.py:222(set_seq2)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\models\auto\auto_factory.py:790(__contains__)
+        9    0.000    0.000    0.000    0.000 {built-in method setCheckable}
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\menu_manager.py:16(__init__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\timeout.py:172(from_float)
+       42    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\_collections.py:291(__iter__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\difflib.py:305(find_longest_match)
+        6    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\vault_manager.py:414(get_current_vault)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:892(_addHandlerRef)
+        2    0.000    0.000    0.000    0.000 {built-in method binascii.a2b_base64}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\feedparser.py:121(pushlines)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\cursor_manager.py:27(get_current_cursor_pos)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\cookiejar.py:1734(clear_expired_cookies)
+       12    0.000    0.000    0.000    0.000 {method 'fullmatch' of 're.Pattern' objects}
+       14    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\threading.py:302(__exit__)
+       22    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:168(__getitem__)
+        2    0.000    0.000    0.000    0.000 {built-in method index}
+        3    0.000    0.000    0.000    0.000 {built-in method resize}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\cookies.py:358(update)
+      4/2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:178(getwidth)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:666(_classify_pyc)
+       36    0.000    0.000    0.000    0.000 {method 'release' of '_thread.RLock' objects}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\_collections.py:95(__getitem__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\feedparser.py:195(_new_message)
+        5    0.000    0.000    0.000    0.000 {function CompEditor.resizeEvent at 0x00000219C8587B00}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:372(release)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\uuid.py:280(__str__)
+        1    0.000    0.000    0.000    0.000 {method 'setsockopt' of '_socket.socket' objects}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\copy.py:191(_deepcopy_list)
+       33    0.000    0.000    0.000    0.000 {method 'add' of 'set' objects}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\typing_extensions.py:2954(_has_generic_or_protocol_as_origin)
+       14    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:1064(_output)
+       24    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connection.py:353(<genexpr>)
+      2/1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_compiler.py:436(_get_literal_prefix)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:124(setdefault)
+        4    0.000    0.000    0.000    0.000 {method '__setstate__' of 'tokenizers.AddedToken' objects}
+        1    0.000    0.000    0.000    0.000 {built-in method setViewportMargins}
+        5    0.000    0.000    0.000    0.000 {built-in method rect}
+        5    0.000    0.000    0.000    0.000 {method 'flush' of '_io.TextIOWrapper' objects}
+       16    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_runtime.py:73(_get_version)
+       16    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:261(get)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\copyreg.py:98(__newobj__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:98(closegroup)
+       11    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\cookiejar.py:1753(__iter__)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:383(__init__)
+        2    0.000    0.000    0.000    0.000 {built-in method setToolTip}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\ssl_.py:184(resolve_cert_reqs)
+       16    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\retry.py:242(<genexpr>)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\difflib.py:1303(ndiff)
+        4    0.000    0.000    0.000    0.000 {built-in method setContentsMargins}
+       12    0.000    0.000    0.000    0.000 <frozen _collections_abc>:845(__init__)
+        2    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\project_manager.py:200(get_projects)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_fast.py:226(vocab_size)
+        7    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\typing.py:1152(_is_dunder)
+        3    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\threading.py:277(__init__)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\threading.py:1180(name)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:856(_load_lines)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\parse.py:672(unquote)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\typing.py:1276(__hash__)
+        9    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1776(getEffectiveLevel)
+        1    0.000    0.000    0.000    0.000 {built-in method setBackground}
+       42    0.000    0.000    0.000    0.000 {method 'popleft' of 'collections.deque' objects}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\sessions.py:781(get_adapter)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:874(_removeHandlerRef)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\cookiejar.py:1297(_cookie_attrs)
+       18    0.000    0.000    0.000    0.000 {method 'keys' of 'dict' objects}
+       21    0.000    0.000    0.000    0.000 {method 'values' of 'dict' objects}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\file_download.py:828(_normalize_etag)
+        3    0.000    0.000    0.000    0.000 {built-in method contentsRect}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:185(_path_abspath)
+        6    0.000    0.000    0.000    0.000 {method 'subn' of 're.Pattern' objects}
+        3    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:84(_unpack_uint32)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\parse.py:156(username)
+       12    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\queue.py:251(_put)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:997(raise_for_status)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\_collections.py:102(__setitem__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:636(unquote_unreserved)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:957(_check_for_existing_members_)
+        1    0.000    0.000    0.000    0.000 {built-in method pos}
+        2    0.000    0.000    0.000    0.000 {built-in method setIcon}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\ssl.py:556(options)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:393(prepare_method)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_runtime.py:119(is_fastcore_available)
+       10    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:831(filter)
+       10    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:975(release)
+       14    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\queue.py:248(_qsize)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\response.py:9(is_fp_closed)
+        3    0.000    0.000    0.000    0.000 {built-in method geometry}
+        9    0.000    0.000    0.000    0.000 {built-in method isFloating}
+       12    0.000    0.000    0.000    0.000 {method 'splitlines' of 'str' objects}
+        4    0.000    0.000    0.000    0.000 <frozen _collections_abc>:819(keys)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\difflib.py:266(__chain_b)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\threading.py:1483(current_thread)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\NITTY_GRITTY\ThreadTrackers.py:18(__init__)
+        2    0.000    0.000    0.000    0.000 {method 'write' of '_io.StringIO' objects}
+        6    0.000    0.000    0.000    0.000 {method 'decode' of 'bytearray' objects}
+        3    0.000    0.000    0.000    0.000 {method 'split' of 'bytes' objects}
+        9    0.000    0.000    0.000    0.000 {built-in method setChecked}
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:312(_original_line)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:947(_wrap_ipv6)
+        2    0.000    0.000    0.000    0.000 <frozen _collections_abc>:848(__len__)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_token.py:48(_get_token_from_google_colab)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:129(getLevelName)
+        1    0.000    0.000    0.000    0.000 {method 'getsockopt' of '_socket.socket' objects}
+        3    0.000    0.000    0.000    0.000 {built-in method pixmap}
+        4    0.000    0.000    0.000    0.000 {built-in method builtins.all}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:172(_path_isabs)
+        9    0.000    0.000    0.000    0.000 {built-in method parent}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\wait.py:82(_have_working_poll)
+        2    0.000    0.000    0.000    0.000 {built-in method setDragDropMode}
+        3    0.000    0.000    0.000    0.000 {built-in method _thread.allocate_lock}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:982(find_spec)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\response.py:1079(closed)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\typing.py:1270(__eq__)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\base64.py:34(_bytes_from_decode_data)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\parse.py:958(urlencode)
+       19    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:240(__next)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\typing.py:1196(__getattr__)
+       10    0.000    0.000    0.000    0.000 {method 'groups' of 're.Match' objects}
+       21    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:491(_verbose_message)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\response.py:403(retries)
+       10    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\_internal_utils.py:25(to_native_string)
+        1    0.000    0.000    0.000    0.000 {built-in method setStyleHint}
+        2    0.000    0.000    0.000    0.000 {built-in method nt.urandom}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\socket.py:507(detach)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\hooks.py:15(default_hooks)
+       13    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:176(append)
+        6    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:208(_checkLevel)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:2021(basicConfig)
+       78    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\copy.py:172(_deepcopy_atomic)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\poolmanager.py:374(_merge_pool_kwargs)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\timeout.py:245(read_timeout)
+        7    0.000    0.000    0.000    0.000 {built-in method nt.getpid}
+        2    0.000    0.000    0.000    0.000 {built-in method update}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\_internal_utils.py:38(unicode_is_ascii)
+        2    0.000    0.000    0.000    0.000 {method 'no_truncation' of 'tokenizers.Tokenizer' objects}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:958(createLock)
+        1    0.000    0.000    0.000    0.000 {method 'getpeername' of '_socket.socket' objects}
+        6    0.000    0.000    0.000    0.000 {built-in method sys._getframe}
+        3    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:645(parent)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:442(flush)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_runtime.py:247(is_tf_available)
+        2    0.000    0.000    0.000    0.000 <frozen _collections_abc>:549(__subclasshook__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\timeout.py:202(start_connect)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\file_download.py:964(repo_folder_name)
+       14    0.000    0.000    0.000    0.000 {method '__enter__' of '_thread.lock' objects}
+        6    0.000    0.000    0.000    0.000 {method 'rstrip' of 'bytes' objects}
+        2    0.000    0.000    0.000    0.000 <frozen _collections_abc>:104(_check_methods)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\multiprocessing\process.py:37(current_process)
+        2    0.000    0.000    0.000    0.000 {method 'get_vocab_size' of 'tokenizers.Tokenizer' objects}
+       10    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:638(_display_width)
+       14    0.000    0.000    0.000    0.000 {method 'acquire' of '_thread.lock' objects}
+        4    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:67(_relax_case)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\timeout.py:126(resolve_default_timeout)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:1263(_encode_request)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\ssl.py:560(options)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\ssl.py:678(verify_mode)
+        2    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\NITTY_GRITTY\database.py:97(__init__)
+       35    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:560(root)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\vault_manager.py:509(get_vault_names)
+        5    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:1469(_path_importer_cache)
+        2    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\vault_manager.py:507(get_vault)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\message.py:331(set_payload)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\process_manager.py:46(get_running_processes)
+       24    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\inspect.py:3079(parameters)
+       14    0.000    0.000    0.000    0.000 {built-in method _thread.get_ident}
+        8    0.000    0.000    0.000    0.000 {method 'update' of 'set' objects}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\socket.py:491(_decref_socketios)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\retry.py:379(_is_method_retryable)
+        1    0.000    0.000    0.000    0.000 {built-in method setProperty}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:1128(find_spec)
+       14    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:1411(<lambda>)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\parse.py:175(port)
+        4    0.000    0.000    0.000    0.000 {method 'pop' of 'collections.OrderedDict' objects}
+        8    0.000    0.000    0.000    0.000 {built-in method builtins.min}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_runtime.py:101(is_fastai_available)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\contextlib.py:567(__exit__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:449(_uniq)
+       13    0.000    0.000    0.000    0.000 {built-in method _io.text_encoding}
+       12    0.000    0.000    0.000    0.000 {method 'values' of 'collections.OrderedDict' objects}
+       22    0.000    0.000    0.000    0.000 {method 'isascii' of 'str' objects}
+        4    0.000    0.000    0.000    0.000 {method 'read' of '_io.StringIO' objects}
+        4    0.000    0.000    0.000    0.000 {method 'startswith' of 'bytes' objects}
+        2    0.000    0.000    0.000    0.000 {built-in method installEventFilter}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\cookiejar.py:1290(_cookies_for_request)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\vault_manager.py:397(get_vaults)
+        2    0.000    0.000    0.000    0.000 {built-in method widget}
+        7    0.000    0.000    0.000    0.000 {method 'pop' of 'list' objects}
+        2    0.000    0.000    0.000    0.000 {method 'Close' of 'winreg.PyHKEY' objects}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:232(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\hooks.py:22(dispatch_hook)
+       38    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:569(_tail)
+        1    0.000    0.000    0.000    0.000 {built-in method _imp.is_builtin}
+        1    0.000    0.000    0.000    0.000 <frozen os>:1116(__subclasshook__)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\adapters.py:140(__init__)
+        2    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\action_handlers.py:8(__init__)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\linecache.py:52(checkcache)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\parse.py:193(_userinfo)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\feedparser.py:208(_pop_message)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\ssl.py:570(hostname_checks_common_name)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:986(_find_data_repr_)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\pathlib.py:274(__len__)
+        2    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\vault_manager.py:315(get_current_vault_path)
+        9    0.000    0.000    0.000    0.000 {built-in method isVisible}
+        4    0.000    0.000    0.000    0.000 {method 'seek' of '_io.BufferedReader' objects}
+        6    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:134(<genexpr>)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\message.py:211(is_multipart)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\structures.py:60(__len__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\file_download.py:1929(_int_or_none)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_base.py:1052(eos_token)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:231(__init__)
+        6    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:211(<genexpr>)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_compiler.py:407(_generate_overlap_table)
+        1    0.000    0.000    0.000    0.000 {built-in method count}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:699(_validate_timestamp_pyc)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:383(getMessage)
+        1    0.000    0.000    0.000    0.000 {method '_set_alpn_protocols' of '_ssl._SSLContext' objects}
+        1    0.000    0.000    0.000    0.000 {built-in method setCurrentIndex}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:445(cb)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\typing_extensions.py:2976(_is_unpacked_typevartuple)
+        1    0.000    0.000    0.000    0.000 {built-in method currentWidget}
+        2    0.000    0.000    0.000    0.000 {built-in method setDragEnabled}
+        8    0.000    0.000    0.000    0.000 {method 'co_positions' of 'code' objects}
+        3    0.000    0.000    0.000    0.000 {method 'sort' of 'list' objects}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:82(remove)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\json\encoder.py:105(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:1276(_validate_path)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\json\encoder.py:260(_make_iterencode)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:1267(_validate_method)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\socket.py:523(type)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\socket.py:733(readable)
+        3    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\file_manager.py:12(__init__)
+        4    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:1226(__exit__)
+        8    0.000    0.000    0.000    0.000 {built-in method height}
+        9    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:453(isclosed)
+       14    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\utils\hub.py:83(is_offline_mode)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:265(__init__)
+        1    0.000    0.000    0.000    0.000 {built-in method setAlpha}
+        4    0.000    0.000    0.000    0.000 {method 'extend' of 'collections.deque' objects}
+        2    0.000    0.000    0.000    0.000 {built-in method contains}
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\editor_manager.py:28(__init__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\contextlib.py:481(__init__)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1317(__init__)
+        2    0.000    0.000    0.000    0.000 {built-in method setAnimated}
+        2    0.000    0.000    0.000    0.000 {built-in method model}
+        1    0.000    0.000    0.000    0.000 {built-in method isReadOnly}
+       11    0.000    0.000    0.000    0.000 {built-in method _json.encode_basestring_ascii}
+        1    0.000    0.000    0.000    0.000 {built-in method _winapi.CloseHandle}
+        2    0.000    0.000    0.000    0.000 {method 'values' of 'mappingproxy' objects}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:657(__init__)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\_request_methods.py:51(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\queue.py:254(_get)
+        2    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\build_manager.py:7(__init__)
+        4    0.000    0.000    0.000    0.000 {built-in method time.perf_counter}
+        1    0.000    0.000    0.000    0.000 {built-in method builtins.locals}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:74(__new__)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:293(tell)
+        1    0.000    0.000    0.000    0.000 {built-in method textCursor}
+        8    0.000    0.000    0.000    0.000 {method 'seek' of '_io.StringIO' objects}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\models\auto\tokenization_auto.py:554(tokenizer_class_from_name)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_runtime.py:297(is_google_colab)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:86(opengroup)
+        8    0.000    0.000    0.000    0.000 {method 'items' of 'collections.OrderedDict' objects}
+       29    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\parse.py:108(_noop)
+        1    0.000    0.000    0.000    0.000 <string>:1(<lambda>)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:1284(_validate_host)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\sessions.py:91(merge_hooks)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:811(__init__)
+        1    0.000    0.000    0.000    0.000 {built-in method clearSelection}
+        1    0.000    0.000    0.000    0.000 {built-in method _sre.compile}
+        3    0.000    0.000    0.000    0.000 {built-in method _stat.S_ISDIR}
+       14    0.000    0.000    0.000    0.000 {method '__exit__' of '_thread.lock' objects}
+       10    0.000    0.000    0.000    0.000 <frozen _collections_abc>:341(__subclasshook__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\request.py:134(set_file_position)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_base.py:1133(bos_token)
+        2    0.000    0.000    0.000    0.000 {built-in method toPlainText}
+        2    0.000    0.000    0.000    0.000 {method '_checkReadable' of '_io._IOBase' objects}
+        6    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\cookiejar.py:44(_debug)
+       18    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:251(__init__)
+        2    0.000    0.000    0.000    0.000 {built-in method addStretch}
+        1    0.000    0.000    0.000    0.000 {built-in method setSpacing}
+        3    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\urllib\parse.py:421(_checknetloc)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_compiler.py:398(_simple)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:256(match)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:162(_format_final_exc_line)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\vault_manager.py:159(get_project_names)
+        2    0.000    0.000    0.000    0.000 {built-in method setIndentation}
+        6    0.000    0.000    0.000    0.000 {method '__exit__' of 'memoryview' objects}
+        3    0.000    0.000    0.000    0.000 {built-in method left}
+       18    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\enum.py:1185(__init__)
+        9    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:1369(disable)
+        3    0.000    0.000    0.000    0.000 {method 'gettimeout' of '_socket.socket' objects}
+        1    0.000    0.000    0.000    0.000 {built-in method setWindowOpacity}
+        1    0.000    0.000    0.000    0.000 {method 'getvalue' of '_io.StringIO' objects}
+        5    0.000    0.000    0.000    0.000 {built-in method from_bytes}
+        4    0.000    0.000    0.000    0.000 {method 'update' of 'collections.OrderedDict' objects}
+        4    0.000    0.000    0.000    0.000 {built-in method sys.audit}
+        1    0.000    0.000    0.000    0.000 {built-in method sys.exit}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:643(_check_name_wrapper)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:572(prepare_content_length)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\editor_manager.py:41(set_current_window)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:164(__len__)
+        1    0.000    0.000    0.000    0.000 {built-in method isModified}
+        3    0.000    0.000    0.000    0.000 {built-in method width}
+        4    0.000    0.000    0.000    0.000 {method 'truncate' of '_io.StringIO' objects}
+        2    0.000    0.000    0.000    0.000 {method 'translate' of 'bytes' objects}
+        6    0.000    0.000    0.000    0.000 {built-in method _imp.release_lock}
+        1    0.000    0.000    0.000    0.000 {built-in method _imp.find_frozen}
+        2    0.000    0.000    0.000    0.000 {built-in method sys.exc_info}
+        2    0.000    0.000    0.000    0.000 <frozen codecs>:186(__init__)
+        2    0.000    0.000    0.000    0.000 <frozen os>:853(fsdecode)
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\multiprocessing\process.py:189(name)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\difflib.py:196(set_seq1)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\difflib.py:810(__init__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\netrc.py:66(netrc)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_compiler.py:570(isstring)
+       22    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:676(<lambda>)
+        6    0.000    0.000    0.000    0.000 {method '__exit__' of '_thread.RLock' objects}
+        2    0.000    0.000    0.000    0.000 {method 'cast' of 'memoryview' objects}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\ssl_.py:207(resolve_ssl_version)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\connection.py:103(allowed_gai_family)
+        6    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\response.py:248(__len__)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\cookies.py:110(__init__)
+        3    0.000    0.000    0.000    0.000 {method 'remove' of 'list' objects}
+        6    0.000    0.000    0.000    0.000 {built-in method _imp.acquire_lock}
+        5    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\timeout.py:227(connect_timeout)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_runtime.py:87(get_hf_hub_version)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\typing.py:2330(get_origin)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\collections\__init__.py:447(_make)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\typing_extensions.py:2916(_check_generic)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:83(groups)
+        5    0.000    0.000    0.000    0.000 {method 'pop' of 'set' objects}
+        4    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:1222(__enter__)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:173(__exit__)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_runtime.py:82(get_python_version)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\utils\import_utils.py:296(is_torch_available)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_base.py:1139(eos_token)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\netrc.py:22(_netrclex)
+        3    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:662(indent)
+        1    0.000    0.000    0.000    0.000 {built-in method nt.getcwd}
+        1    0.000    0.000    0.000    0.000 {method 'append' of 'bytearray' objects}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:79(__init__)
+        2    0.000    0.000    0.000    0.000 {built-in method y}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\dynamic_module_utils.py:603(resolve_trust_remote_code)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\contextlib.py:440(__init__)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\cccore.py:281(set_menu_manager)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:48(_new_module)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connection.py:295(is_closed)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:96(_parse_value_tb)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:170(_safe_string)
+        2    0.000    0.000    0.000    0.000 {built-in method setRootIndex}
+        2    0.000    0.000    0.000    0.000 {method 'count' of 'list' objects}
+        2    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\project_manager.py:267(get_current_project)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:743(set_environ)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\netrc.py:10(NetrcParseError)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\contextlib.py:446(__exit__)
+        2    0.000    0.000    0.000    0.000 {built-in method time.monotonic}
+        2    0.000    0.000    0.000    0.000 {method 'isalpha' of 'str' objects}
+        1    0.000    0.000    0.000    0.000 {built-in method _imp._fix_co_filename}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\parser.py:17(__init__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connection.py:309(proxy_is_forwarding)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\cookies.py:87(get_new_headers)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\cookies.py:117(info)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:953(fix_flags)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\cccore.py:220(set_overlay)
+        1    0.000    0.000    0.000    0.000 {built-in method nt._path_splitroot}
+        1    0.000    0.000    0.000    0.000 {method 'extend' of 'bytearray' objects}
+        1    0.000    0.000    0.000    0.000 {built-in method setSingleShot}
+        3    0.000    0.000    0.000    0.000 {built-in method top}
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\ssl.py:1083(_checkClosed)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\tokenization_utils_base.py:2254(<genexpr>)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\typing.py:166(_type_convert)
+        3    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:113(__init__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\subprocess.py:193(__init__)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\cccore.py:79(set_widget_manager)
+        1    0.000    0.000    0.000    0.000 {built-in method fromkeys}
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\email\feedparser.py:124(__iter__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connection.py:183(host)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\utils.py:891(default_user_agent)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_headers.py:174(_validate_token_to_send)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\huggingface_hub\utils\_token.py:123(_clean_token)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\typing.py:1264(<genexpr>)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_compiler.py:31(_combine_flags)
+        1    0.000    0.000    0.000    0.000 {method 'fileno' of '_socket.socket' objects}
+        2    0.000    0.000    0.000    0.000 {method '_checkClosed' of '_io._IOBase' objects}
+        2    0.000    0.000    0.000    0.000 {built-in method builtins.callable}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\queue.py:245(_init)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\util\proxy.py:11(connection_requires_http_tunnel)
+        8    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\contextlib.py:443(__enter__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:77(__init__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\http\client.py:924(_get_hostport)
+        4    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\inspect.py:2786(name)
+        1    0.000    0.000    0.000    0.000 {built-in method _socket.getdefaulttimeout}
+        1    0.000    0.000    0.000    0.000 {built-in method _weakref._remove_dead_weakref}
+        1    0.000    0.000    0.000    0.000 {built-in method atexit.register}
+        1    0.000    0.000    0.000    0.000 {method 'close' of '_io.StringIO' objects}
+        2    0.000    0.000    0.000    0.000 {function HTTPResponse.flush at 0x00000219817FE520}
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:599(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_compiler.py:428(_get_iscased)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\widget_manager.py:80(set_main_window)
+        1    0.000    0.000    0.000    0.000 x:\_WORK\Python\Qt\BigLinks\HMC\cccore.py:296(get_project_manager)
+        2    0.000    0.000    0.000    0.000 {built-in method builtins.iter}
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\models.py:216(<genexpr>)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\re\_parser.py:172(__setitem__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\logging\__init__.py:254(_register_at_fork_reinit_lock)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:1153(__init__)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\urllib3\connectionpool.py:339(_validate_conn)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\ssl.py:1087(_check_connected)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\requests\adapters.py:578(add_headers)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\transformers\utils\import_utils.py:540(is_tf_available)
+        2    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\typing.py:2173(cast)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\subprocess.py:1335(_get_handles)
+        1    0.000    0.000    0.000    0.000 {function socket.detach at 0x000002198175C680}
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\site-packages\_distutils_hack\__init__.py:109(<lambda>)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\contextlib.py:564(__enter__)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\traceback.py:673(<lambda>)
+        1    0.000    0.000    0.000    0.000 C:\Users\thewi\miniconda3\Lib\subprocess.py:259(_cleanup)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:653(has_location)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:1178(get_filename)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap_external>:986(create_module)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:158(__init__)
+        1    0.000    0.000    0.000    0.000 <frozen importlib._bootstrap>:412(__init__)
+
+

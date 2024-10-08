@@ -22,7 +22,8 @@ from GUX.media_player import MediaPlayer
 from GUX.diff_merger import DiffMergerWidget
 from HMC.sticky_note_manager import StickyNoteManager
 from HMC.download_manager import DownloadManager, DownloadManagerUI
-from GUX.widget_vault import VaultWidget, VaultsManagerWidget
+from NITTY_GRITTY.object_tree import ObjectTreeModel
+from GUX.debuuginator import CoolWidget
 from GUX.theme_builder import ThemeBuilderWidget
 import serial
 import serial.tools.list_ports
@@ -34,6 +35,7 @@ import logging
 import traceback
 from GUX.file_search_widget import FileSearchWidget
 from HMC.project_manager import ManyProjectsManagerWidget
+from GUX.widget_vault import VaultWidget, VaultsManagerWidget, AdvancedDataViewerWidget, StateInspectorWidget
 class WidgetManager:
     def __init__(self, cccore):
         self.cccore = cccore
@@ -245,7 +247,7 @@ class WidgetManager:
                 current_parent.removeDockWidget(dock)
                 target_window.addDockWidget(self.dock_configs[name]["area"], dock)
 
-    def add_dock_widget(self, widget, title, area):
+    def add_dock_widget(self, widget, title, area, hidden=False):
         dock = QDockWidget(title, self.main_window)
         dock.setObjectName(f"{title.replace(' ', '')}DockWidget")
         widget.setMinimumWidth(300)
@@ -253,14 +255,18 @@ class WidgetManager:
         self.main_window.addDockWidget(area, dock)
         self.docks[title] = dock
         self.all_dock_widgets[title] = dock  # Add to all_dock_widgets
-        
+        if hidden:
+            dock.hide()
         widget.installEventFilter(self.main_window)
         if len(self.docks) > 1:
             self.main_window.tabifyDockWidget(list(self.docks.values())[-2], dock)
 
         return dock
 
-    
+    def show_dock_widget(self, title):
+        if title in self.docks:
+            self.docks[title].show()   
+   
     def update_flashlight_settings(self, value):
         power = value / 100.0
         self.overlay.flashlight_overlay.set_power(power)
@@ -326,7 +332,20 @@ class WidgetManager:
 
     def get_all_dock_widgets(self):
         return self.all_dock_widgets
-
+    def add_advanced_data_viewer_dock(self):
+        if 'advanced_data_viewer_dock' not in self.docks:
+            advanced_data_viewer = AdvancedDataViewerWidget(self.cccore)
+            dock = self.add_dock_widget(advanced_data_viewer, "Advanced Data Viewer", Qt.DockWidgetArea.RightDockWidgetArea)
+            self.docks['advanced_data_viewer_dock'] = dock
+            
+            # Create an action to toggle the dock's visibility
+            action = QAction("Advanced Data Viewer", self.cccore.main_window)
+            action.setCheckable(True)
+            action.setChecked(dock.isVisible())
+            action.triggered.connect(dock.toggleViewAction().trigger)
+            
+            return dock, action
+        return self.docks['advanced_data_viewer_dock'], self.docks['advanced_data_viewer_dock'].toggleViewAction()
     def save_current_workspace(self):
         active_workspace = self.workspace_manager.get_active_workspace()
         if active_workspace:
@@ -430,6 +449,11 @@ class WidgetManager:
 
             self.overlay_settings_widget = widget
         return self.overlay_settings_widget
+    def AdvancedDataViewerWidget(self, cccore):
+        if 'advanced_data_viewer' not in self.widgets:
+            self.widgets['advanced_data_viewer'] = AdvancedDataViewerWidget(parent=self.main_window)
+        return self.widgets['advanced_data_viewer']
+
     def open_file_from_search(self, file_path):
         self.cccore.editor_manager.open_file(file_path)
 
@@ -481,3 +505,36 @@ class WidgetManager:
         layout.addWidget(QLabel("Project:"))
         layout.addWidget(project_selector)
         return widget
+    
+    def StateInspectorWidget(self, cccore):
+        if 'state_inspector' not in self.widgets:
+            self.widgets['state_inspector'] = StateInspectorWidget(cccore, parent=self.main_window)
+        return self.widgets['state_inspector']
+
+    def add_state_inspector_dock(self):
+        if 'state_inspector_dock' not in self.docks:
+            state_inspector = self.StateInspectorWidget(self.cccore)
+            self.docks['state_inspector_dock'] = self.add_dock_widget(
+                state_inspector,
+                "State Inspector",
+                Qt.DockWidgetArea.RightDockWidgetArea,
+                hidden=True
+            )
+        return self.docks['state_inspector_dock']
+
+    def get_cool_widget(self):
+        if 'cool' not in self.widgets:
+            self.widgets['cool'] = CoolWidget(self.cccore)
+        return self.widgets['cool']
+
+    def add_cool_dock(self):
+        if 'cool_dock' not in self.docks:
+            cool_widget = self.get_cool_widget()
+            self.docks['cool_dock'] = self.add_dock_widget(
+                cool_widget,
+                "Code Tool",
+                Qt.DockWidgetArea.BottomDockWidgetArea,
+                hidden=True
+            )
+        return self.docks['cool_dock']
+  

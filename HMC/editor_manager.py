@@ -86,7 +86,7 @@ class EditorManager:
             content = ""
         
         try:
-            editor = CodeEditor(self.cccore)
+            editor = CodeEditor(self.cccore,parent=self.current_window)
             editor.set_file_path(file_path)
             editor.setText(content)
             

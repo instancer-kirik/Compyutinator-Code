@@ -12,78 +12,84 @@ from PyQt6.QtCore import QProcess
 from llama_cpp import Llama
 
 from PyQt6.QtCore import QSettings
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import spacy
-from spacy.lang.en.stop_words import STOP_WORDS
-nlp = spacy.load("en_core_web_sm")
 from string import punctuation
 from heapq import nlargest
 from collections import Counter
+import re
+from collections import deque
 # Define threshold
 
 threshold = 0.5
 
 class AIMemoryManager:
-    def __init__(self):
-        self.memory = []
-        self.memory_model = pipeline("text-classification", model="distilbert-base-uncased-finetuned-sst-2-english")
+    def __init__(self, max_memories=100):
+        self.code_memory = []
+        self.project_memory = deque(maxlen=max_memories)
+        self.vectorizer = TfidfVectorizer(stop_words='english')
 
-    def add_memory(self, description, content):
-        if self.should_remember(content):
-            self.memory.append((description, content))
+    def add_memory(self, description, content, memory_type='code'):
+        if memory_type == 'code' and self.should_remember_code(content):
+            self.code_memory.append((description, content))
+        elif memory_type == 'project':
+            self.project_memory.append((description, content))
 
-    def extract_keywords(self, content, top_n=5):
-        # Process the text with spaCy
-        doc = nlp(content)
-        
-        # Extract nouns and proper nouns as keywords
-        keywords = [token.text for token in doc if token.pos_ in ('NOUN', 'PROPN')]
-        
-        # Get the most common keywords
-        most_common_keywords = Counter(keywords).most_common(top_n)
-        
-        return [keyword for keyword, _ in most_common_keywords]
+    def should_remember_code(self, content):
+        relevant_keywords = ['def ', 'class ', 'import ', 'from ', 'if __name__']
+        return any(keyword in content for keyword in relevant_keywords)
 
-    def should_remember(self, content, recent_message):
-        # Combine techniques to decide if content should be remembered
-        relevance = self.score_relevance(content, recent_message)
-        summary = self.summarize_content(content)
-        keywords = self.extract_keywords(content)
-        evaluation = self.evaluate_memory(content)
-        
-        # Decide based on combined criteria
-        return relevance > 0.5 or evaluation
+    def add_project_info(self, info_type, content):
+        self.project_memory.append((info_type, content))
 
-    def summarize_content(self, content):
-        # Initialize a summarization pipeline
-        summarization_model = pipeline("summarization", model="facebook/bart-large-cnn")
-        # Use the model to generate a summary
-        summary = summarization_model(content, max_length=130, min_length=30, do_sample=False)
-        return summary[0]['summary_text']
-
-    def score_relevance(self, context, message):
-        # Use cosine similarity or another metric to score relevance
-        tfidf_matrix = self.vectorizer.fit_transform([context, message])
-        similarity = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2]).flatten()[0]
-        return similarity
-
-    def evaluate_memory(self, content):
-        # Use the model to predict the importance of the content
-        result = self.memory_model(content)
-        return result[0]['label'] == 'LABEL_1'  # Adjust based on your model's labels
-
-    def get_memory(self, description):
-        for desc, content in self.memory:
+    def get_memory(self, description, memory_type='code'):
+        memory = self.code_memory if memory_type == 'code' else self.project_memory
+        for desc, content in memory:
             if desc == description:
                 return content
         return None
 
-    def clear_memory(self):
-        self.memory = []
+    def get_relevant_memories(self, query, top_n=3):
+        all_memories = self.code_memory + list(self.project_memory)
+        scored_memories = [(desc, content, self.relevance_score(query, content)) 
+                           for desc, content in all_memories]
+        sorted_memories = sorted(scored_memories, key=lambda x: x[2], reverse=True)
+        logging.debug(f"Sorted memories (top {top_n}): {sorted_memories[:top_n]}")
+        return sorted_memories[:top_n]
+
+    def relevance_score(self, query, content):
+        if self.is_code_content(content):
+            return self.code_relevance_score(query, content)
+        else:
+            return self.nlp_relevance_score(query, content)
+
+    def is_code_content(self, content):
+        code_indicators = ['def ', 'class ', 'import ', 'from ', 'if __name__']
+        return any(indicator in content for indicator in code_indicators)
+
+    def code_relevance_score(self, query, content):
+        query_words = set(re.findall(r'\w+', query.lower()))
+        content_words = set(re.findall(r'\w+', content.lower()))
+        return len(query_words.intersection(content_words))
+
+    def nlp_relevance_score(self, query, content):
+        tfidf_matrix = self.vectorizer.fit_transform([query, content])
+        return cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
+
+    def clear_memory(self, memory_type=None):
+        if memory_type == 'code' or memory_type is None:
+            self.code_memory = []
+        if memory_type == 'project' or memory_type is None:
+            self.project_memory.clear()
 
     def get_all_memories(self):
-        return self.memory
+        return {'code': self.code_memory, 'project': list(self.project_memory)}
 
+    def get_context_aware_completions(self, current_code, cursor_position):
+        relevant_memories = self.get_relevant_memories(current_code, top_n=5)
+        # Use relevant memories to generate completion suggestions
+        # This is a placeholder for more sophisticated completion logic
+        return [mem[1] for mem in relevant_memories]
 
 class ModelLoadWorker(QThread):
     progress = pyqtSignal(int, int)  # bytes_downloaded, total_bytes
@@ -183,7 +189,7 @@ class ModelManager(QObject):
             self.generate_worker = GenerateWorker(self.model, messages, max_tokens)
             self.generate_worker.finished.connect(self.on_generation_finished)
             self.generate_worker.error.connect(self.on_generation_error)
-            self.generate_worker.partial_response.connect(self.partial_response)  # Connect partial responses
+            self.generate_worker.partial_response.connect(self.partial_response)
             self.generate_worker.start()
         except Exception as e:
             logging.error(f"Error in generate method: {e}")
@@ -213,8 +219,4 @@ class ModelManager(QObject):
 
    
 
-    def get_installed_models(self):
-        models = [f for f in os.listdir(self.models_dir) if f.endswith('.gguf')]
-        complete_models = [model for model in models if self.check_model_integrity(model)]
-        return complete_models
-
+   

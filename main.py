@@ -609,11 +609,14 @@ class MainApplication(QMainWindow):
         
         logging.info("All threads have finished")
 
-         # Stop all Python threads (except the main thread)
+        # Stop all Python threads (except the main thread)
         for thread in threading.enumerate():
-            if thread != threading.main_thread():
-                logging.info(f"Stopping Python thread: {thread.name}")
-                thread.join(5)  # Wait up to 5 seconds for the thread to finish
+            if thread != threading.current_thread():
+                try:
+                    logging.info(f"Stopping Python thread: {thread.name}")
+                    thread.join(5)  # Wait up to 5 seconds for the thread to finish
+                except Exception as e:
+                    logging.warning(f"Cannot: {e}")
         
         QThreadPool.globalInstance().waitForDone(5000)  # Wait up to 5 seconds for all threads to finish
         logging.info("Cleanup process completed")
@@ -683,10 +686,16 @@ def setup_logging():
 # Call this function at the beginning of your main() function
 setup_logging()
 
+def global_exception_handler(exctype, value, traceback):
+    logging.critical("Unhandled exception", exc_info=(exctype, value, traceback))
+    # Optionally, you can add code here to display an error message to the user
+    sys.__excepthook__(exctype, value, traceback)
+
+sys.excepthook = global_exception_handler
+
 def main():
-    
     profiler = cProfile.Profile()
-    profiler.enable()
+    # profiler.enable()
     # Use your existing logging configuration
     log_directory = os.path.join(os.getcwd(), 'logs')
     if not os.path.exists(log_directory):
@@ -694,23 +703,23 @@ def main():
 
     log_file_path = os.path.join(log_directory, 'app.log')
 
-    logging.basicConfig(level=logging.INFO, 
+    logging.basicConfig(level=logging.DEBUG, 
                         format='%(asctime)s - %(levelname)s - %(message)s', 
                         handlers=[logging.FileHandler(log_file_path, 'a'), 
                                   logging.StreamHandler()])
 
-    logging.info("Application started")
+    logging.debug("Starting application")
 
     sys.excepthook = exception_hook
 
     try:
-        logging.info("Starting splash screen process")
+        logging.debug("Starting splash screen process")
         splash_process = subprocess.Popen([sys.executable, 'GUX/splash_process.py'])
         
-        logging.info("Creating QApplication")
+        logging.debug("Creating QApplication")
         app = QApplication(sys.argv)
 
-        logging.info("Setting application-wide stylesheet")
+        logging.debug("Setting application-wide stylesheet")
         app.setStyleSheet("""
             QWidget {
                 background-color: #2E3440;
@@ -718,7 +727,7 @@ def main():
             }
         """)
 
-        logging.info("Initializing SettingsManager")
+        logging.debug("Creating SettingsManager")
         settings_manager = SettingsManager()
         
         logging.info("Initializing managers")
@@ -773,11 +782,12 @@ def main():
 
         def cleanup():
             main_app.cleanup()
+            cccore.process_manager.cleanup_processes()
             app.quit()
 
         app.aboutToQuit.connect(cleanup)
 
-        logging.info("Entering Qt event loop")
+        logging.debug("Entering Qt event loop")
         try:
             sys.exit(app.exec())
         except Exception as e:
@@ -788,10 +798,26 @@ def main():
                 main_app.cleanup()
             if 'global_thread_tracker' in globals():
                 global_thread_tracker.dump_thread_info()
-
+       
+               
+          
     except Exception as e:
         logging.error(f"Unhandled exception in main: {e}", exc_info=True)
         sys.exit(1)
-
+    finally:pass
+        # try:    
+        #     profiler.disable()
+        #     s = io.StringIO()
+        #     sortby = 'cumulative'
+        #     ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
+        #     ps.print_stats()
+        #     print(s.getvalue())
+        
+        # # Optionally, save the profiling results to a file
+        #     with open('profile_results.txt', 'w') as f:
+        #         ps.stream = f
+        #         ps.print_stats()
+        # except Exception as e:
+        #     logging.error(f"Error saving profiling results: {e}")
 if __name__ == '__main__':
     main()

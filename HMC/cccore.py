@@ -30,8 +30,16 @@ from .ai_model_manager import AIMemoryManager
 from .font_manager import FontManager
 from .thread_controller import ThreadController
 from .action_handlers import ActionHandlers
+from PyQt6.QtWidgets import QApplication
+import time
+import logging
+from PyQt6.QtCore import QTimer, pyqtSignal
+
 class CCCore:  # referred to as mm in other files (auratext)
+    lsp_manager_initialized = pyqtSignal()
+
     def __init__(self, settings_manager, main_window=None):
+        logging.info("Initializing CCCore")
         self.settings_manager = settings_manager
         self.main_window = main_window
         self.action_handlers = ActionHandlers(self)
@@ -59,6 +67,7 @@ class CCCore:  # referred to as mm in other files (auratext)
         logging.debug(f"Current vault after initialization: {self.vault_manager.get_current_vault()}")
         
         self.process_manager = ProcessManager(self)
+        self.lsp_manager = None
         self.build_manager = None
         self.file_manager = None
         self.font_manager = None
@@ -68,15 +77,14 @@ class CCCore:  # referred to as mm in other files (auratext)
         self.late_init_done = False
         self.vault_windows = {}  # Dictionary to store vault paths and their corresponding windows
         self.main_vault = None
-        
-        self.init_managers()
        
-
+        self.init_managers()
+        logging.info("CCCore initialization complete")
+        
     def set_widget_manager(self, widget_manager):
         self.widget_manager = widget_manager
         # Instead of directly accessing auratext_window, let's create it if needed
      
-        
     def set_auratext_window(self, window):
         self.auratext_windows.append(window)
         if self.editor_manager:
@@ -90,7 +98,7 @@ class CCCore:  # referred to as mm in other files (auratext)
         self.download_manager = DownloadManager(self)
         self.theme_manager = ThemeManager(self)
         self.lexer_manager = LexerManager(self)
-        self.lsp_manager = LSPManager(self)
+        
         self.cursor_manager = CursorManager(self)
         
         logging.info(f"Current vault: {self.vault_manager.current_vault.name if self.vault_manager.current_vault else 'None'}")
@@ -111,6 +119,31 @@ class CCCore:  # referred to as mm in other files (auratext)
             self.editor_manager = EditorManager(self)
             self.editor_manager.set_current_window(self.main_window)
             self.late_init_done = True
+            # Move LSP manager initialization to a separate method
+            QTimer.singleShot(0, self.initialize_lsp_manager)
+
+    def initialize_lsp_manager(self):
+        logging.warning("Initializing LSP Manager")
+        try:
+            if self.lsp_manager is None:
+                self.lsp_manager = LSPManager(self)
+                self.lsp_manager.initialize()
+                # Wait for initialization to complete with a timeout
+                start_time = time.time()
+                while not self.lsp_manager.is_initialized():
+                    logging.warning("Waiting for LSP Manager initialization to complete...")
+                    
+                    QApplication.processEvents()
+                    if time.time() - start_time > 30:  # 30 seconds timeout
+                        logging.error("LSP Manager initialization timed out")
+                        break
+            if self.lsp_manager.is_initialized():
+                logging.warning("LSP Manager initialization complete")
+                self.lsp_manager_initialized.emit()
+            else:
+                logging.error("LSP Manager failed to initialize")
+        except Exception as e:
+            logging.error(f"Error initializing LSP Manager: {e}")
 
     def show_radial_menu(self, pos, context):
         if not self.late_init_done:
@@ -267,13 +300,16 @@ class CCCore:  # referred to as mm in other files (auratext)
         self.menu_manager = menu_manager
     def cleanup(self):
         logging.info("Starting CCCore cleanup")
-        if hasattr(self, 'thread_controller'):
-            self.thread_controller.shutdown()
-        if hasattr(self, 'process_manager'):
-            self.process_manager.cleanup_processes()
-       # ... cleanup other managers ...
-        if hasattr(self, 'lsp_manager'):
-            self.lsp_manager.cleanup()
+        managers_to_cleanup = [
+            'thread_controller', 'process_manager', 'lsp_manager',
+            'file_manager', 'download_manager', 'build_manager'
+        ]
+        for manager_name in managers_to_cleanup:
+            if hasattr(self, manager_name):
+                manager = getattr(self, manager_name)
+                if hasattr(manager, 'cleanup'):
+                    logging.info(f"Cleaning up {manager_name}")
+                    manager.cleanup()
         logging.info("CCCore cleanup complete")
     def get_project_manager(self):
         return self.project_manager

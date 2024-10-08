@@ -115,6 +115,7 @@ class Project:
         self.save_config()
 
 class ProjectManager:
+    project_changed = pyqtSignal(str)
     def __init__(self, settings_manager, cccore):
         self.settings_manager = settings_manager
         self.cccore = cccore
@@ -157,6 +158,7 @@ class ProjectManager:
             config = json.load(f)
         
         self.current_project = config
+        self.project_changed.emit(config)
         return config
 
     def get_project_files(self):

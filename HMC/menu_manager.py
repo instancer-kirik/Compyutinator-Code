@@ -86,8 +86,15 @@ class MenuManager:
             #self.add_toggle_view_action(view_menu, "Many Projects Manager", self.cccore.widget_manager.many_projects_manager)
         except AttributeError:
             logging.warning("Many Projects Manager not found, skipping addition of toggle action.")
+        try:# Add the Advanced Data Viewer action
+            _, advanced_data_viewer_action = self.cccore.widget_manager.add_advanced_data_viewer_dock()
+            self.view_menu.addAction(advanced_data_viewer_action)
+            
+        except AttributeError:
+            logging.warning("Advanced Data Viewer not found, skipping addition of toggle action.")
         return self.view_menu
-
+    
+        
     def toggle_dock_visibility(self, dock_widget, checked):
         try:
             dock_widget.setVisible(checked)
