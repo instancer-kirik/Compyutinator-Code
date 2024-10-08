@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (QTreeView, QWidget, QVBoxLayout, QLabel, QScrollArea, 
-                             QPushButton, QHBoxLayout, QLineEdit)
+                             QPushButton, QHBoxLayout, QLineEdit, QHeaderView)
 from PyQt6.QtCore import Qt, QTimer, QModelIndex, pyqtSignal
 from PyQt6.QtGui import QStandardItemModel, QFileSystemModel
 from PyQt6.QtGui import QCursor
@@ -29,12 +29,13 @@ class PathBreadcrumb(QWidget):
         else:
             self.path_edit.setText(self.current_path)
 
-class FileTreeView(QTreeView):
+class FileTreeView(QWidget):
     file_selected = pyqtSignal(str)
 
-    def __init__(self, file_system_model, parent=None):
+    def __init__(self, file_system_model=None, parent=None):
         super().__init__(parent)
-        self.model = file_system_model
+        self.model = file_system_model or QFileSystemModel()
+        self.model.setRootPath("")  # Set the root path for the model
         self.setup_ui()
         self.setup_model(self.model)
         self.is_scrolling = False
@@ -49,15 +50,24 @@ class FileTreeView(QTreeView):
 
         # Tree view
         self.tree_view = QTreeView()
+        self.tree_view.setModel(self.model)
+        self.tree_view.setRootIndex(self.model.index(""))
         self.tree_view.setHeaderHidden(False)  # Show the header for file attributes
         self.tree_view.setExpandsOnDoubleClick(False)
         self.tree_view.clicked.connect(self.on_item_clicked)
         
-        # Scroll area for tree view
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidget(self.tree_view)
-        self.scroll_area.setWidgetResizable(True)
-        layout.addWidget(self.scroll_area)
+        # Adjust column sizes
+        header = self.tree_view.header()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # Name column
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)  # Date Modified column
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)  # Size column
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)  # Type column
+
+        # Set a larger initial size for the Name column
+        header.resizeSection(0, 400)  # Adjust this value as needed
+        
+        # Add tree view to layout
+        layout.addWidget(self.tree_view)
 
         # Auto-scroll timers
         self.scroll_timer = QTimer(self)
@@ -197,3 +207,6 @@ class FileTreeView(QTreeView):
                 if os.path.isfile(file_path):
                     selected_files.append(file_path)
         return selected_files
+
+    def set_root_index(self, index):
+        self.tree_view.setRootIndex(index)

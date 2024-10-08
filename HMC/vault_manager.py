@@ -33,7 +33,12 @@ class Vault:
         self.load_config()
 
    
-    def get_project_path(self, project_name):
+    def get_project_path(self, project_name=None):
+        if project_name is None:
+            current_project = self.cccore.project_manager.get_current_project()
+            if current_project:
+                return current_project.path
+            return None
         relative_path = self.projects.get(project_name)
         if relative_path:
             return str(self.path / relative_path)

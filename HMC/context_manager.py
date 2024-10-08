@@ -22,7 +22,9 @@ class ContextManager:
             logging.warning(f"Failed to load AutoTokenizer: {e}")
             return tiktoken.get_encoding("cl100k_base")  # Fallback to tiktoken
 
-    def add_context(self, content, description):
+    def add_context(self, content, description, file_path=None):
+        if file_path:
+            content = f"{file_path}\n{content}"  # Append file path as the first line
         tokens = self.tokenize(content)
         if len(tokens) > self.max_tokens:
             content = self.detokenize(tokens[:self.max_tokens])
@@ -63,6 +65,17 @@ class ContextManager:
         
         relevant_contexts = [self.contexts[i] for i in most_similar_indices]
         return "\n\n".join([f"{desc}:\n{content}" for desc, content in relevant_contexts])
+    
+    def preprocess_message(self, message):
+        # Tokenize the message
+        message_tokens = self.tokenize(message)
+        
+        # Find relevant contexts
+        relevant_contexts = self.get_most_relevant_context(message)
+        
+        # Return the relevant contexts and tokens
+        return relevant_contexts, message_tokens
+
     def get_contexts(self):
         return self.contexts
     def get_context_by_description(self, description):
@@ -101,3 +114,4 @@ class NoveltyDetector:
 
         return novel_parts
     
+

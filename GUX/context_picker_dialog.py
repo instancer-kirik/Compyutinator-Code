@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTableWidget, QP
                              QTabWidget)
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QFont, QFileSystemModel
+from pathlib import Path
 
 from GUX.file_search_widget import FileSearchWidget
 from GUX.file_tree_view import FileTreeView
@@ -50,14 +51,16 @@ class FileItemWidget(QWidget):
 class ContextPickerDialog(QDialog):
     context_added = pyqtSignal(str, str)  # context_type, context_content
 
-    def __init__(self, parent=None, recent_files=None, open_files=None, existing_contexts=None, editor_manager=None, vault_manager=None):
+    def __init__(self, parent=None, recent_files=None, open_files=None, existing_contexts=None, editor_manager=None, vault_manager=None, context_manager=None):
         super().__init__(parent)
         self.setWindowTitle("Add Context")
         self.recent_files = recent_files or []
+        self.context_manager = context_manager  
         self.open_files = open_files or []
         self.existing_contexts = existing_contexts or []
         self.editor_manager = editor_manager
         self.vault_manager = vault_manager
+        self.selected_files = []  # Initialize selected_files
         logging.info(f"Initializing ContextPickerDialog with {len(self.open_files)} open files, "
                      f"{len(self.recent_files)} recent files, and {len(self.existing_contexts)} existing contexts")
         self.initUI()
@@ -75,9 +78,13 @@ class ContextPickerDialog(QDialog):
         file_explorer_widget = QWidget()
         file_explorer_layout = QVBoxLayout(file_explorer_widget)
         self.file_model = QFileSystemModel()
-        self.file_model.setRootPath("")
+
+        # Set initial directory
+        initial_directory = self.get_initial_directory()
+        self.file_model.setRootPath(str(initial_directory))  # Convert to string
         self.file_tree_view = FileTreeView(self.file_model)
-        self.file_tree_view.file_selected.connect(self.preview_file)
+        self.file_tree_view.set_root_path(str(initial_directory))  # Convert to string
+        self.file_tree_view.file_selected.connect(self.add_to_selected_files)  # Connect to method
         file_explorer_layout.addWidget(self.file_tree_view)
         self.tab_widget.addTab(file_explorer_widget, "File Explorer")
 
@@ -202,23 +209,31 @@ class ContextPickerDialog(QDialog):
             logging.error(f"Error getting context content: {e}")
             return f"Error loading content: {str(e)}"
 
+    def add_to_selected_files(self, file_path):
+        if file_path not in self.selected_files:
+            self.selected_files.append(file_path)
+        self.preview_file(file_path)
     def add_selected_contexts(self):
-        selected_items = self.recent_open_table.selectedItems()
-        for item in selected_items:
-            if item.column() == 0:  # Only process the first column
-                data = item.data(Qt.ItemDataRole.UserRole)
-                if data:
-                    file, file_type = data
-                else:
-                    file = item.text()
-                    file_type = self.recent_open_table.item(item.row(), 1).text()  # Get type from second column
-                
-                content = self.get_context_content(file_type, file)
-                if content.startswith("Error:"):
-                    QMessageBox.warning(self, "Error", content)
-                else:
-                    self.context_added.emit(f"[{file_type}] {file}", content)
-                    logging.warning(f"Emitting context: [{file_type}] {file}")
+        for file_path in self.selected_files:
+            if self.is_binary_file(file_path):
+                logging.warning(f"Skipping binary file: {file_path}")
+                QMessageBox.warning(self, "Binary File", f"Cannot read binary file: {os.path.basename(file_path)}")
+                continue
+
+            try:
+                with open(file_path, 'r', encoding='utf-8') as file:
+                    content = file.read()
+            except UnicodeDecodeError:
+                try:
+                    with open(file_path, 'r', encoding='latin-1') as file:
+                        content = file.read()
+                except Exception as e:
+                    logging.error(f"Error reading file {file_path}: {e}")
+                    QMessageBox.critical(self, "File Read Error", f"Failed to read file {file_path} due to encoding issues.")
+                    continue
+
+            self.context_added.emit(f"[File] {file_path}", content)
+            self.context_manager.add_context(content, f"Context: {file_path}")  # Use full file path
 
         # Process selected items from existing contexts
         selected_contexts = self.existing_contexts_table.selectedItems()
@@ -231,14 +246,15 @@ class ContextPickerDialog(QDialog):
 
         self.accept()
 
-    # Implement drag and drop methods if needed
-    
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select File")
-        if file_path:
-            with open(file_path, 'r') as file:
-                content = file.read()
-            self.context_added.emit(f"[File] {os.path.basename(file_path)}", content)
-
+    def is_binary_file(self, file_path):
+        try:
+            with open(file_path, 'rb') as file:
+                chunk = file.read(1024)
+                return b'\0' in chunk
+        except Exception as e:
+            logging.error(f"Error checking if file is binary: {e}")
+            return False
+ 
     def add_custom_text(self):
         text, ok = QInputDialog.getMultiLineText(self, "Add Custom Text", "Enter your text:")
         if ok and text:
@@ -274,8 +290,16 @@ class ContextPickerDialog(QDialog):
             if os.path.isfile(file_path):
                 with open(file_path, 'r') as file:
                     content = file.read()
-                self.context_added.emit(f"[File] {os.path.basename(file_path)}", content)
+                self.context_added.emit(f"[File] {file_path}", content)
         event.acceptProposedAction()
 
     def get_selected_items(self):
         return [item.data(Qt.ItemDataRole.UserRole) for item in self.recent_open_table.selectedItems() if item.data(Qt.ItemDataRole.UserRole) is not None]
+
+    def get_initial_directory(self):
+        # Determine the initial directory
+        if self.open_files:
+            return Path(self.open_files[0]).parent
+        elif self.vault_manager:
+            return Path(self.vault_manager.get_default_vault_path())
+        return Path("")

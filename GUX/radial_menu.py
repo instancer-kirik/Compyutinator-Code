@@ -67,11 +67,11 @@ class RadialMenu(QWidget):
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.RightButton and self.right_button_pressed:
-            if 0 <= self.hover_index < len(self.options):
-                self.optionSelected.emit(self.options[self.hover_index])
-            self.right_button_pressed = False
-            self.close()
-
+           # if 0 <= self.hover_index < len(self.options):
+            #     self.optionSelected.emit(self.options[self.hover_index])
+            # self.right_button_pressed = False
+            # self.close()
+            pass
     def update_hover_index(self, pos):
         center = QPoint(self.radius, self.radius)
         pos = pos - center
@@ -90,8 +90,8 @@ class RadialMenu(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape:
             self.close()
-        elif Qt.Key.Key_1 <= event.key() <= Qt.Key.Key_9:
-            index = event.key() - Qt.Key.Key_1
+        elif Qt.Key.Key_1 <= event.key()() <= Qt.Key.Key_9:  # Add parentheses
+            index = event.key()() - Qt.Key.Key_1  # Add parentheses
             if index < len(self.options):
                 self.optionSelected.emit(self.options[index])
                 self.close()

@@ -62,8 +62,8 @@ def apply_diff_to_content(content, diff_blocks):
                 match = re.match(r'-(\d+):', line)
                 if match:
                     line_num = int(match.group(1)) - 1
-                    if 0 <= line_num < len(lines):
-                        del lines[line_num]
+    #                if 0 <= line_num < len(lines):
+    #                    del lines[line_num]
 
     return '\n'.join(lines)
 

@@ -26,7 +26,7 @@ from .input_manager import InputManager
 from PyQt6.QtWidgets import QWidget
 from PyQt6.QtGui import QIcon
 from AuraText.auratext.scripts.def_path import resource
-
+from .ai_model_manager import AIMemoryManager
 from .font_manager import FontManager
 from .thread_controller import ThreadController
 from .action_handlers import ActionHandlers
@@ -45,7 +45,7 @@ class CCCore:  # referred to as mm in other files (auratext)
         self.secrets_manager = None
         self.env_manager = EnvironmentManager(self.settings_manager.get_value("environments_path", "./environments"))
         self.vault_manager = VaultManager(self.settings_manager, cccore=self)
-        
+        self.ai_memory_manager = AIMemoryManager()
         # Add debug logging
         logging.debug(f"Initializing CCCore. Default vault path: {self.settings_manager.get_value('app_data_dir')}")
         

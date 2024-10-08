@@ -261,7 +261,7 @@ class HashSlingingHasherWidget(QWidget):
         self.setWindowTitle("File Hash Checker/Adder")
 
     def browse_file(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select File")
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Open File")
         if file_path:
             self.file_path_input.setText(file_path)
             if not self.name_input.text():
@@ -327,3 +327,101 @@ class AudioLevelWidget(QWidget):
         level_height = int(bar_height * (self.level / 100))
         painter.setBrush(QColor(0, 255, 0))
         painter.drawRect(2, 2 + bar_height - level_height, bar_width, level_height)
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QPushButton, QTextEdit, QLabel
+
+class MergeWidget(QDialog):
+    def __init__(self, file_path, original_content, new_content, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Merge Changes")
+        
+        layout = QVBoxLayout(self)
+        
+        self.path_label = QLabel(f"File: {file_path}")
+        self.original_label = QLabel("Original Content:")
+        self.original_text = QTextEdit(original_content)
+        self.original_text.setReadOnly(True)
+        
+        self.new_label = QLabel("New Content:")
+        self.new_text = QTextEdit(new_content)
+        self.new_text.setReadOnly(True)
+        
+        self.merge_button = QPushButton("Merge")
+        self.merge_button.clicked.connect(self.merge_changes)
+        
+        layout.addWidget(self.path_label)
+        layout.addWidget(self.original_label)
+        layout.addWidget(self.original_text)
+        layout.addWidget(self.new_label)
+        layout.addWidget(self.new_text)
+        layout.addWidget(self.merge_button)
+    
+    def merge_changes(self):
+        # Implement merge logic here
+        merged_content = self.new_text.toPlainText()  # Example: use new content
+        self.accept()
+        return merged_content
+    
+# pomodoro_timer_widget.py
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QToolBar
+from PyQt6.QtCore import QTimer, Qt
+
+class PomodoroTimerWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.initUI()
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_timer)
+        self.time_left = 25 * 60  # 25 minutes in seconds
+        self.is_running = False
+
+    def initUI(self):
+        layout = QVBoxLayout(self)
+
+        self.toolbar = QToolBar("Pomodoro Timer")
+        self.start_button = QPushButton("Start")
+        self.pause_button = QPushButton("Pause")
+        self.reset_button = QPushButton("Reset")
+
+        self.start_button.clicked.connect(self.start_timer)
+        self.pause_button.clicked.connect(self.pause_timer)
+        self.reset_button.clicked.connect(self.reset_timer)
+
+        self.toolbar.addWidget(self.start_button)
+        self.toolbar.addWidget(self.pause_button)
+        self.toolbar.addWidget(self.reset_button)
+
+        self.time_display = QLabel(self.format_time(self.time_left))
+        self.time_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        layout.addWidget(self.toolbar)
+        layout.addWidget(self.time_display)
+
+    def start_timer(self):
+        if not self.is_running:
+            self.timer.start(1000)  # Update every second
+            self.is_running = True
+
+    def pause_timer(self):
+        if self.is_running:
+            self.timer.stop()
+            self.is_running = False
+
+    def reset_timer(self):
+        self.timer.stop()
+        self.time_left = 25 * 60
+        self.time_display.setText(self.format_time(self.time_left))
+        self.is_running = False
+
+    def update_timer(self):
+        if self.time_left > 0:
+            self.time_left -= 1
+            self.time_display.setText(self.format_time(self.time_left))
+        else:
+            self.timer.stop()
+            self.is_running = False
+            # Optionally, add a notification or sound here
+
+    def format_time(self, seconds):
+        minutes = seconds // 60
+        seconds = seconds % 60
+        return f"{minutes:02}:{seconds:02}"
