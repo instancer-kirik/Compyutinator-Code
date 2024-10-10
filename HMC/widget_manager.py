@@ -35,7 +35,7 @@ import logging
 import traceback
 from GUX.file_search_widget import FileSearchWidget
 from HMC.project_manager import ManyProjectsManagerWidget
-from GUX.widget_vault import VaultWidget, VaultsManagerWidget, AdvancedDataViewerWidget, StateInspectorWidget
+from GUX.widget_vault import VaultWidget, VaultsManagerWidget, MergeWidget, AdvancedDataViewerWidget, StateInspectorWidget
 class WidgetManager:
     def __init__(self, cccore):
         self.cccore = cccore
@@ -66,6 +66,7 @@ class WidgetManager:
         self.theme_manager_window = None
         
         self.auratext_windows = []
+        self.startup_layout_applied = False
 
     def load_config(self):
         try:
@@ -147,8 +148,11 @@ class WidgetManager:
         except RuntimeError:
             return False
    
-    def apply_layout(self):
-        logging.info("Applying layout")
+    def apply_startup_layout(self):
+        if hasattr(self, 'startup_layout_applied') and self.startup_layout_applied:
+            logging.warning("Startup layout already applied, skipping")
+            return
+        logging.info("Applying startup layout")
         for area, dock_names in self.startup_config.items():
             for dock_name in dock_names:
                 dock = self.get_or_create_dock(dock_name)
@@ -167,6 +171,7 @@ class WidgetManager:
                 else:
                     logging.warning(f"Failed to create or retrieve dock: {dock_name}")
         logging.info("Layout applied")
+        self.startup_layout_applied = True
 
     def is_dock_deleted(self, dock):
         try:
@@ -178,8 +183,8 @@ class WidgetManager:
     def create_startup_docks(self):
         try:
             # Create and add your startup docks here
-            self.create_dock("Projects Manager", self.ProjectManagerWidget(self.cccore, parent =self.main_window),parent=self.main_window)
-            self.create_dock("Many Projects Manager", self.ManyProjectsManagerWidget(self.cccore),parent=self.main_window)
+            self.create_dock("Projects Manager", self.ProjectManagerWidget(self.cccore, parent=self.main_window), parent=self.main_window)
+            #self.add_cool_dock()  # Add this line to create the Cool dock on startup
             # ... other startup docks
         except Exception as e:
             logging.error(f"Error creating startup docks: {e}")
@@ -202,15 +207,20 @@ class WidgetManager:
             logging.warning(f"Failed to ensure dock: {name}")
         return dock
 
-    def set_main_window_and_create_docks(self, main_window):
-        logging.info(f"Setting main window: {main_window}")
+    def set_main_window_and_create_docks(self, main_window = None):
+        logging.warning(f"Setting main window: {main_window}")
         self.set_main_window(main_window)
         if self.main_window is None:
             logging.error("Main window is None, cannot create docks")
             return
         self.create_startup_docks()
-        self.apply_layout()
-
+        logging.warning(f"Startup docks created: {self.dock_widgets}")#just one?
+        try:
+            self.apply_startup_layout()
+            logging.warning(f"Layout applied: {self.dock_widgets}") 
+        except Exception as e:
+            logging.error(f"Error applying layout: {e}")
+            logging.error(traceback.format_exc())
     def get_qt_dock_area(self, area):
         area_map = {
             'left': Qt.DockWidgetArea.LeftDockWidgetArea,
@@ -398,7 +408,10 @@ class WidgetManager:
             )
         return self._ai_chat_widget
 
-    
+    def MergeWidget(self, cccore):
+        if not hasattr(self, 'merge_widget'):
+            self.merge_widget = MergeWidget(parent=self.main_window,)
+        return self.merge_widget
     def CodeEditorWidget(self, cccore):
         if not hasattr(self, 'code_editor_widget'):
             self.code_editor_widget = CodeEditorWidget(parent=self.main_window, cccore=self.cccore)
@@ -523,18 +536,53 @@ class WidgetManager:
         return self.docks['state_inspector_dock']
 
     def get_cool_widget(self):
+        logging.info("Entering get_cool_widget method")
         if 'cool' not in self.widgets:
-            self.widgets['cool'] = CoolWidget(self.cccore)
+            logging.info("Creating new CoolWidget instance")
+            try:
+                self.widgets['cool'] = CoolWidget(self.cccore)
+                logging.info("CoolWidget created successfully")
+            except Exception as e:
+                logging.error(f"Error creating CoolWidget: {str(e)}")
+                logging.error(traceback.format_exc())
+        else:
+            logging.info("Returning existing CoolWidget instance")
         return self.widgets['cool']
 
     def add_cool_dock(self):
+        logging.info("Entering add_cool_dock method")
         if 'cool_dock' not in self.docks:
-            cool_widget = self.get_cool_widget()
-            self.docks['cool_dock'] = self.add_dock_widget(
-                cool_widget,
-                "Code Tool",
-                Qt.DockWidgetArea.BottomDockWidgetArea,
-                hidden=True
-            )
+            logging.info("Creating new Cool dock")
+            try:
+                cool_widget = self.get_cool_widget()
+                self.docks['cool_dock'] = self.add_dock_widget(
+                    cool_widget,
+                    "Code Tool",
+                    Qt.DockWidgetArea.BottomDockWidgetArea,
+                    hidden=False
+                )
+                logging.info(f"Cool dock created: {self.docks['cool_dock']}")
+            except Exception as e:
+                logging.error(f"Error creating Cool dock: {str(e)}")
+                logging.error(traceback.format_exc())
+        else:
+            logging.info("Returning existing Cool dock")
         return self.docks['cool_dock']
+
+    
+    # Add this method to ensure the Cool dock is visible
+    def show_cool_dock(self):
+        logging.warning("Entering show_cool_dock method")
+        try:
+            cool_dock = self.add_cool_dock()
+            if cool_dock:
+                logging.warning("Attempting to show Cool dock")
+                cool_dock.show()
+                cool_dock.raise_()
+                logging.warning("Cool dock shown successfully")
+            else:
+                logging.warning("Failed to create or retrieve Cool dock")
+        except Exception as e:
+            logging.error(f"Error showing Cool dock: {str(e)}")
+            logging.error(traceback.format_exc())
   

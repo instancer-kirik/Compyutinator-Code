@@ -68,16 +68,16 @@ class InlineDiffWidget(QWidget):
     def apply_changes(self):
         # Logic to apply accepted changes
         pass
-class DiffMergerWidget(QWidget):
+class DiffMergerWidget(QDialog):  # Change QWidget to QDialog
     key_symbols = ['def', 'class', 'import']
 
     def __init__(self, mm, original_text="", suggested_text="", file_path=None):
-        super().__init__()
+        super().__init__()  # No parent widget for a dialog
         self.mm = mm
         self.file_path = file_path
         self.original_text = original_text
         self.suggested_text = suggested_text
-        self.isFullScreen = True
+        self.isFullScreen = False  # Start as a normal window
         self.diff_data = {}
         self.current_diff_index = -1
         self.current_line_index = 0
@@ -470,7 +470,7 @@ class DiffMergerWidget(QWidget):
             self.mm.editor_manager.update_editor_content(self.file_path, merged_content)
         else:
             self.mm.editor_manager.update_current_editor_content(merged_content)
-        self.close()
+        self.accept()  # Close the dialog and return QDialog.Accepted
 class DiffMergerDialog(QDialog):
     def __init__(self, mm, original_text, suggested_text, file_path=None):
         super().__init__()

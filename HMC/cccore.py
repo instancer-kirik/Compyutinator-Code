@@ -33,17 +33,20 @@ from .action_handlers import ActionHandlers
 from PyQt6.QtWidgets import QApplication
 import time
 import logging
-from PyQt6.QtCore import QTimer, pyqtSignal
+from PyQt6.QtCore import QTimer, pyqtSignal, QObject
 
-class CCCore:  # referred to as mm in other files (auratext)
+class CCCore(QObject):  # referred to as mm in other files (auratext)
     lsp_manager_initialized = pyqtSignal()
 
     def __init__(self, settings_manager, main_window=None):
+        super().__init__()  # Call the QObject's __init__ method
         logging.info("Initializing CCCore")
         self.settings_manager = settings_manager
         self.main_window = main_window
         self.action_handlers = ActionHandlers(self)
-        
+        self.main_window_set = False
+        self.menu_setup_done = False
+        self.menu_manager = None
         self.widget_manager = None
         self.auratext_windows = []
         self.editor_manager = None
@@ -118,32 +121,14 @@ class CCCore:  # referred to as mm in other files (auratext)
             self.file_manager = FileManager(self)
             self.editor_manager = EditorManager(self)
             self.editor_manager.set_current_window(self.main_window)
+            self.init_lsp_manager()
             self.late_init_done = True
-            # Move LSP manager initialization to a separate method
-            QTimer.singleShot(0, self.initialize_lsp_manager)
 
-    def initialize_lsp_manager(self):
-        logging.warning("Initializing LSP Manager")
-        try:
-            if self.lsp_manager is None:
-                self.lsp_manager = LSPManager(self)
-                self.lsp_manager.initialize()
-                # Wait for initialization to complete with a timeout
-                start_time = time.time()
-                while not self.lsp_manager.is_initialized():
-                    logging.warning("Waiting for LSP Manager initialization to complete...")
-                    
-                    QApplication.processEvents()
-                    if time.time() - start_time > 30:  # 30 seconds timeout
-                        logging.error("LSP Manager initialization timed out")
-                        break
-            if self.lsp_manager.is_initialized():
-                logging.warning("LSP Manager initialization complete")
-                self.lsp_manager_initialized.emit()
-            else:
-                logging.error("LSP Manager failed to initialize")
-        except Exception as e:
-            logging.error(f"Error initializing LSP Manager: {e}")
+    def init_lsp_manager(self):
+        self.lsp_manager = LSPManager(self)
+        self.lsp_manager.initialize()
+        self.lsp_manager_initialized.emit()
+        logging.info("LSP manager initialized and signal emitted")
 
     def show_radial_menu(self, pos, context):
         if not self.late_init_done:
@@ -261,11 +246,15 @@ class CCCore:  # referred to as mm in other files (auratext)
             logging.warning("Editor manager not initialized. Cannot open config file.")
 
     def set_main_window(self, main_window):
+        if self.main_window_set:
+            logging.warning("Main window already set, skipping")
+            return
+        logging.info(f"Setting main window: {main_window}")
         main_window.setWindowOpacity(0)
         self.main_window = main_window
-        
         self.theme_manager.main_window = main_window
         self.widget_manager.set_main_window_and_create_docks(main_window)
+        self.main_window_set = True
 
     def create_vault_window(self, vault_path):
         if vault_path not in self.vault_windows:

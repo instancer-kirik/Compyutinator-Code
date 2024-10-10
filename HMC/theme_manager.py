@@ -12,8 +12,9 @@ from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QWidget, QComboBox, QPushB
 from PyQt6.QtWidgets import QProgressDialog, QFormLayout, QDialogButtonBox, QLineEdit, QDialog
 import traceback
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QPushButton, QMessageBox, QTabWidget
+from PyQt6.QtGui import QIcon
 from GUX.theme_builder import ThemeBuilderWidget  # Import the ThemeBuilderWidget
-
+from PyQt6.Qsci import QsciLexer
 import json
 import os
 class CustomThemeDialog(QDialog):
@@ -148,16 +149,30 @@ class ThemeManager(QObject):
         self.config_dir = os.path.dirname(os.path.abspath(__file__))
         self.config_file = os.path.join(self.config_dir, 'theme_config.json')
         self.custom_themes = {}
-        self.current_theme = 'dark_amber.xml'  # Default theme
+        self.current_theme = {
+            'name': 'default',
+            'colors': {
+                'sidebarBackground': '#2E3440',
+                'sidebarText': '#D8DEE9',
+                'sidebarHighlight': '#3B4252',
+                'sidebarHover': '#434C5E'
+            }
+        }
         self.custom_themes_dir = os.path.join(os.path.dirname(__file__), 'custom_themes')
         os.makedirs(self.custom_themes_dir, exist_ok=True)
         self.load_config()
         self.load_custom_themes()
 
-    def apply_theme(self, theme_name):
-        logging.info(f"Applying theme: {theme_name}")
+    def apply_theme(self, theme):
+        logging.info(f"Applying theme: {theme}")
         try:
-            theme_data = self.get_theme_data(theme_name)
+            if isinstance(theme, dict):
+                theme_data = theme
+                theme_name = theme.get('name', 'Custom Theme')
+            else:
+                theme_name = theme
+                theme_data = self.get_theme_data(theme_name)
+
             if not theme_data:
                 logging.error(f"Invalid theme data for {theme_name}")
                 return
@@ -181,15 +196,21 @@ class ThemeManager(QObject):
             else:
                 logging.warning("No editors found to apply theme")
 
-            self.current_theme = theme_name
+            self.current_theme_name = theme_name
+            self.current_theme = theme_data
             self.save_config()
             self.theme_changed.emit(theme_data)
             logging.info("Theme applied successfully")
+
+            # Apply lexer colors
+            self.apply_lexer_colors(theme_data.get('lexer', {}))
         except Exception as e:
             logging.error(f"Error applying theme: {str(e)}")
             logging.error(traceback.format_exc())
 
     def get_theme_data(self, theme_name):
+        if isinstance(theme_name, dict):
+            return theme_name
         if theme_name in self.custom_themes:
             return self.custom_themes[theme_name]
         elif theme_name in list_themes():
@@ -241,7 +262,10 @@ class ThemeManager(QObject):
         os.makedirs(self.config_dir, exist_ok=True)
         with open(self.config_file, 'w') as f:
             json.dump(config, f, indent=2)
-
+    def get_icon_path(self, icon_name):
+        return os.path.join(self.config_dir, 'icons', icon_name)
+    def get_icon(self, icon_name):
+        return QIcon(self.get_icon_path(icon_name)) 
     def load_custom_themes(self):
         for filename in os.listdir(self.custom_themes_dir):
             if filename.endswith('.json'):
@@ -311,26 +335,32 @@ class ThemeManager(QObject):
         self.theme_changed.emit(self.current_theme_data)
 
     def apply_theme_to_editor(self, editor):
-        # Apply theme to the editor
-        editor.setStyleSheet(f"""
-            background-color: {self.current_theme["editor_theme"]};
-            color: {self.current_theme["editor_fg"]};
-            font-family: {self.current_theme["font"]};
-        """)
+        try:
+            colors = self.current_theme.get('editor_colors', {})
+            logging.debug(f"Applying theme to editor with colors: {colors}")
+            # Apply theme to the editor
+            editor.setStyleSheet(f"""
+                background-color: {self.current_theme["editor_theme"]};
+                color: {self.current_theme["editor_fg"]};
+                font-family: {self.current_theme["font"]};
+            """)
 
-        # Apply line highlight
-        highlight_color = QColor(self.current_theme.get("lineHighlightColor", "#111111"))  # Dark yellow
-        highlight_color.setAlpha(40)  # Adjust alpha for transparency
-        editor.setCaretLineVisible(True)
-        editor.setCaretLineBackgroundColor(QColor(0, 0, 0, .5))
+            # Apply line highlight
+            highlight_color = QColor(self.current_theme.get("lineHighlightColor", "#111111"))  # Dark yellow
+            highlight_color.setAlpha(40)  # Adjust alpha for transparency
+            editor.setCaretLineVisible(True)
+            editor.setCaretLineBackgroundColor(QColor(0, 0, 0, .5))
 
-        # Apply sidebar (line number area) color
-        sidebar_color = QColor(self.current_theme.get("sidebarColor", "#2E3440"))
-        editor.setMarginsBackgroundColor(sidebar_color)
-        editor.setMarginsForegroundColor(QColor(self.current_theme.get("sidebarTextColor", "#D8DEE9")))
+            # Apply sidebar (line number area) color
+            sidebar_color = QColor(self.current_theme.get("sidebarColor", "#2E3440"))
+            editor.setMarginsBackgroundColor(sidebar_color)
+            editor.setMarginsForegroundColor(QColor(self.current_theme.get("sidebarTextColor", "#D8DEE9")))
 
-        # Ensure the changes are applied
-        editor.update()
+            # Ensure the changes are applied
+            editor.update()
+        except Exception as e:
+            logging.error(f"Error applying theme to editor: {str(e)}")
+            logging.error(traceback.format_exc())
     def get_current_theme_color(self, color_key, default_color):
         # Ensure current_theme is a dictionary containing theme data
         theme_data = self.get_theme_data(self.current_theme)
@@ -706,4 +736,72 @@ class ThemeManager(QObject):
                 with open(os.path.join(self.custom_themes_dir, filename), 'r') as f:
                     self.custom_themes[theme_name] = json.load(f)
 
-  
+    def apply_lexer_colors(self, lexer_colors):
+        for editor in self.get_all_code_editors():
+            lexer = editor.current_lexer
+            if isinstance(lexer, QsciLexer):
+                self.set_lexer_colors(lexer, lexer_colors)
+    def get_lexer_color_map(self):
+        self.lexer_color_map = {
+            'default': 0,
+            'keyword': 1,
+            'class': 2,
+            'function': 3,
+            'string': 4,
+            'comment': 5,
+            'number': 6,
+            'operator': 7,
+            'variable': 8,
+            'preprocessor': 9,
+            'identifier': 10,
+            'constant': 11,
+            'type': 12,
+            'bracket': 13,
+            'punctuation': 14,
+            'label': 15,
+            'error': 16,
+            'warning': 17,
+            'annotation': 18,
+            'docComment': 19,
+            'regex': 20,
+            'attribute': 21,
+            'builtinFunction': 22,
+            'builtinClass': 23,
+            'exception': 24,
+            'import': 25,
+            'module': 26,
+            'property': 27,
+            'method': 28,
+            'parameter': 29,
+            'namespace': 30,
+            'interface': 31,
+            'enum': 32,
+            'boolean': 33,
+            'null': 34,
+            'escapeChar': 35,
+            'heredoc': 36,
+            'rawString': 37,
+            'formatSpecifier': 38,
+            'specialVariable': 39,
+            'keywordArg': 40,
+            'magicMethod': 41,
+            'docstring': 42,
+            'markupTag': 43,
+            'markupAttribute': 44,
+            'cssSelector': 45,
+            'cssProperty': 46,
+            'cssValue': 47,
+            'sqlKeyword': 48,
+            'sqlFunction': 49,
+            'sqlTable': 50,
+            'sqlColumn': 51
+        }
+        return self.lexer_color_map
+    
+    def set_lexer_colors(self, lexer, colors):
+        color_map = self.get_lexer_color_map()
+
+        for name, style in color_map.items():
+            if name in colors:
+                lexer.setColor(QColor(colors[name]), style)
+                

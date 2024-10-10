@@ -6,7 +6,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 import json
 import os
-
+from PyQt6.QtWidgets import QMessageBox
 class ColorPicker(QWidget):
     def __init__(self, label):
         super().__init__()
@@ -135,6 +135,15 @@ class ThemeBuilderWidget(QWidget):
         editor_group.setLayout(editor_layout)
         scroll_layout.addWidget(editor_group)
 
+        # Add Lexer Colors section
+        lexer_group = QGroupBox("Lexer Colors")
+        lexer_layout = QFormLayout()
+        self.lexer_pickers = list(self.theme_manager.get_lexer_color_map().keys())
+        for name in self.lexer_pickers:
+            lexer_layout.addRow(ColorPicker(name))
+        lexer_group.setLayout(lexer_layout)
+        scroll_layout.addWidget(lexer_group)
+
         # Qt DOM elements list
         self.elements_list = QListWidget()
         self.elements_list.addItems([
@@ -214,7 +223,7 @@ class ThemeBuilderWidget(QWidget):
     def save_theme(self):
         theme_name = self.name_input.text()
         if not theme_name:
-            # Show an error message
+            QMessageBox.warning(self, "Error", "Please enter a theme name.")
             return
 
         theme_data = {
@@ -223,6 +232,7 @@ class ThemeBuilderWidget(QWidget):
             "sidebar": {name: picker.get_color() for name, picker in self.sidebar_pickers.items()},
             "toolbar": {name: picker.get_color() for name, picker in self.toolbar_pickers.items()},
             "editor": {name: picker.get_color() for name, picker in self.editor_pickers.items()},
+            "lexer": {name: picker.get_color() for name, picker in self.lexer_pickers.items()},
         }
 
         for i in range(self.elements_list.count()):
@@ -259,27 +269,32 @@ class ThemeBuilderWidget(QWidget):
         # Load general colors
         for name, picker in self.color_pickers.items():
             if name in theme_data.get("colors", {}):
-                picker.color_button.setStyleSheet(f"background-color: {theme_data['colors'][name]};")
+                picker.set_color(theme_data["colors"][name])
 
         # Load highlighting colors
         for name, picker in self.highlight_pickers.items():
             if name in theme_data.get("highlighting", {}):
-                picker.color_button.setStyleSheet(f"background-color: {theme_data['highlighting'][name]};")
+                picker.set_color(theme_data["highlighting"][name])
 
         # Load sidebar colors
         for name, picker in self.sidebar_pickers.items():
             if name in theme_data.get("sidebar", {}):
-                picker.color_button.setStyleSheet(f"background-color: {theme_data['sidebar'][name]};")
+                picker.set_color(theme_data["sidebar"][name])
 
         # Load toolbar and context menu colors
         for name, picker in self.toolbar_pickers.items():
             if name in theme_data.get("toolbar", {}):
-                picker.color_button.setStyleSheet(f"background-color: {theme_data['toolbar'][name]};")
+                picker.set_color(theme_data["toolbar"][name])
 
         # Load editor colors
         for name, picker in self.editor_pickers.items():
             if name in theme_data.get("editor", {}):
-                picker.color_button.setStyleSheet(f"background-color: {theme_data['editor'][name]};")
+                picker.set_color(theme_data["editor"][name])
+
+        # Load lexer colors
+        for name, picker in self.lexer_pickers.items():
+            if name in theme_data.get("lexer", {}):
+                picker.set_color(theme_data["lexer"][name])
 
         # Load element-specific styles
         for i in range(self.elements_list.count()):
@@ -291,6 +306,6 @@ class ThemeBuilderWidget(QWidget):
                     key = page.layout().itemAt(j, QFormLayout.ItemRole.LabelRole).widget().text()
                     if key in theme_data[element]:
                         if isinstance(item, ColorPicker):
-                            item.color_button.setStyleSheet(f"background-color: {theme_data[element][key]};")
+                            item.set_color(theme_data[element][key])
                         elif isinstance(item, StyleInput):
-                            item.input.setItemText(str(theme_data[element][key]))
+                            item.set_value(theme_data[element][key])

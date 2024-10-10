@@ -6,8 +6,12 @@ from DEV.workspace import Workspace
 import tempfile
 import logging
 from PyQt6.QtCore import QObject, pyqtSignal
-
+from NITTY_GRITTY.knowledge_graph import KnowledgeGraph
 from .project_manager import Project
+import re
+import asyncio
+from PyQt6.QtCore import QTimer
+from datetime import datetime
 #WORKSPACES IS UI RELATED, probably, filesets open?
 ##Vaults can be considered as top-level containers.
 # Projects can exist within vaults.
@@ -30,9 +34,31 @@ class Vault:
         self.config_file = self.path / '.vault_config.json'
         self.index_file = self.path / '.vault_index.json'
         logging.info(f"Initializing Vault: {vault_name} at {path}")
+        self.index = None
+        self.knowledge_graph = KnowledgeGraph()
         self.load_config()
+        # Remove self.load_index() from here
 
-   
+    def get_index(self):
+        if self.index is None:
+            self.load_index()
+        return self.index
+
+    def get_graph(self):
+        return self.knowledge_graph
+
+    def get_all_tags(self):
+        return self.knowledge_graph.get_all_tags()
+
+    def get_all_references(self):
+        return self.knowledge_graph.get_all_references()
+
+    def get_all_files(self):
+        return self.knowledge_graph.get_all_files()
+
+    def get_all_backlinks(self):
+        return self.knowledge_graph.get_all_backlinks()
+    
     def get_project_path(self, project_name=None):
         if project_name is None:
             current_project = self.cccore.project_manager.get_current_project()
@@ -78,21 +104,71 @@ class Vault:
         return list(self.workspaces.keys())
 
     def load_index(self):
-        logging.warning(f"Loading index for vault: {self.name}")
         if self.index_file.exists():
             with open(self.index_file, 'r') as f:
                 self.index = json.load(f)
-            logging.warning(f"Index loaded for vault: {self.name}")
         else:
-            logging.warning(f"Index file not found for vault: {self.name}. Updating index.")
+            self.index = {'files': {}}
             self.update_index()
 
     def update_index(self):
+        logging.info(f"Updating index for vault: {self.name}")
+        self.index = {'files': {}}
+        for root, _, files in os.walk(self.path):
+            for file in files:
+                file_path = Path(root) / file
+                rel_path = str(file_path.relative_to(self.path))
+                file_info = self.get_file_info(file_path)
+                self.index['files'][rel_path] = file_info
+        self.save_index()
+        logging.info(f"Index updated for vault: {self.name}")
+
+    def get_file_info(self, file_path):
+        stat = file_path.stat()
+        file_type = self.get_file_type(file_path)
+        return {
+            'path': str(file_path.relative_to(self.path)),
+            'name': file_path.name,
+            'type': file_type,
+            'size': stat.st_size,
+            'created': datetime.fromtimestamp(stat.st_ctime).isoformat(),
+            'modified': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            'tags': self.extract_tags(file_path) if file_type == 'document' else [],
+            'links': self.extract_links(file_path) if file_type == 'document' else [],
+        }
+
+    def get_file_type(self, file_path):
+        extension = file_path.suffix.lower()
+        if extension in ['.md', '.txt']:
+            return 'document'
+        elif extension in ['.png', '.jpg', '.jpeg', '.gif']:
+            return 'image'
+        elif extension in ['.py', '.js', '.html', '.css']:
+            return 'code'
+        else:
+            return 'other'
+
+    def extract_tags(self, file_path):
         try:
-            self.update_index_nix()
-        except FileNotFoundError:
-            logging.warning("Nix not found. Falling back to Python indexing.")
-            self.update_index_python()
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return list(set(re.findall(r'#(\w+)', content)))
+        except Exception as e:
+            logging.error(f"Error extracting tags from {file_path}: {str(e)}")
+            return []
+
+    def extract_links(self, file_path):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return list(set(re.findall(r'\[\[(.*?)\]\]', content)))
+        except Exception as e:
+            logging.error(f"Error extracting links from {file_path}: {str(e)}")
+            return []
+
+    def save_index(self):
+        with open(self.index_file, 'w') as f:
+            json.dump(self.index, f, indent=4)
 
     def update_index_nix(self):
         script_path = Path(__file__).parent.parent / 'NITTY_GRITTY' / 'index.nix'
@@ -107,32 +183,63 @@ class Vault:
         
         if result.returncode == 0:
             self.index = json.loads(result.stdout)
-            self.save_index()
+            
         else:
             raise RuntimeError(f"Error updating index: {result.stderr}")
 
     def update_index_python(self):
-        self.index = {'files': []}
+        self.index = {'files': {}}
+        self.knowledge_graph.clear()
         for root, _, files in os.walk(self.path):
             for file in files:
                 if file.endswith(('.md', '.txt', '.png', '.jpg', '.jpeg', '.gif')):
                     file_path = Path(root) / file
-                    rel_path = file_path.relative_to(self.path)
-                    stat = file_path.stat()
-                    self.index['files'].append({
-                        'path': str(rel_path),
-                        'mtime': stat.st_mtime,
-                        'size': stat.st_size,
-                        'type': 'image' if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')) else 'document'
-                    })
-        self.save_index()
+                    rel_path = str(file_path.relative_to(self.path))
+                    file_info = self.get_file_info(file_path)
+                    self.index['files'][rel_path] = file_info
+                    if file_info['type'] == 'document':
+                        self.process_file_content(file_path, rel_path)
 
-    def save_index(self):
-        with open(self.index_file, 'w') as f:
-            json.dump(self.index, f, indent=2)
+    def update_knowledge_graph(self):
+        logging.info(f"Updating knowledge graph for vault: {self.name}")
+        if self.index is None:
+            self.load_index()
+        if self.index is None:
+            logging.error(f"Failed to load index for vault: {self.name}")
+            return
+
+        self.knowledge_graph.clear()
+        for rel_path, file_info in self.index['files'].items():
+            if file_info['type'] == 'document':
+                file_path = self.path / rel_path
+                self.process_file_content(file_path, rel_path)
+        logging.info(f"Knowledge graph updated for vault: {self.name}")
+
+    def process_file_content(self, file_path, rel_path):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Extract links
+            links = re.findall(r'\[\[(.*?)\]\]', content)
+            for link in links:
+                self.knowledge_graph.add_link(rel_path, link)
+
+            # Extract tags
+            tags = re.findall(r'#(\w+)', content)
+            for tag in tags:
+                self.knowledge_graph.add_tag(rel_path, tag)
+
+            # Extract references (assuming references are in the format @reference)
+            references = re.findall(r'@(\w+)', content)
+            for ref in references:
+                self.knowledge_graph.add_reference(rel_path, ref)
+        except Exception as e:
+            logging.error(f"Error processing file {file_path}: {str(e)}")
 
     def get_file_info(self, rel_path):
-        return next((f for f in self.index['files'] if f['path'] == rel_path), None)
+        return self.index['files'].get(rel_path)
+
     def add_project(self, project_name, project_path, language=None, version=None):
         project_path = Path(project_path)
         if not project_path.is_relative_to(self.path):
@@ -152,23 +259,39 @@ class Vault:
         self.projects[project_name] = project
         self.save_config()
         return True
+
     def get_project(self, project_name):
         return self.projects.get(project_name)
+
     def get_project_path(self, project_name):
         return self.projects.get(project_name)
+
     def get_project_names(self):
         return list(self.projects.keys())
-    
-   
+
+    def get_backlinks(self, file_path):
+        return self.knowledge_graph.get_backlinks(file_path)
+
+    def contains_file(self, file_path):
+        if self.index is None:
+            self.load_index()
+        rel_path = str(Path(file_path).relative_to(self.path))
+        return rel_path in self.index['files']
 
 class VaultManager(QObject):
     vault_changed = pyqtSignal(str)
     project_added = pyqtSignal(str, str) #vault_name, project_name
+    indexing_started = pyqtSignal()
+    indexing_finished = pyqtSignal()
+    vault_added = pyqtSignal(str)
+    vault_removed = pyqtSignal(str)
+    project_removed = pyqtSignal(str, str)
 
     def __init__(self, settings_manager, cccore):
         super().__init__()  # Initialize the QObject
         self.settings_manager = settings_manager
         self.cccore = cccore
+        self.indexing_queue = asyncio.Queue()
         self.project_manager = cccore.get_project_manager()
         self.app_config_dir = Path.home() / ".computinator_code"
         self.app_config_dir.mkdir(exist_ok=True)
@@ -179,6 +302,10 @@ class VaultManager(QObject):
         self.load_vaults()
         self.ensure_default_vault()
         logging.info(f"VaultManager initialized with {len(self.vaults)} vaults.")
+        
+        self.indexing_timer = QTimer(self)
+        self.indexing_timer.timeout.connect(self.process_indexing_queue)
+        self.indexing_timer.start(1000)  # Check queue every second
         
     def load_vaults(self):
         logging.info("Loading vaults...")
@@ -226,6 +353,9 @@ class VaultManager(QObject):
             self.set_current_vault(next(iter(self.vaults)))
         
         logging.warning(f"Current vault set to: {self.current_vault.name if self.current_vault else 'None'}")
+        
+        # Instead of updating immediately, queue the update
+        self.queue_vault_update(self.current_vault)
 
     def create_vault(self, name, path):
         path = Path(path)
@@ -271,6 +401,8 @@ class VaultManager(QObject):
             self.vault_changed.emit(vault_name)
             self.initialize_vault(self.current_vault)
             self.save_vaults_config()   
+            # Queue the update instead of doing it immediately
+            self.queue_vault_update(self.current_vault)
             return True
         logging.warning(f"Vault not found: {vault_name}")
         return False
@@ -445,7 +577,8 @@ class VaultManager(QObject):
 
     def update_vault_index(self):
         if self.current_vault:
-            self.current_vault.update_index()
+            self.queue_vault_update(self.current_vault)
+
     def cleanup_temp_vaults(self):
         temp_vaults = [name for name in list(self.vaults.keys()) if name.startswith("temp_vault")]
         for name in temp_vaults:
@@ -542,3 +675,80 @@ class VaultManager(QObject):
         self.save_vaults_config()
         logging.warning(f"Created new vault: {name} at {path}")
         return new_vault
+    
+    def get_vault_icon(self, vault_name):
+        return self.theme_manager.get_icon(vault_name)
+    
+    def get_vault_color(self, vault_name):
+        return self.theme_manager.get_color(vault_name)
+    
+    def get_vault_background_color(self, vault_name):
+        return self.theme_manager.get_background_color(vault_name)
+    
+    def get_vault_text_color(self, vault_name):
+        return self.theme_manager.get_text_color(vault_name)
+
+    def update_vault_index(self):
+        if self.current_vault:
+            self.queue_vault_update(self.current_vault)
+
+    def update_vault_config(self):
+        if self.current_vault:
+            self.current_vault.save_config()
+
+    def update_knowledge_graph(self):
+        if self.current_vault:
+            self.queue_vault_update(self.current_vault)
+
+    def get_vault_knowledge_graph(self):
+        if self.current_vault:
+            return self.current_vault.knowledge_graph
+        return {}
+
+    def queue_vault_update(self, vault):
+        if vault:
+            asyncio.run_coroutine_threadsafe(self.indexing_queue.put(vault), asyncio.get_event_loop())
+        else:
+            logging.warning("Attempted to queue update for None vault")
+
+    def process_indexing_queue(self):
+        if self.indexing_queue.empty():
+            return
+
+        asyncio.create_task(self._process_queue())
+
+    async def _process_queue(self):
+        self.indexing_started.emit()
+        try:
+            vault = await self.indexing_queue.get()
+            await self.update_vault_async(vault)
+        except Exception as e:
+            logging.error(f"Error processing indexing queue: {str(e)}")
+        finally:
+            self.indexing_queue.task_done()
+            self.indexing_finished.emit()
+
+    async def update_vault_async(self, vault):
+        try:
+            await asyncio.to_thread(vault.update_index)
+            await asyncio.to_thread(vault.update_knowledge_graph)
+        except Exception as e:
+            logging.error(f"Error updating vault {vault.name}: {str(e)}")
+
+    def get_backlinks(self, file_path):
+        if self.current_vault:
+            return self.current_vault.get_backlinks(file_path)
+        return []
+    def get_backlinks_for_file(self, file_path):
+        if self.current_vault:
+            return self.current_vault.get_backlinks_for_file(file_path)
+        return []
+    def get_vault_for_file(self, file_path):
+        file_path = Path(file_path).resolve()
+        for vault in self.vaults.values():
+            try:
+                file_path.relative_to(vault.path)
+                return vault
+            except ValueError:
+                continue
+        return None

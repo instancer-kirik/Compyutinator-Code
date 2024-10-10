@@ -11,16 +11,19 @@ from debugpy.server import api
 import psutil
 import networkx as nx
 import matplotlib.pyplot as plt
+import traceback
 import logging
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from NITTY_GRITTY.ThreadTrackers import global_thread_tracker, global_qthread_tracker
-
+from PyQt6.QtCore import pyqtSignal
 class BreakpointBookmarkWidget(QWidget):
-    def __init__(self, debugger_widget):
+    def __init__(self, cool_widget):
         super().__init__()
         logging.warning("BreakpointBookmarkWidget initialized")
-        self.debugger_widget = debugger_widget
+        self.cool_widget = cool_widget
         self.setup_ui()
+        self.breakpoint_list.itemDoubleClicked.connect(self.goto_breakpoint)
+        self.bookmark_list.itemDoubleClicked.connect(self.goto_bookmark)
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -48,12 +51,12 @@ class BreakpointBookmarkWidget(QWidget):
 
     def goto_breakpoint(self, item):
         file, line = item.text().split(':')
-        self.debugger_widget.goto_file_line(file, int(line))
+        self.cool_widget.goto_file_line(file, int(line))
 
     def goto_bookmark(self, item):
         file, rest = item.text().split(':', 1)
         line = rest.split(' - ')[0]
-        self.debugger_widget.goto_file_line(file, int(line))
+        self.cool_widget.goto_file_line(file, int(line))
 
 class ForestWidget(QWidget):
     def __init__(self, debugger_widget):
@@ -117,87 +120,99 @@ class DebuggerThread(QThread):
             self.output_received.emit(f"Error: {str(e)}")
 
 class CoolWidget(QWidget):
-    def __init__(self, cccore, parent=None):
-        super().__init__(parent)
-        self.cccore = cccore
-        logging.warning("Initializing CoolWidget")
-        self.setup_ui()
-        self.connect_signals()
-        self.debugger_thread = None
-        self.breakpoints = []
-        self.bookmarks = []
-        self.update_timer = QTimer(self)
-        self.update_timer.timeout.connect(self.update_thread_and_memory_info)
-        self.update_timer.start(1000)  # Update every second
-        logging.warning("CoolWidget initialized")
+    def __init__(self, cccore):
+        logging.info("Initializing CoolWidget")
+        try:
+            super().__init__()
+            self.cccore = cccore
+            self.setup_ui()
+            self.connect_signals()
+            self.debugger_thread = None
+            self.breakpoints = []
+            self.bookmarks = []
+            self.update_timer = QTimer(self)
+            self.update_timer.timeout.connect(self.update_thread_and_memory_info)
+            self.update_timer.start(1000)  # Update every second
+            logging.info("CoolWidget initialized successfully")
+        except Exception as e:
+            logging.error(f"Error initializing CoolWidget: {str(e)}")
+            logging.error(traceback.format_exc())
+
     def setup_ui(self):
-        layout = QVBoxLayout(self)
+        logging.info("Setting up CoolWidget UI")
+        try:
+            layout = QVBoxLayout(self)
 
-        # Control buttons
-        control_layout = QHBoxLayout()
-        self.run_button = QPushButton("Run")
-        self.step_button = QPushButton("Step")
-        self.continue_button = QPushButton("Continue")
-        self.stop_button = QPushButton("Stop")
-        control_layout.addWidget(self.run_button)
-        control_layout.addWidget(self.step_button)
-        control_layout.addWidget(self.continue_button)
-        control_layout.addWidget(self.stop_button)
-        layout.addLayout(control_layout)
+            # Control buttons
+            control_layout = QHBoxLayout()
+            self.run_button = QPushButton("Run")
+            self.step_button = QPushButton("Step")
+            self.continue_button = QPushButton("Continue")
+            self.stop_button = QPushButton("Stop")
+            control_layout.addWidget(self.run_button)
+            control_layout.addWidget(self.step_button)
+            control_layout.addWidget(self.continue_button)
+            control_layout.addWidget(self.stop_button)
+            layout.addLayout(control_layout)
 
-        # Main splitter
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+            # Main splitter
+            splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        # Left side: Stack, Variables, and Console
-        left_widget = QWidget()
-        left_layout = QVBoxLayout(left_widget)
-        
-        self.stack_view = QTreeView()
-        left_layout.addWidget(QLabel("Stack Trace"))
-        left_layout.addWidget(self.stack_view)
+            # Left side: Stack, Variables, and Console
+            left_widget = QWidget()
+            left_layout = QVBoxLayout(left_widget)
+            
+            self.stack_view = QTreeView()
+            left_layout.addWidget(QLabel("Stack Trace"))
+            left_layout.addWidget(self.stack_view)
 
-        self.var_view = QTreeView()
-        left_layout.addWidget(QLabel("Variables"))
-        left_layout.addWidget(self.var_view)
+            self.var_view = QTreeView()
+            left_layout.addWidget(QLabel("Variables"))
+            left_layout.addWidget(self.var_view)
 
-        self.console_output = QTextEdit()
-        self.console_output.setReadOnly(True)
-        left_layout.addWidget(QLabel("Console Output"))
-        left_layout.addWidget(self.console_output)
+            self.console_output = QTextEdit()
+            self.console_output.setReadOnly(True)
+            left_layout.addWidget(QLabel("Console Output"))
+            left_layout.addWidget(self.console_output)
 
-        splitter.addWidget(left_widget)
+            splitter.addWidget(left_widget)
 
-        # Right side: Tabs for additional features
-        right_widget = QTabWidget()
+            # Right side: Tabs for additional features
+            right_widget = QTabWidget()
 
-        # Breakpoints and Bookmarks tab
-        self.breakpoint_bookmark_widget = BreakpointBookmarkWidget(self)
-        right_widget.addTab(self.breakpoint_bookmark_widget, "Breakpoints & Bookmarks")
+            # Breakpoints and Bookmarks tab
+            self.breakpoint_bookmark_widget = BreakpointBookmarkWidget(self)
+            right_widget.addTab(self.breakpoint_bookmark_widget, "Breakpoints & Bookmarks")
 
-        # Thread viewer tab
-        self.thread_list = QListWidget()
-        right_widget.addTab(self.thread_list, "Threads")
+            # Thread viewer tab
+            self.thread_list = QListWidget()
+            right_widget.addTab(self.thread_list, "Threads")
 
-        # Memory usage tab
-        self.memory_view = FigureCanvas(plt.Figure(figsize=(5, 4)))
-        right_widget.addTab(self.memory_view, "Memory Usage")
+            # Memory usage tab
+            self.memory_view = FigureCanvas(plt.Figure(figsize=(5, 4)))
+            right_widget.addTab(self.memory_view, "Memory Usage")
 
-        # Call graph tab
-        self.call_graph = FigureCanvas(plt.Figure(figsize=(5, 4)))
-        right_widget.addTab(self.call_graph, "Call Graph")
+            # Call graph tab
+            self.call_graph = FigureCanvas(plt.Figure(figsize=(5, 4)))
+            right_widget.addTab(self.call_graph, "Call Graph")
 
-        # Forest tab
-        self.forest_widget = ForestWidget(self)
-        right_widget.addTab(self.forest_widget, "Forest")
+            # Forest tab
+            self.forest_widget = ForestWidget(self)
+            right_widget.addTab(self.forest_widget, "Forest")
 
-        splitter.addWidget(right_widget)
+            splitter.addWidget(right_widget)
 
-        layout.addWidget(splitter)
+            layout.addWidget(splitter)
 
-        # Command input
-        self.command_input = QLineEdit()
-        layout.addWidget(QLabel("Debugger Command"))
-        layout.addWidget(self.command_input)
+            # Command input
+            self.command_input = QLineEdit()
+            layout.addWidget(QLabel("Debugger Command"))
+            layout.addWidget(self.command_input)
+
+            logging.info("CoolWidget UI setup complete")
+        except Exception as e:
+            logging.error(f"Error setting up CoolWidget UI: {str(e)}")
+            logging.error(traceback.format_exc())
 
     def connect_signals(self):
         # ... (existing signal connections) ...
@@ -206,8 +221,8 @@ class CoolWidget(QWidget):
         self.continue_button.clicked.connect(self.continue_execution)
         self.stop_button.clicked.connect(self.stop_debugger)
         self.command_input.returnPressed.connect(self.execute_command)
-        self.breakpoint_list.itemDoubleClicked.connect(self.toggle_breakpoint)
-
+        #self.breakpoint_bookmark_widget.itemDoubleClicked.connect(self.toggle_breakpoint)
+       # self.thread_list.itemDoubleClicked.connect(self.goto_thread)
     def run_debugger(self):
         code = self.cccore.editor_manager.get_current_editor_content()
         self.debugger_thread = DebuggerThread(code)
@@ -330,9 +345,8 @@ class CoolWidget(QWidget):
         self.breakpoint_bookmark_widget.update_bookmarks(self.bookmarks)
 
     def goto_file_line(self, file, line):
-        # Implement logic to open the file and go to the specified line
-        # This might involve communicating with your IDE's main window or editor component
-        pass
+        
+        self.cccore.editor_manager.open(file,line)
 
     def update_forest(self):
         # Use LSP to get log function calls

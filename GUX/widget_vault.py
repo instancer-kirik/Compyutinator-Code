@@ -5,17 +5,17 @@ from GUX.markdown_viewer import MarkdownViewer
 import os
 import hashlib
 from GUX.custom_tree_view import CustomTreeView
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog,
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog, QPlainTextEdit,
                              QLineEdit, QMessageBox, QApplication)
-from PyQt6.QtCore import Qt, QAbstractItemModel, QModelIndex
-from PyQt6.QtGui import QStandardItemModel, QStandardItem
+from PyQt6.QtCore import Qt, QAbstractItemModel, QModelIndex, QRegularExpression
+from PyQt6.QtGui import QStandardItemModel, QStandardItem, QTextCursor
 import inspect
 
 import requests
 from AuraText.auratext.scripts.def_path import resource
 from PyQt6.QtCore import pyqtSignal
 import logging
-from PyQt6.QtGui import QIcon, QFileSystemModel
+from PyQt6.QtGui import QIcon, QFileSystemModel, QFont
 
 class VaultsManagerWidget(QWidget):
     vault_selected = pyqtSignal(str)
@@ -203,7 +203,7 @@ class FileExplorerWidget(QWidget):
         self.layout.addWidget(self.splitter)
 
     def create_tree_view(self):
-        tree = CustomTreeView(self)
+        tree = CustomTreeView(self,file_explorer=self)
         tree.setModel(self.model)
         tree.setRootIndex(self.model.index(self.model.rootPath()))
         tree.doubleClicked.connect(self.on_double_click)
@@ -315,55 +315,235 @@ class AudioLevelWidget(QWidget):
         self.update()
 
     def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        width = self.width()
-        height = self.height()
-        bar_width = width - 4
-        bar_height = height - 4
-
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(200, 200, 200))
-        painter.drawRect(2, 2, bar_width, bar_height)
-
-        level_height = int(bar_height * (self.level / 100))
-        painter.setBrush(QColor(0, 255, 0))
-        painter.drawRect(2, 2 + bar_height - level_height, bar_width, level_height)
+        super().paintEvent(event)
+        painter = QPainter(self.viewport())
+        painter.setOpacity(0.2)
+        document = self.document()
+        block = document.begin()
+        while block.isValid():
+            if block.text().startswith('-'):
+                layout = block.layout()
+                if layout:  # Check if layout exists
+                    line_rect = layout.lineAt(0).rect()
+                    painter.fillRect(line_rect, QColor(100, 100, 100))
+            block = block.next()
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QPushButton, QTextEdit, QLabel
 
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QPushButton, QTextEdit, QLabel, QHBoxLayout
+from PyQt6.QtGui import QColor, QTextCharFormat, QSyntaxHighlighter
+from PyQt6.QtCore import Qt
+from difflib import unified_diff
+
+class DiffHighlighter(QSyntaxHighlighter):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.add_format = QTextCharFormat()
+        self.add_format.setBackground(QColor(200, 255, 200))
+        self.remove_format = QTextCharFormat()
+        self.remove_format.setBackground(QColor(255, 200, 200))
+        self.remove_format.setFontStrikeOut(True)
+        self.header_format = QTextCharFormat()
+        self.header_format.setForeground(QColor(0, 0, 255))
+        self.line_num_format = QTextCharFormat()
+        self.line_num_format.setForeground(QColor(128, 128, 128))
+
+    def highlightBlock(self, text):
+        if text.startswith('+'):
+            self.setFormat(0, len(text), self.add_format)
+        elif text.startswith('-'):
+            self.setFormat(0, len(text), self.remove_format)
+
+class MergeTextEdit(QTextEdit):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        font = QFont("Courier")
+        font.setStyleHint(QFont.StyleHint.Monospace)
+        self.setFont(font)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self.viewport())
+        painter.setOpacity(0.2)
+        cursor = self.textCursor()
+        document = self.document()
+        for block in document.begin():
+            if block.text().startswith('-'):
+                layout = block.layout()
+                line_rect = layout.lineAt(0).rect()
+                painter.fillRect(line_rect, QColor(100, 100, 100))
+
 class MergeWidget(QDialog):
+    merge_accepted = pyqtSignal(str)
+    merge_rejected = pyqtSignal()
+
     def __init__(self, file_path, original_content, new_content, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Merge Changes")
-        
+        self.file_path = file_path
+        self.original_content = original_content
+        self.new_content = new_content
+        self.setup_ui()
+
+    def setup_ui(self):
         layout = QVBoxLayout(self)
         
-        self.path_label = QLabel(f"File: {file_path}")
-        self.original_label = QLabel("Original Content:")
-        self.original_text = QTextEdit(original_content)
-        self.original_text.setReadOnly(True)
-        
-        self.new_label = QLabel("New Content:")
-        self.new_text = QTextEdit(new_content)
-        self.new_text.setReadOnly(True)
-        
-        self.merge_button = QPushButton("Merge")
-        self.merge_button.clicked.connect(self.merge_changes)
-        
-        layout.addWidget(self.path_label)
-        layout.addWidget(self.original_label)
-        layout.addWidget(self.original_text)
-        layout.addWidget(self.new_label)
-        layout.addWidget(self.new_text)
-        layout.addWidget(self.merge_button)
-    
-    def merge_changes(self):
-        # Implement merge logic here
-        merged_content = self.new_text.toPlainText()  # Example: use new content
+        self.context_label = QLabel(f"Editing: {self.file_path}")
+        layout.addWidget(self.context_label)
+
+        self.merge_edit = MergeTextEdit()
+        self.highlighter = DiffHighlighter(self.merge_edit.document())
+        layout.addWidget(self.merge_edit)
+
+        button_layout = QHBoxLayout()
+        self.accept_button = QPushButton("Accept Changes")
+        self.accept_button.clicked.connect(self.accept_changes)
+        self.reject_button = QPushButton("Reject Changes")
+        self.reject_button.clicked.connect(self.reject_changes)
+        button_layout.addWidget(self.accept_button)
+        button_layout.addWidget(self.reject_button)
+        layout.addLayout(button_layout)
+
+        self.show_diff()
+
+    def show_diff(self):
+        diff_content = self.generate_diff()
+        self.merge_edit.setPlainText(diff_content)
+
+    def generate_diff(self):
+        from difflib import unified_diff
+        diff = list(unified_diff(
+            self.original_content.splitlines(keepends=True),
+            self.new_content.splitlines(keepends=True),
+            fromfile=self.file_path,
+            tofile=f"{self.file_path} (modified)",
+            lineterm='',
+        ))
+        return ''.join(diff)
+
+    def accept_changes(self):
+        cursor = self.merge_edit.textCursor()
+        cursor.beginEditBlock()
+        cursor.movePosition(QTextCursor.MoveOperation.Start)
+        while not cursor.atEnd():
+            cursor.movePosition(QTextCursor.MoveOperation.StartOfLine)
+            if cursor.block().text().startswith('-'):
+                cursor.select(QTextCursor.SelectionType.LineUnderCursor)
+                cursor.removeSelectedText()
+                cursor.deleteChar()  # Remove newline
+            else:
+                if cursor.block().text().startswith('+'):
+                    cursor.deleteChar()  # Remove the '+' sign
+                cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
+        cursor.endEditBlock()
+        self.merge_accepted.emit(self.merge_edit.toPlainText())
         self.accept()
-        return merged_content
-    
+
+    def reject_changes(self):
+        self.merge_edit.setPlainText(self.original_content)
+        self.merge_rejected.emit()
+        self.reject()
+class LineNumberTextEdit(QPlainTextEdit):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        self.setReadOnly(True)
+        font = QFont("Courier")
+        font.setStyleHint(QFont.StyleHint.Monospace)
+        self.setFont(font)
+
+class MergeWidget(QDialog):
+    merge_accepted = pyqtSignal(str)
+    merge_rejected = pyqtSignal()
+
+    def __init__(self, file_path, original_content, new_content, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Merge Changes")
+        self.file_path = file_path
+        self.original_content = original_content
+        self.new_content = new_content
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        
+        self.context_label = QLabel(f"Editing: {self.file_path}")
+        layout.addWidget(self.context_label)
+
+        self.merge_edit = MergeTextEdit()
+        self.highlighter = DiffHighlighter(self.merge_edit.document())
+        layout.addWidget(self.merge_edit)
+
+        button_layout = QHBoxLayout()
+        self.accept_button = QPushButton("Accept Changes")
+        self.accept_button.clicked.connect(self.accept_changes)
+        self.reject_button = QPushButton("Reject Changes")
+        self.reject_button.clicked.connect(self.reject_changes)
+        button_layout.addWidget(self.accept_button)
+        button_layout.addWidget(self.reject_button)
+        layout.addLayout(button_layout)
+
+        self.show_diff()
+
+    def show_diff(self):
+        diff_content = self.generate_diff()
+        self.merge_edit.setPlainText(diff_content)
+
+    def generate_diff(self):
+        from difflib import unified_diff
+        diff = list(unified_diff(
+            self.original_content.splitlines(keepends=True),
+            self.new_content.splitlines(keepends=True),
+            fromfile=self.file_path,
+            tofile=f"{self.file_path} (modified)",
+            lineterm='',
+        ))
+        return ''.join(diff)
+
+    def accept_changes(self):
+        cursor = self.merge_edit.textCursor()
+        cursor.beginEditBlock()
+        cursor.movePosition(QTextCursor.MoveOperation.Start)
+        while not cursor.atEnd():
+            cursor.movePosition(QTextCursor.MoveOperation.StartOfLine)
+            if cursor.block().text().startswith('-'):
+                cursor.select(QTextCursor.SelectionType.LineUnderCursor)
+                cursor.removeSelectedText()
+                cursor.deleteChar()  # Remove newline
+            else:
+                if cursor.block().text().startswith('+'):
+                    cursor.deleteChar()  # Remove the '+' sign
+                cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
+        cursor.endEditBlock()
+        self.merge_accepted.emit(self.merge_edit.toPlainText())
+        self.accept()
+
+    def reject_changes(self):
+        self.merge_edit.setPlainText(self.original_content)
+        self.merge_rejected.emit()
+        self.reject()
+class ModularMergeWidget:
+    def __init__(self, editor_widget):
+        self.editor_widget = editor_widget
+        self.original_content = ""
+        self.new_content = ""
+        self.file_path = ""
+
+    def show_merge(self, file_path, original_content, new_content):
+        self.file_path = file_path
+        self.original_content = original_content
+        self.new_content = new_content
+        
+        merge_widget = MergeWidget(self.file_path, self.original_content, self.new_content)
+        merge_widget.merge_accepted.connect(self.on_merge_accepted)
+        merge_widget.merge_rejected.connect(self.on_merge_rejected)
+        merge_widget.exec()
+
+    def on_merge_accepted(self, merged_content):
+        self.editor_widget.setPlainText(merged_content)
+
+    def on_merge_rejected(self):
+        self.editor_widget.setPlainText(self.original_content)  
 # pomodoro_timer_widget.py
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QToolBar
 from PyQt6.QtCore import QTimer, Qt
@@ -463,6 +643,7 @@ class AdvancedDataViewerWidget(QWidget):
     def __init__(self, cccore, parent=None):
         super().__init__(parent)
         self.cccore = cccore
+        self.data = None  # Initialize data attribute
         self.setup_ui()
 
     def setup_ui(self):
@@ -513,6 +694,9 @@ class AdvancedDataViewerWidget(QWidget):
         splitter.addWidget(right_widget)
         layout.addWidget(splitter)
 
+        # Disable plot button initially
+        self.plot_button.setEnabled(False)
+
         # Connect signals
         self.load_button.clicked.connect(self.load_data)
         self.plot_button.clicked.connect(self.plot_data)
@@ -525,6 +709,7 @@ class AdvancedDataViewerWidget(QWidget):
             'C': np.random.rand(100)
         })
         self.update_views()
+        self.plot_button.setEnabled(True)  # Enable plot button after data is loaded
 
     def update_views(self):
         # Update table view
@@ -548,6 +733,10 @@ class AdvancedDataViewerWidget(QWidget):
         self.y_combo.addItems(self.data.columns)
 
     def plot_data(self):
+        if self.data is None:
+            QMessageBox.warning(self, "No Data", "Please load data before plotting.")
+            return
+
         x = self.x_combo.currentText()
         y = self.y_combo.currentText()
         plot_type = self.plot_type_combo.currentText()
@@ -555,19 +744,22 @@ class AdvancedDataViewerWidget(QWidget):
         self.figure.clear()
         ax = self.figure.add_subplot(111)
 
-        if plot_type == "Scatter":
-            ax.scatter(self.data[x], self.data[y])
-        elif plot_type == "Line":
-            ax.plot(self.data[x], self.data[y])
-        elif plot_type == "Bar":
-            ax.bar(self.data[x], self.data[y])
-        elif plot_type == "Histogram":
-            ax.hist(self.data[x], bins=20)
+        try:
+            if plot_type == "Scatter":
+                ax.scatter(self.data[x], self.data[y])
+            elif plot_type == "Line":
+                ax.plot(self.data[x], self.data[y])
+            elif plot_type == "Bar":
+                ax.bar(self.data[x], self.data[y])
+            elif plot_type == "Histogram":
+                ax.hist(self.data[x], bins=20)
 
-        ax.set_xlabel(x)
-        ax.set_ylabel(y)
-        ax.set_title(f"{plot_type} Plot: {y} vs {x}")
-        self.canvas.draw()
+            ax.set_xlabel(x)
+            ax.set_ylabel(y)
+            ax.set_title(f"{plot_type} Plot: {y} vs {x}")
+            self.canvas.draw()
+        except Exception as e:
+            QMessageBox.warning(self, "Plot Error", f"Error occurred while plotting: {str(e)}")
 
 class StateInspectorWidget(QWidget):
     def __init__(self, cccore, parent=None):

@@ -49,6 +49,9 @@ pandas = "^2.2.3"
 matplotlib = "^3.9.2"
 debugpy = "^1.8.6"
 networkx = "^3.3"
+pyqtgraph = "^0.13.7"
+fuzzywuzzy = "^0.18.0"
+python-levenshtein = "^0.26.0"
 
 
 [build-system]

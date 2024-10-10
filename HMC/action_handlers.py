@@ -3,11 +3,11 @@ import os
 from PyQt6.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 from PyQt6.QtWidgets import QDialog
 from GUX.settings_dialog import SettingsDialog
-
+from GUX.vault_graph_view import VaultGraphView
 class ActionHandlers:
-    def __init__(self, cccore):
+    def __init__(self, cccore = None):
         self.cccore = cccore
-
+        self.settings_manager = cccore.settings_manager
     def new_file(self):
         self.cccore.editor_manager.new_document()
     def new_project(self):
@@ -287,7 +287,7 @@ class ActionHandlers:
     def toggle_diff_merger(self):
         self.cccore.diff_merger.show()
     def show_diff_merger(self, diff_blocks):
-        self.cccore.diff_merger.show_diff_merger(diff_blocks)
+        self.cccore.widget_manager.diff_merger.show_diff_merger(diff_blocks)
     def toggle_terminal(self):
         logging.info("toggle_terminal")
         pass
@@ -302,6 +302,48 @@ class ActionHandlers:
         self.cccore.project_manager.open_project_as_treeview()
     def project_settings(self):
         self.cccore.project_manager.show_project_settings()
+
+    def show_vault_explorer(self):
+        # Implement vault explorer functionality
+        pass
+
+    def show_vault_search(self):
+        # Implement vault search functionality
+        pass
+    def show_vault_graph(self):
+        current_vault = self.cccore.vault_manager.get_current_vault()
+        if current_vault:
+            self.graph_view = VaultGraphView(self.cccore.vault_manager, current_vault.name,self.cccore.lsp_manager)
+            self.graph_view.show()
+        else:
+            QMessageBox.warning(self.cccore.main_window, "No Vault", "Please select a vault first.")
+    def show_vault_statistics(self):
+        # Implement vault statistics functionality
+        pass
+
+    def show_2d_graph(self):
+        # Implement 2D graph view
+        pass
+
+    def show_3d_graph(self):
+        # Implement 3D graph view
+        pass
+
+    def show_graph_settings(self):
+        # Implement graph settings dialog
+        pass
+
+    def manage_workspaces(self):
+        # Implement workspace management functionality
+        pass
+
+    def show_documentation(self):
+        # Show or open documentation
+        pass
+
+    def check_for_updates(self):
+        # Implement update checking functionality
+        pass
         #self.cccore.terminal_emulator.toggle_visibility()
     # def toggle_file_explorer(self):
     #     self.cccore.file_explorer.toggle_visibility()

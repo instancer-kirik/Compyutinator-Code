@@ -136,3 +136,16 @@ class CursorManager:
             if cursor.text_cursor:
                 edit_function(cursor.text_cursor)
         self.synchronize_cursors()
+
+    def move_cursor_left(self, chars: int, keep_anchor: bool = False):
+        active_cursor = self.get_active_cursor()
+        if active_cursor and active_cursor.text_cursor:
+            mode = QTextCursor.MoveMode.KeepAnchor if keep_anchor else QTextCursor.MoveMode.MoveAnchor
+            active_cursor.text_cursor.movePosition(QTextCursor.MoveOperation.Left, mode, chars)
+            self.synchronize_cursors()
+
+    def insert_text(self, text: str):
+        active_cursor = self.get_active_cursor()
+        if active_cursor and active_cursor.text_cursor:
+            active_cursor.text_cursor.insertText(text)
+            self.synchronize_cursors()

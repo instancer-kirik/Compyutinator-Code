@@ -53,11 +53,6 @@ class FileManager:
             logging.error(f"File not found: {file_path}")
             return
 
-        existing_editor = self.cccore.editor_manager.get_editor_by_file_path(file_path)
-        if existing_editor:
-            self.cccore.editor_manager.set_current_editor(existing_editor)
-            return
-
         try:
             with open(file_path, 'r', encoding='utf-8') as file:
                 content = file.read()
@@ -89,6 +84,7 @@ class FileManager:
         except Exception as e:
             logging.error(f"Error saving file: {e}")
             QMessageBox.critical(self.cccore.current_window, "Error", f"Could not save file: {e}")
+        self.cccore.vault_manager.update_knowledge_graph()
 
     def save_file_as(self, editor=None):
         if editor is None:
@@ -257,7 +253,7 @@ class FileManager:
             new_folder_path = os.path.join(current_path, folder_name)
             try:
                 os.makedirs(new_folder_path)
-                QMessageBox.information(self.cccore.editor_manager.current_window, "Success", f"Folder '{folder_name}' created successfully.")
+                QMessageBox.information(self.cccore.editor_manager.current_window, "Success", f"Folder '{folder_name}' created successfully at {new_folder_path}.")
                 self.cccore.widget_manager.file_explorer.refresh()
             except OSError as e:
                 QMessageBox.warning(self.cccore.editor_manager.current_window, "Error", f"Failed to create folder: {str(e)}")
@@ -351,6 +347,15 @@ class FileManager:
 
         def generate_hash(self, content):
             return hashlib.sha256(content).hexdigest()
+
+    def show_backlinks(self, file_path):
+        backlinks = self.cccore.vault_manager.get_backlinks(file_path)
+        # Display backlinks in a dialog or sidebar
+        return backlinks
+
+    def get_vault_for_file(self, file_path):
+        vault = self.cccore.vault_manager.get_vault_for_file(file_path)
+        return vault
     # class DependencyStore:
     #     def __init__(self, store_path):
     #         self.store_path = store_path

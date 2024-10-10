@@ -56,10 +56,10 @@ class ProcessManager(QObject):
                 process = process_info['process']
                 pid = process_info['pid']
                 process.terminate()
-                if not process.waitForFinished(2000):  # Wait for up to 2 seconds
+                if not process.waitForFinished(1000):  # Wait for up to 2 seconds
                     logging.warning(f"Process {process_name} (PID: {pid}) did not terminate, forcing kill")
                     process.kill()
-                if not process.waitForFinished(2000):  # Wait additional 2 seconds after force kill
+                if not process.waitForFinished(1000):  # Wait additional 2 seconds after force kill
                     logging.error(f"Failed to kill process {process_name} (PID: {pid})")
                 else:
                     logging.info(f"Killed process: {process_name} (PID: {pid})")

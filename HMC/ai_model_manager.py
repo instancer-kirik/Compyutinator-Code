@@ -30,8 +30,12 @@ class AIMemoryManager:
         self.vectorizer = TfidfVectorizer(stop_words='english')
 
     def add_memory(self, description, content, memory_type='code'):
-        if memory_type == 'code' and self.should_remember_code(content):
-            self.code_memory.append((description, content))
+        if memory_type == 'code':
+            if description.startswith("File:"):
+                file_path = description.split("File: ", 1)[1]
+                description = f"File: {os.path.abspath(file_path)}"
+            if self.should_remember_code(content):
+                self.code_memory.append((description, content))
         elif memory_type == 'project':
             self.project_memory.append((description, content))
 
@@ -55,8 +59,8 @@ class AIMemoryManager:
                            for desc, content in all_memories]
         sorted_memories = sorted(scored_memories, key=lambda x: x[2], reverse=True)
         logging.debug(f"Sorted memories (top {top_n}): {sorted_memories[:top_n]}")
-        return sorted_memories[:top_n]
-
+        return [(f"File: {os.path.abspath(desc.split('File: ', 1)[1])}", content, score) if desc.startswith("File:") else (desc, content, score) for desc, content, score in sorted_memories[:top_n]]
+        #wow
     def relevance_score(self, query, content):
         if self.is_code_content(content):
             return self.code_relevance_score(query, content)
@@ -172,13 +176,19 @@ class ModelManager(QObject):
         self.current_model_name = self.load_worker.filename
         logging.info(f"Model loaded successfully: {self.current_model_name}")
         self.model_loaded.emit(self.current_model_name)
-
+        
     def on_model_error(self, error):
         error_msg = f"Failed to load model: {error}"
         logging.error(error_msg)
         self.model_error.emit(error_msg)
 
+    def set_system_message(self, message):
+        self.system_message = message
+
     def generate(self, messages, context=None, tokens=256):
+        if hasattr(self, 'system_message'):
+            messages = [{"role": "system", "content": self.system_message}] + messages
+        
         max_tokens = tokens
         if not self.model:
             raise RuntimeError("Model not loaded. Please load a model first.")

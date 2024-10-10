@@ -29,6 +29,7 @@ class LSPManager(QObject):
     completionsReceived = pyqtSignal(list)
     importsIndexed = pyqtSignal(dict)
     referencesFound = pyqtSignal(list)
+    symbolsReceived = pyqtSignal(list)
 
     def __init__(self, cccore, parent=None):
         super().__init__(parent)
@@ -150,6 +151,8 @@ class LSPManager(QObject):
                 self.handle_completion(response["result"]["items"])
             elif response.get("method") == "textDocument/references":
                 self.handle_references(response["result"])
+            elif response.get("method") == "textDocument/documentSymbol":
+                self.handle_document_symbols(response["result"])
 
     def handle_completion(self, lsp_completions):
         import_suggestions = self.get_import_suggestions(self.last_completion_context)
@@ -158,6 +161,9 @@ class LSPManager(QObject):
 
     def handle_references(self, references):
         self.referencesFound.emit(references)
+
+    def handle_document_symbols(self, symbols):
+        self.symbolsReceived.emit(symbols)
 
     def get_log_function_calls(self):
         current_workspace = self.cccore.workspace_manager.get_active_workspace()

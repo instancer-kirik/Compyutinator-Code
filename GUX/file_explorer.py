@@ -27,8 +27,8 @@ class FileExplorerWidget(QWidget):
         self.layout.addWidget(self.cycle_view_button)
 
         self.model.setRootPath('')
-        self.tree1 = CustomTreeView(self)
-        self.tree2 = CustomTreeView(self)
+        self.tree1 = CustomTreeView(self,file_explorer=self)
+        self.tree2 = CustomTreeView(self,file_explorer=self)
         
         self.stack = QStackedWidget()
         self.stack.addWidget(self.tree1)
@@ -54,7 +54,7 @@ class FileExplorerWidget(QWidget):
         self.stack.setCurrentIndex(next_index)
 
     def create_tree_view(self, model):
-        tree = CustomTreeView(self)
+        tree = CustomTreeView(self,file_explorer=self)
         tree.setModel(model)
         tree.setRootIndex(model.index(''))
         tree.doubleClicked.connect(self.on_double_click)

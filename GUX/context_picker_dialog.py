@@ -81,10 +81,10 @@ class ContextPickerDialog(QDialog):
 
         # Set initial directory
         initial_directory = self.get_initial_directory()
-        self.file_model.setRootPath(str(initial_directory))  # Convert to string
+        self.file_model.setRootPath(str(initial_directory))
         self.file_tree_view = FileTreeView(self.file_model)
-        self.file_tree_view.set_root_path(str(initial_directory))  # Convert to string
-        self.file_tree_view.file_selected.connect(self.add_to_selected_files)  # Connect to method
+        self.file_tree_view.set_root_path(str(initial_directory))
+        self.file_tree_view.file_selected.connect(self.add_to_selected_files)
         file_explorer_layout.addWidget(self.file_tree_view)
         self.tab_widget.addTab(file_explorer_widget, "File Explorer")
 
@@ -213,38 +213,73 @@ class ContextPickerDialog(QDialog):
         if file_path not in self.selected_files:
             self.selected_files.append(file_path)
         self.preview_file(file_path)
+
+    def get_selected_items(self):
+        selected_items = []
+        
+        # Get selected items from File Explorer
+        selected_files = self.file_tree_view.get_selected_files()
+        for file_path in selected_files:
+            selected_items.append(("File:", file_path))
+        
+        # Get selected items from Recent & Open Files tab
+        for item in self.recent_open_table.selectedItems():
+            file_info = item.data(Qt.ItemDataRole.UserRole)
+            if file_info is not None:
+                if isinstance(file_info, str):
+                    selected_items.append(("File:", file_info))
+                elif isinstance(file_info, tuple) and len(file_info) == 2:
+                    selected_items.append(file_info)
+                else:
+                    logging.warning(f"Unexpected file info format: {file_info}")
+        
+        # Get selected items from Existing Contexts tab
+        for item in self.existing_contexts_table.selectedItems():
+            context_name = item.text()
+            selected_items.append(("Existing Context:", context_name))
+        
+        # Get selected items from Search tab
+        search_widget = self.tab_widget.widget(1)  # Assuming Search tab is at index 1
+        if isinstance(search_widget, FileSearchWidget):
+            if hasattr(search_widget, 'get_selected_files'):
+                selected_files = search_widget.get_selected_files()
+                for file_path in selected_files:
+                    selected_items.append(("File:", file_path))
+            else:
+                logging.warning("FileSearchWidget does not have get_selected_files method")
+        
+        logging.info(f"Selected items: {selected_items}")
+        return selected_items
+
+    
+
     def add_selected_contexts(self):
-        for file_path in self.selected_files:
-            if self.is_binary_file(file_path):
-                logging.warning(f"Skipping binary file: {file_path}")
-                QMessageBox.warning(self, "Binary File", f"Cannot read binary file: {os.path.basename(file_path)}")
+        added_contexts = set()
+        selected_items = self.get_selected_items()
+        logging.info(f"Adding selected contexts: {selected_items}")
+        
+        for context_type, context_path in selected_items:
+            if context_type == "File:" and self.is_binary_file(context_path):
+                logging.warning(f"Skipping binary file: {context_path}")
+                QMessageBox.warning(self, "Binary File", f"Cannot read binary file: {os.path.basename(context_path)}")
                 continue
 
             try:
-                with open(file_path, 'r', encoding='utf-8') as file:
-                    content = file.read()
-            except UnicodeDecodeError:
-                try:
-                    with open(file_path, 'r', encoding='latin-1') as file:
-                        content = file.read()
-                except Exception as e:
-                    logging.error(f"Error reading file {file_path}: {e}")
-                    QMessageBox.critical(self, "File Read Error", f"Failed to read file {file_path} due to encoding issues.")
-                    continue
+                content = self.get_context_content(context_type, context_path)
+            except Exception as e:
+                logging.error(f"Error reading context {context_path}: {e}")
+                QMessageBox.critical(self, "Context Read Error", f"Failed to read context {context_path}: {str(e)}")
+                continue
 
-            self.context_added.emit(f"[File] {file_path}", content)
-            self.context_manager.add_context(content, f"Context: {file_path}")  # Use full file path
-
-        # Process selected items from existing contexts
-        selected_contexts = self.existing_contexts_table.selectedItems()
-        for item in selected_contexts:
-            if item.column() == 0:  # Only process the first column
-                context_name = item.text()
-                content = self.get_context_content("Existing Contexts", context_name)
-                self.context_added.emit(f"[Context] {context_name}", content)
-                logging.warning(f"Emitting context: [Context] {context_name}")
+            context_key = f"{context_type} {context_path}"
+            if context_key not in added_contexts:
+                self.context_added.emit(context_key, content)
+                self.context_manager.add_context(content, context_key, file_path=context_path if context_type == "File:" else None)
+                added_contexts.add(context_key)
+                logging.info(f"Added context: {context_key}")
 
         self.accept()
+
 
     def is_binary_file(self, file_path):
         try:
@@ -292,9 +327,6 @@ class ContextPickerDialog(QDialog):
                     content = file.read()
                 self.context_added.emit(f"[File] {file_path}", content)
         event.acceptProposedAction()
-
-    def get_selected_items(self):
-        return [item.data(Qt.ItemDataRole.UserRole) for item in self.recent_open_table.selectedItems() if item.data(Qt.ItemDataRole.UserRole) is not None]
 
     def get_initial_directory(self):
         # Determine the initial directory

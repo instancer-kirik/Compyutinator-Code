@@ -36,7 +36,7 @@ import traceback
 from DEV.utils import extract_code_blocks, extract_diff_blocks, apply_diff_to_content
 
 from GUX.diff_merger import DiffMergerWidget, DiffMergerDialog
-
+##maybe implement profiler to track time and memory usage and optimize
 class CollapsibleSection(QWidget):
     def __init__(self, title, parent=None):
         super().__init__(parent)
@@ -89,9 +89,9 @@ class ChatReferenceWidget(QWidget):
         self.layout.addWidget(self.scroll_area)
     
    
-    def add_reference(self, text, context):
+    def add_reference(self, display_text, context):
         # Add a new reference item
-        reference = ReferenceItem(text, context, self)
+        reference = ReferenceItem(display_text, context, self)
         self.references.append(reference)
         self.scroll_layout.addWidget(reference)
     def remove_reference(self, reference):
@@ -101,13 +101,13 @@ class ChatReferenceWidget(QWidget):
         reference.deleteLater()
 
 class ReferenceItem(QWidget):
-    def __init__(self, text, context, parent):
+    def __init__(self, display_text, context, parent):
         super().__init__(parent)
         self.context = context
         self.parent = parent
 
         layout = QHBoxLayout(self)
-        self.label = QLabel(text)
+        self.label = QLabel(display_text)
         self.label.setWordWrap(True)
         layout.addWidget(self.label)
 
@@ -133,9 +133,9 @@ class ContextReferenceWidget(QWidget):
         self.scroll_area.setWidgetResizable(True)
 
         self.layout.addWidget(self.scroll_area)
-    def add_context_reference(self, text, context):
+    def add_context_reference(self, display_text, context):
         # Add a new reference item
-        reference = ReferenceItem(text, context, self)
+        reference = ReferenceItem(display_text, context, self)
         self.references.append(reference)
         self.scroll_layout.addWidget(reference)
     def remove_reference(self, reference):
@@ -198,12 +198,9 @@ class AIChatWidget(QWidget):
         return """
         Please follow these instructions in your response:
         1. Use file path references when referring to specific parts of the code.
-        2. When writing out code blocks, specify the file path after the initial backticks, like so:
-        ```python:path/to/file.py
-        # Your code here
-        ```
+        2. If there is overlapping functionality and unneeded code, alert the user concisely. If the user agrees, remove the unneeded code.
         3. When suggesting changes, use a diff-like format with '+' for additions, '-' for deletions, and provide line numbers. For example:
-        ```diff:path/to/file.py
+        ```diff:file_path/file_name.py
         -10: old_line = "This is the old version"
         +10: new_line = "This is the new version"
         ```
@@ -216,6 +213,23 @@ class AIChatWidget(QWidget):
         8. If you detect duplicate classes, within a file, include a diff to reduce the duplicate classes. This means identical name, code may differ; prefer the version with the most features, and least issues
         9. If a file has a different path than expected, use the new path as the new expected
         10. If we are creating a new class or function, and the context is significantly different than the current class, create a new class or relevant definition, and if needed, generate a new filepath in the most applicable location; otherwise, continue within the current class in appropriate location.
+        When suggesting code changes or additions, always format your response as follows:
+
+        
+        13. Start the actual code content on the next line.
+
+            For example:
+
+            ```python:file_path/file_name.py
+            # Your code here
+            ```
+
+            ```diff:file_path/file_name.py
+            -10: old_line = "This is the old version"
+            +10: new_line = "This is the new version"
+            ```
+
+
         """
 
     def set_instructions(self, instructions):
@@ -300,6 +314,7 @@ class AIChatWidget(QWidget):
         self.loading_spinner = QLabel()
         self.loading_spinner.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(self.loading_spinner)
+    
 
     def on_partial_response(self, partial_response):
         self.partial_response_buffer += partial_response
@@ -321,28 +336,8 @@ class AIChatWidget(QWidget):
         return [
             {'language': 'python', 'file_path': 'example.py', 'code': 'print("Hello, World!")'}
         ]
-
-    def add_code_block_widget(self, language, file_path, code):
-        code_widget = QWidget()
-        layout = QVBoxLayout(code_widget)
-        
-        code_display = QTextEdit()
-        code_display.setPlainText(code)
-        code_display.setReadOnly(True)
-        
-        apply_button = QPushButton("Apply Changes")
-        apply_button.clicked.connect(lambda: self.apply_code_changes(file_path, code))
-        
-        layout.addWidget(QLabel(f"File: {file_path}"))
-        layout.addWidget(code_display)
-        layout.addWidget(apply_button)
-        
-        self.chat_layout.addWidget(code_widget)
-
-    def apply_code_changes(self, file_path, code):
-        # Logic to apply code changes
-        pass
-
+   
+ 
     def show_context_reference(self):
         dialog = QDialog(self)
         dialog.setWindowTitle("Context Reference")
@@ -355,12 +350,7 @@ class AIChatWidget(QWidget):
         dialog.setLayout(layout)
         dialog.exec()
 
-    def load_model(self):
-        self.progress_display.setVisible(True)
-        repo_id = "Joseph717171/Llama-3.1-SuperNova-Lite-8.0B-OQ8_0.EF32.IQ4_K-Q8_0-GGUF"
-        filename = "Llama-3.1-SuperNova-Lite-8.0B-OF32.EF32.IQ4_K_M.gguf"
-        self.model_manager.load_model(repo_id, filename)
-
+    
     def update_progress(self, bytes_downloaded, total_bytes):
         if total_bytes > 0:
             progress = int((bytes_downloaded / total_bytes) * 100)
@@ -368,9 +358,6 @@ class AIChatWidget(QWidget):
         else:
             self.progress_display.setValue(0)
 
-    def on_model_loaded(self, model_name):
-        self.progress_display.setVisible(False)
-        QMessageBox.information(self, "Model Loaded", f"Model {model_name} has been successfully loaded.")
     
     def display_message(self, message, is_user=False):
         parts = self.process_message(message)
@@ -389,9 +376,9 @@ class AIChatWidget(QWidget):
             self.scroll_area.verticalScrollBar().maximum()
         )
         
-    def preprocess_user_message(self, message):
-        relevant_contexts, message_tokens = self.context_manager.preprocess_message(message)
-        return relevant_contexts, message_tokens
+    # def preprocess_user_message(self, message):
+    #     message, relevant_contexts = self.context_manager.preprocess_message(message)
+    #     return message, relevant_contexts
     def send_message(self):
         user_input = self.input_field.toPlainText().strip()
         if not user_input or not self.model_manager.model:
@@ -401,17 +388,15 @@ class AIChatWidget(QWidget):
         self.input_field.clear()
         self.show_loading_spinner()
 
-        processed_message, processed_contexts = self.context_manager.preprocess_message(user_input)
+        # Preprocess the message and get processed contexts
+        preprocessed_message, processed_contexts = self.context_manager.preprocess_message(user_input)
         
-        # Change this line to handle both 2 and 3-element tuples
-        context_string = "\n\n".join([f"{item[0]}:\n{item[1]}" for item in processed_contexts])
-        
-        logging.info(f"Processed context being sent to model: {context_string[:100]}...")
+        logging.warning(f"Sending context to model: {preprocessed_message[:100]}...")  # Log first 100 chars
         
         self.model_manager.memory_manager.add_memory("User Query", user_input)
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": f"Context:\n{context_string}\n\nUser Query: {user_input}"}
+            {"role": "user", "content": preprocessed_message}
         ]
 
         try:
@@ -447,13 +432,20 @@ class AIChatWidget(QWidget):
 
     def on_model_changed(self, new_model):
         self.model_manager.change_model(new_model)
-
+    def load_model(self):
+        self.progress_display.setVisible(True)
+        repo_id = "Joseph717171/Llama-3.1-SuperNova-Lite-8.0B-OQ8_0.EF32.IQ4_K-Q8_0-GGUF"
+        filename = "Llama-3.1-SuperNova-Lite-8.0B-OF32.EF32.IQ4_K_M.gguf"
+        self.model_manager.load_model(repo_id, filename)
     def on_model_loaded(self, model_name):
+        self.context_manager.load_tokenizer(model_name)
+        self.progress_display.setVisible(False)
+        #QMessageBox.information(self, "Model Loaded", f"Model {model_name} has been successfully loaded.")
         self.status_label.setText(f"Model loaded: {model_name}")
         self.load_button.setEnabled(True)
-        self.progress_display.setVisible(False)
-        self.context_manager.load_tokenizer(model_name)
-
+        instructions = self.set_default_instructions()
+        self.model_manager.set_system_message(instructions)
+   
     def on_model_unloaded(self):
         self.status_label.setText("No model loaded")
 
@@ -556,22 +548,42 @@ class AIChatWidget(QWidget):
 
     def on_context_added(self, context_type, context_content):
         logging.info(f"Received context: {context_type}")
-        self.chat_reference_widget.add_reference(context_type, context_content)
-        self.context_reference_widget.add_context_reference(context_type, context_content)
+        self.chat_reference_widget.add_reference(f"{context_type}", context_content)
+        self.context_reference_widget.add_context_reference(f"{context_type}", context_content)
         
-    def add_file_reference(self, file_name, content):
-        self.context_manager.add_context(content, f"File: {file_name}")
-        self.context_reference_widget.add_reference(file_name, content)
-        logging.info(f"Added file reference: {file_name}")
+    def add_file_reference(self, file_path, content=None):
+        if content is None:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as file:
+                    content = file.read()
+            except UnicodeDecodeError:
+                try:
+                    with open(file_path, 'r', encoding='latin-1') as file:
+                        content = file.read()
+                except Exception as e:
+                    logging.error(f"Error reading file {file_path}: {e}")
+                    QMessageBox.critical(self, "File Read Error", f"Failed to read file {file_path} due to encoding issues.")
+                    return
+
+        # Store the original content
+        self.context_manager.add_context(content, f"File: {file_path}", file_path=file_path)
+
+        # Create a display version with HTML line breaks
+        display_content = content.replace("\n", "<br>")
+
+        # Use the display version for the UI
+        self.context_reference_widget.add_context_reference(f"File: {os.path.basename(file_path)}", display_content)
+
+        logging.info(f"Added file reference: {file_path}")
 
     def add_context_reference(self, context_name, content):
-        self.context_manager.add_context(content, f"Context: {context_name}")
-        self.context_reference_widget.add_reference(context_name, content)
+        self.context_manager.add_context(content,description= f"Context: {context_name}")
+        self.context_reference_widget.add_context_reference(f"Context: {context_name}", content)
         logging.warning(f"Added context reference: {context_name}")
 
     def add_text_reference(self, content):
         self.context_manager.add_context(content, "Custom Text")
-        self.context_reference_widget.add_reference("Custom Text", content)
+        self.context_reference_widget.add_context_reference("Custom Text", content)
         logging.info("Added custom text reference")
 
     
@@ -588,21 +600,35 @@ class AIChatWidget(QWidget):
             merged_content = merge_widget.merge_changes()
             # Apply merged content to the editor or file
     def apply_code_changes(self, file_path, suggested_code):
-        if not file_path:
-            QMessageBox.warning(self, "No File Specified", "No file path specified for this code block.")
-            return
+        logging.debug(f"Attempting to apply code changes. File path: {file_path}")
+        if not file_path or file_path.startswith("[File] "):
+            file_path = file_path.replace("[File] ", "") if file_path else None
+            if not file_path:
+                file_path, _ = QFileDialog.getSaveFileName(self, "Save File", "", "All Files (*)")
+            if not file_path:
+                QMessageBox.warning(self, "No File Selected", "No file was selected. Cannot apply changes.")
+                return
 
         current_content = self.editor_manager.get_file_content(file_path)
         if current_content is None:
-            QMessageBox.warning(self, "File Not Found", f"The file {file_path} could not be found or opened.")
-            return
+            logging.warning(f"File not found: {file_path}")
+            response = QMessageBox.question(self, "File Not Found", 
+                                            f"The file {file_path} could not be found. Would you like to create it?",
+                                            QMessageBox.Yes | QMessageBox.No)
+            if response == QMessageBox.Yes:
+                current_content = ""
+            else:
+                return
 
         diff_merger = DiffMergerDialog(self.editor_manager, current_content, suggested_code, file_path)
         if diff_merger.exec() == QDialog.DialogCode.Accepted:
             merged_content = diff_merger.get_merged_content()
             self.editor_manager.update_file_content(file_path, merged_content)
             QMessageBox.information(self, "Changes Applied", f"Changes have been applied to {file_path}")
-
+            logging.info(f"Changes applied successfully to {file_path}")
+        else:
+            logging.info(f"User cancelled applying changes to {file_path}")
+            
     def update_file_content(self, new_content):
         self.current_file_content = new_content
         # Update the main editor with the new content
@@ -619,12 +645,16 @@ class AIChatWidget(QWidget):
         dialog.context_added.connect(self.on_context_added)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             selected_items = dialog.get_selected_items()
+            logging.debug(f"Selected items from dialog: {selected_items}")
+            added_references = set()  # To keep track of added references
             for item in selected_items:
-                if isinstance(item, tuple):
+                logging.debug(f"Processing item: {item}")
+                if isinstance(item, tuple) and len(item) == 2:
                     item_type, item_content = item
                 elif isinstance(item, str):
                     try:
                         item_type, item_content = item.split("] ", 1)
+                        item_type = item_type.strip(":")
                         item_type = item_type.strip("[")
                     except ValueError:
                         item_type = "Unknown"
@@ -632,16 +662,31 @@ class AIChatWidget(QWidget):
                 else:
                     logging.warning(f"Unexpected item type in add_references: {type(item)}")
                     continue
-
+                
                 if item_type == "File":
-                    self.add_file_reference(item_content)
+                    full_path = os.path.abspath(item_content)
+                    if full_path not in added_references:
+                        self.add_file_reference(full_path)
+                        added_references.add(full_path)
+                elif item_type == "File:":
+                    logging.warning(f"File: {item_content}")
+                    full_path = os.path.abspath(item_content)
+                    if full_path not in added_references:
+                        self.add_file_reference(full_path)
+                        added_references.add(full_path)
                 elif item_type == "Text":
-                    self.context_manager.add_context(item_content, "Custom Text")
-                    self.context_reference_widget.add_reference("Custom Text", item_content)
+                    if item_content not in added_references:
+                        self.context_manager.add_context(item_content, "Custom Text")
+                        self.context_reference_widget.add_context_reference("Custom Text", item_content)
+                        added_references.add(item_content)
                 elif item_type == "Import":
-                    self.add_import_reference(item_content)
+                    if item_content not in added_references:
+                        self.add_import_reference(item_content)
+                        added_references.add(item_content)
                 elif item_type in ["Open Files", "Recent Files", "Existing Contexts"]:
-                    self.add_existing_context(item_content)
+                    if item_content not in added_references:
+                        self.add_existing_context(item_content)
+                        added_references.add(item_content)
                 else:
                     logging.warning(f"Unknown item type in add_references: {item_type}")
 
@@ -733,56 +778,96 @@ class AIChatWidget(QWidget):
             parts.append(('text', message[last_end:]))
         return parts
 
-    def add_code_block_widget(self, language, file_path, code):
-        logging.debug(f"Adding code block widget - Language: {language}, File: {file_path}")
-        code_widget = QWidget()
-        layout = QVBoxLayout(code_widget)
-        
-        code_display = QTextEdit()
-        code_display.setPlainText(code)
-        code_display.setReadOnly(True)
-        
-        apply_button = QPushButton("Apply Changes")
-        apply_button.clicked.connect(lambda: self.apply_code_changes(file_path, code))
-        
-        layout.addWidget(QLabel(f"File: {file_path}"))
-        layout.addWidget(code_display)
-        layout.addWidget(apply_button)
-        
-        self.chat_layout.addWidget(code_widget)
+    
+    def specify_file_path(self, code_widget):
+        file_path, _ = QFileDialog.getSaveFileName(self, "Specify File Path", "", "All Files (*)")
+        if file_path:
+            for child in code_widget.children():
+                if isinstance(child, QLabel) and child.text().startswith("File:"):
+                    child.setText(f"File: {file_path}")
+                    break
+            # Update the apply_button to use the new file_path
+            for child in code_widget.children():
+                if isinstance(child, QPushButton) and child.text() == "Apply Changes":
+                    child.clicked.disconnect()
+                    child.clicked.connect(lambda: self.apply_code_changes(file_path, code_widget.findChild(QTextEdit).toPlainText()))
+                    break
+        logging.debug(f"User specified file path: {file_path}")
 
     def extract_code_suggestions(self, response):
+        logging.debug(f"Extracting code suggestions from response: {response[:100]}...")  # Log first 100 chars of response
         code_blocks = re.findall(r'```(.*?)```', response, re.DOTALL)
-        for code in code_blocks:
+        logging.debug(f"Found {len(code_blocks)} code blocks")
+        for i, code in enumerate(code_blocks):
+            logging.debug(f"Processing code block {i+1}:\n{code}")
             language, file_path, code_content = self.parse_code_block(code)
-            logging.debug(f"Extracted code block - Language: {language}, File: {file_path}")
+            logging.debug(f"Extracted code block {i+1} - Language: {language}, File: {file_path}")
             self.add_code_block_widget(language, file_path, code_content)
     def parse_code_block(self, code_block):
         lines = code_block.strip().split('\n')
-        if not lines:
-            return 'text', "unknown_file.py", ""
-
-        file_path = "unknown_file.py"
         language = 'text'
+        file_path = None
         content_start = 0
 
-        # Look for file path in the first few lines
-        for i, line in enumerate(lines[:5]):
-            if line.startswith('File:'):
-                file_path = line.split(':', 1)[1].strip()
-                content_start = i + 1
-                break
-            elif ':' in line and not language:
-                language, potential_path = line.split(':', 1)
-                if '/' in potential_path or '\\' in potential_path:
-                    file_path = potential_path.strip()
-                    content_start = i + 1
-                    break
+        logging.debug(f"Parsing code block. First line: {lines[0]}")
 
-        # If we haven't found a language yet, use the first line
-        if language == 'text' and lines[content_start].strip():
-            language = lines[content_start].strip()
-            content_start += 1
+        # Check for language and file path in the first line
+        if lines and ':' in lines[0]:
+            parts = lines[0].split(':', 1)
+            if len(parts) == 2:
+                language, file_path = parts[0].strip(), parts[1].strip()
+                content_start = 1
+        elif lines:
+            # If no colon, treat the first line as language
+            language = lines[0].strip()
+            content_start = 1
 
+        # If we haven't found a language yet, use 'text'
+        if not language:
+            language = 'text'
+
+        # Include the function signature in the code content
         code_content = '\n'.join(lines[content_start:])
+
+        logging.debug(f"Parsed code block - Language: {language}, File: {file_path}, Content length: {len(code_content)}")
         return language, file_path, code_content
+
+    def add_code_block_widget(self, language, file_path, code_content):
+        code_widget = QWidget()
+        layout = QVBoxLayout(code_widget)
+
+        # Add file path label if available
+        if file_path:
+            file_label = QLabel(f"File: {file_path}")
+            layout.addWidget(file_label)
+
+        # Add language label
+        lang_label = QLabel(f"Language: {language}")
+        layout.addWidget(lang_label)
+
+        # Add code content
+        code_edit = QTextEdit()
+        code_edit.setPlainText(code_content)
+        code_edit.setReadOnly(True)
+        layout.addWidget(code_edit)
+
+        # Add buttons
+        button_layout = QHBoxLayout()
+        copy_button = QPushButton("Copy")
+        copy_button.clicked.connect(lambda: QApplication.clipboard().setText(code_content))
+        button_layout.addWidget(copy_button)
+
+        if file_path:
+            apply_button = QPushButton("Apply Changes")
+            apply_button.clicked.connect(lambda: self.apply_code_changes(file_path, code_edit.toPlainText()))
+            button_layout.addWidget(apply_button)
+        else:
+            specify_file_button = QPushButton("Specify File")
+            specify_file_button.clicked.connect(lambda: self.specify_file_path(code_widget))
+            button_layout.addWidget(specify_file_button)
+
+        layout.addLayout(button_layout)
+
+        self.chat_layout.addWidget(code_widget)
+        
+    

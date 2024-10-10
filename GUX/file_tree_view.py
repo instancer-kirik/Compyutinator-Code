@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (QTreeView, QWidget, QVBoxLayout, QLabel, QScrollArea, 
                              QPushButton, QHBoxLayout, QLineEdit, QHeaderView)
 from PyQt6.QtCore import Qt, QTimer, QModelIndex, pyqtSignal
-from PyQt6.QtGui import QStandardItemModel, QFileSystemModel
+from PyQt6.QtGui import QStandardItemModel, QFileSystemModel, QDragMoveEvent, QDropEvent
 from PyQt6.QtGui import QCursor
 from PyQt6.QtCore import QEvent
 import os
@@ -29,13 +29,21 @@ class PathBreadcrumb(QWidget):
         else:
             self.path_edit.setText(self.current_path)
 
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTreeView, QHeaderView, QMenu, QInputDialog, QMessageBox, QFileDialog
+from PyQt6.QtCore import  QTimer, QEvent, Qt, pyqtSignal
+from PyQt6.QtGui import QCursor, QAction,QFileSystemModel
+import os
+import subprocess
+
+
 class FileTreeView(QWidget):
     file_selected = pyqtSignal(str)
 
-    def __init__(self, file_system_model=None, parent=None):
+    def __init__(self, file_system_model=None, theme_manager=None, parent=None):
         super().__init__(parent)
         self.model = file_system_model or QFileSystemModel()
-        self.model.setRootPath("")  # Set the root path for the model
+        self.model.setRootPath("")
+        self.theme_manager = theme_manager
         self.setup_ui()
         self.setup_model(self.model)
         self.is_scrolling = False
@@ -52,9 +60,17 @@ class FileTreeView(QWidget):
         self.tree_view = QTreeView()
         self.tree_view.setModel(self.model)
         self.tree_view.setRootIndex(self.model.index(""))
-        self.tree_view.setHeaderHidden(False)  # Show the header for file attributes
+        self.tree_view.setHeaderHidden(False)
         self.tree_view.setExpandsOnDoubleClick(False)
         self.tree_view.clicked.connect(self.on_item_clicked)
+        self.tree_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tree_view.customContextMenuRequested.connect(self.show_context_menu)
+        
+        # Enable drag and drop
+        self.tree_view.setDragEnabled(True)
+        self.tree_view.setAcceptDrops(True)
+        self.tree_view.setDropIndicatorShown(True)
+        self.tree_view.setDragDropMode(QTreeView.DragDropMode.InternalMove)
         
         # Adjust column sizes
         header = self.tree_view.header()
@@ -64,7 +80,11 @@ class FileTreeView(QWidget):
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)  # Type column
 
         # Set a larger initial size for the Name column
-        header.resizeSection(0, 400)  # Adjust this value as needed
+        header.resizeSection(0, 300)  # Adjust this value as needed
+        
+        # Make columns resizable by user
+        header.setSectionsMovable(True)
+        header.setStretchLastSection(False)
         
         # Add tree view to layout
         layout.addWidget(self.tree_view)
@@ -199,14 +219,153 @@ class FileTreeView(QWidget):
             self.breadcrumb.set_path(path)
 
     def get_selected_files(self):
-        selected_indexes = self.selectedIndexes()
+        selected_indexes = self.tree_view.selectedIndexes()
         selected_files = []
         for index in selected_indexes:
             if index.column() == 0:  # Assuming the file path is in the first column
-                file_path = self.model().filePath(index)
+                file_path = self.model.filePath(index)
                 if os.path.isfile(file_path):
                     selected_files.append(file_path)
         return selected_files
 
     def set_root_index(self, index):
         self.tree_view.setRootIndex(index)
+
+    def show_context_menu(self, position):
+        index = self.tree_view.indexAt(position)
+        if not index.isValid():
+            return
+
+        menu = QMenu(self)
+        self.apply_theme_to_menu(menu)
+        file_path = self.model.filePath(index)
+        is_file = os.path.isfile(file_path)
+
+        # File/Folder Operations
+        add_file_action = self.create_action("Add File", "file-add", lambda: self.add_file(file_path))
+        add_folder_action = self.create_action("Add Folder", "folder-add", lambda: self.add_folder(file_path))
+        rename_action = self.create_action("Rename", "edit", lambda: self.rename_item(index))
+        delete_action = self.create_action("Delete", "delete", lambda: self.delete_item(index))
+
+        menu.addAction(add_file_action)
+        menu.addAction(add_folder_action)
+        menu.addSeparator()
+        menu.addAction(rename_action)
+        menu.addAction(delete_action)
+
+        # File-specific actions
+        if is_file:
+            menu.addSeparator()
+            open_with_action = self.create_action("Open With...", "open-with", lambda: self.open_with(file_path))
+            menu.addAction(open_with_action)
+
+        menu.exec(self.tree_view.viewport().mapToGlobal(position))
+
+    def create_action(self, text, icon_name, callback):
+        action = QAction(text, self)
+        action.triggered.connect(callback)
+        if self.theme_manager:
+            icon = self.theme_manager.get_icon(icon_name)
+            if icon:
+                action.setIcon(icon)
+        return action
+ 
+    def apply_theme_to_menu(self, menu):
+        if self.theme_manager:
+            theme_data = self.theme_manager.get_current_theme()
+            if isinstance(theme_data, dict) and 'colors' in theme_data:
+                sidebar_bg = theme_data['colors'].get('sidebarBackground', '#F0F0F0')
+                sidebar_text = theme_data['colors'].get('sidebarText', '#000000')
+                sidebar_highlight = theme_data['colors'].get('sidebarHighlight', '#E0E0E0')
+                stylesheet = f"""
+                    QTreeView {{
+                        background-color: {sidebar_bg};
+                        color: {sidebar_text};
+                        border: none;
+                    }}
+                    QTreeView::item:selected {{
+                        background-color: {sidebar_highlight};
+                    }}
+                """
+                menu.setStyleSheet(stylesheet)
+
+    def add_file(self, parent_path):
+        file_name, ok = QInputDialog.getText(self, "Add File", "Enter file name:")
+        if ok and file_name:
+            new_file_path = os.path.join(parent_path, file_name)
+            try:
+                with open(new_file_path, 'w') as f:
+                    pass  # Create an empty file
+                self.model.layoutChanged.emit()
+            except IOError as e:
+                QMessageBox.critical(self, "Error", f"Could not create file: {str(e)}")
+
+    def add_folder(self, parent_path):
+        folder_name, ok = QInputDialog.getText(self, "Add Folder", "Enter folder name:")
+        if ok and folder_name:
+            new_folder_path = os.path.join(parent_path, folder_name)
+            try:
+                os.mkdir(new_folder_path)
+                self.model.layoutChanged.emit()
+            except OSError as e:
+                QMessageBox.critical(self, "Error", f"Could not create folder: {str(e)}")
+
+    def rename_item(self, index):
+        old_name = self.model.fileName(index)
+        new_name, ok = QInputDialog.getText(self, "Rename", "Enter new name:", text=old_name)
+        if ok and new_name:
+            old_path = self.model.filePath(index)
+            new_path = os.path.join(os.path.dirname(old_path), new_name)
+            try:
+                os.rename(old_path, new_path)
+                self.model.layoutChanged.emit()
+            except OSError as e:
+                QMessageBox.critical(self, "Error", f"Could not rename: {str(e)}")
+
+    def delete_item(self, index):
+        file_path = self.model.filePath(index)
+        reply = QMessageBox.question(self, "Delete", f"Are you sure you want to delete {file_path}?",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+                else:
+                    os.rmdir(file_path)
+                self.model.layoutChanged.emit()
+            except OSError as e:
+                QMessageBox.critical(self, "Error", f"Could not delete: {str(e)}")
+
+    def open_with(self, file_path):
+        program, ok = QFileDialog.getOpenFileName(self, "Select Program")
+        if ok and program:
+            try:
+                subprocess.Popen([program, file_path])
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Could not open file: {str(e)}")
+
+    def dragMoveEvent(self, event: QDragMoveEvent):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
+
+    def dropEvent(self, event: QDropEvent):
+        if event.mimeData().hasUrls():
+            event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()
+            for url in event.mimeData().urls():
+                file_path = url.toLocalFile()
+                if os.path.exists(file_path):
+                    # Handle the dropped file/folder
+                    target_path = self.model.filePath(self.tree_view.indexAt(event.pos()))
+                    if os.path.isdir(target_path):
+                        # Move or copy the file/folder to the target directory
+                        new_path = os.path.join(target_path, os.path.basename(file_path))
+                        if os.path.exists(new_path):
+                            # Handle name conflict
+                            pass
+                        else:
+                            # Perform the move/copy operation
+                            # You may want to ask the user whether to move or copy
+                            os.rename(file_path, new_path)

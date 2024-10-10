@@ -37,7 +37,8 @@ class EditorManager:
         self.windows.append(window)
         self.window_editors[window] = []
         self.set_current_window(window)
-
+   
+        
     def set_current_window(self, window):
         if window in self.windows:
             self.current_window = window
@@ -45,7 +46,7 @@ class EditorManager:
         else:
             self.windows.append(window)
             self.current_window=window
-    def open_file(self, file_path):
+    def open_file(self, file_path, line=0):
         if self.is_file_in_current_context(file_path):
             # Existing open_file logic
             pass
@@ -65,7 +66,7 @@ class EditorManager:
             with open(file_path, 'r') as file:
                 content = file.read()
             new_editor = self.create_new_editor_tab(file_path, content)
-            
+            new_editor.goto_line(line)
             return new_editor
         except Exception as e:
             logging.error(f"Error opening file: {file_path}")
@@ -86,7 +87,7 @@ class EditorManager:
             content = ""
         
         try:
-            editor = CodeEditor(self.cccore,parent=self.current_window)
+            editor = CodeEditor(mm=self.cccore, parent=self.current_window)
             editor.set_file_path(file_path)
             editor.setText(content)
             
@@ -327,19 +328,10 @@ class EditorManager:
                     return editor
         return None
     def set_current_editor(self, editor):
-        if self.current_window:
-            self.current_window.set_current_editor(editor)
+        if editor in self.current_window.tab_widget.findChildren(CodeEditor):
+            self.current_window.tab_widget.setCurrentWidget(editor)
         else:
-            #this is where we need to add the code to switch to the correct window and set the current editor
-            for window, editors in self.window_editors.items():
-                if editor in editors:
-                    self.current_editor = editor
-                    self.current_window = window
-                    index = editors.index(editor)
-                    window.tab_widget.setCurrentIndex(index)
-                    logging.info(f"Current editor set to index {index} in window {window}")
-                    return
-            logging.warning(f"Editor not found in any window. Unable to set as current.")
+            logging.error(f"Attempted to set current editor that is not in the tab widget: {editor.file_path}")
 
     def is_file_in_current_context(self, file_path):
         current_vault = self.cccore.vault_manager.get_current_vault()

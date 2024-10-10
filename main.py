@@ -144,7 +144,7 @@ class MainApplication(QMainWindow):
 #        QTimer.singleShot(0, self.post_show_init)
         
         self.settings_manager = settings_manager
-        self.menu_manager = MenuManager(self, self.cccore)
+        self.menu_manager = MenuManager(self.cccore.main_window, cccore=self.cccore)
         self.cccore.set_menu_manager(self.menu_manager)
         self.setup_ui()
         self.widget_manager = self.cccore.widget_manager
@@ -158,12 +158,15 @@ class MainApplication(QMainWindow):
         self.last_focused_widget = None
         self.child_processes = {}
         self.overlay = self.cccore.overlay
-        
+        self.menu_setup_done = False
         self.workspace_selector = None
       
-        logging.info("Setting main window for widget_manager")
-        self.cccore.widget_manager.set_main_window_and_create_docks(self)
-        
+        logging.warning("Setting main window for widget_manager")
+        try:
+            self.cccore.widget_manager.set_main_window_and_create_docks(self.cccore.main_window)
+        except Exception as e:
+            logging.error(f"Error setting main window: {e}")
+        logging.error(f"AAAAAAAAAAAA Main window set: {self.cccore.main_window}")
         self.tab_widget = None  # Initialize it as None
         self.workspace_selector = QComboBox(self)
         # Create AuraText window
@@ -194,18 +197,7 @@ class MainApplication(QMainWindow):
         self.create_docks()
         self.auratext_windows = []
         self.cccore.set_main_window(self)
-        
         self.setup_many_projects_manager()
-
-    def dump_thread_info():
-        logging.critical("Active threads at exit:")
-        for thread in global_thread_tracker.get_active_threads():
-            logging.critical(f"Thread {thread.name} (ID: {thread.ident}) is still running")
-            stack = traceback.format_stack(sys._current_frames()[thread.ident])
-            logging.critical("".join(stack))
-        
-        for thread in global_qthread_tracker.get_active_threads():
-            logging.critical(f"QThread {thread.objectName()} is still running")
 
     def init_ui(self):
         # ... (other initializations)
@@ -251,6 +243,41 @@ class MainApplication(QMainWindow):
         self.create_auratext_window_action = QAction("New AuraText Window", self)
         self.create_auratext_window_action.triggered.connect(self.create_auratext_window)
         self.menuBar().addAction(self.create_auratext_window_action)
+    
+    def setup_connections(self):
+        if self.tab_widget:
+            self.tab_widget.currentChanged.connect(self.handle_tab_change)
+        self.workspace_selector.currentTextChanged.connect(self.on_workspace_changed)
+        self.cccore.theme_manager.theme_changed.connect(self.on_theme_changed)
+        if hasattr(self, 'many_projects_manager'):
+            self.many_projects_manager.project_list.itemClicked.connect(self.on_project_selected)
+    
+    def dump_thread_info():
+        logging.critical("Active threads at exit:")
+        for thread in global_thread_tracker.get_active_threads():
+            logging.critical(f"Thread {thread.name} (ID: {thread.ident}) is still running")
+            stack = traceback.format_stack(sys._current_frames()[thread.ident])
+            logging.critical("".join(stack))
+        
+        for thread in global_qthread_tracker.get_active_threads():
+            logging.critical(f"QThread {thread.objectName()} is still running")
+
+    def setup_menu(self):
+        if hasattr(self, 'menu_setup_done') and self.menu_setup_done:
+            logging.warning("Menu setup already done, skipping")
+            return
+        try:
+            logging.info("Setting up menu")
+            self.menu_manager = MenuManager(self, self.cccore)
+            self.menuBar = self.menu_manager.create_menu_bar()
+            self.setMenuBar(self.menuBar)
+            logging.info("Menu setup complete")
+            self.menu_setup_done = True
+        except Exception as e:
+            logging.error(f"Error setting up menu: {str(e)}")
+            logging.error(traceback.format_exc())
+    def load_settings(self):
+        self.load_layout()
 
     def setup_workspace_selector(self):
         self.workspace_selector = QComboBox()
@@ -311,17 +338,6 @@ class MainApplication(QMainWindow):
         else:
             logging.warning("No workspace selected.")
    
-    def setup_connections(self):
-        if self.tab_widget:
-            self.tab_widget.currentChanged.connect(self.handle_tab_change)
-        self.workspace_selector.currentTextChanged.connect(self.on_workspace_changed)
-        self.cccore.theme_manager.theme_changed.connect(self.on_theme_changed)
-        if hasattr(self, 'many_projects_manager'):
-            self.many_projects_manager.project_list.itemClicked.connect(self.on_project_selected)
-
-    def load_settings(self):
-        self.load_layout()
-
     def update_history(self, path):
         if path in self.history:
             self.history.remove(path)
@@ -550,12 +566,18 @@ class MainApplication(QMainWindow):
         self.child_processes.clear()
 
     def fade_in(self):
-        self.fade_animation = QPropertyAnimation(self, b"windowOpacity")
-        self.fade_animation.setDuration(500)
-        self.fade_animation.setStartValue(0.0)
-        self.fade_animation.setEndValue(1.0)
-        self.fade_animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
-        self.fade_animation.start()
+        logging.info("Starting fade_in animation")
+        try:
+            self.animation = QPropertyAnimation(self, b"windowOpacity")
+            self.animation.setDuration(1000)
+            self.animation.setStartValue(0)
+            self.animation.setEndValue(1)
+            self.animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+            self.animation.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
+            logging.info("Fade_in animation started successfully")
+        except Exception as e:
+            logging.error(f"Error in fade_in method: {str(e)}")
+            logging.error(traceback.format_exc())
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Type.MouseButtonPress:
@@ -614,11 +636,12 @@ class MainApplication(QMainWindow):
             if thread != threading.current_thread():
                 try:
                     logging.info(f"Stopping Python thread: {thread.name}")
-                    thread.join(5)  # Wait up to 5 seconds for the thread to finish
+                    thread.join(2)  # Wait up to 5 seconds for the thread to finish
                 except Exception as e:
+                    QApplication.quit()
                     logging.warning(f"Cannot: {e}")
         
-        QThreadPool.globalInstance().waitForDone(5000)  # Wait up to 5 seconds for all threads to finish
+        QThreadPool.globalInstance().waitForDone(2000)  # Wait up to 5 seconds for all threads to finish
         logging.info("Cleanup process completed")
 
         logging.info("Application cleanup complete")
@@ -653,8 +676,16 @@ class MainApplication(QMainWindow):
 
     # ... (other methods remain the same)
         # Update other UI elements as needed
-def post_show_init(self):#
-        logging.info("Post show init")
+def post_show_init(self):
+    logging.warning("Entering post_show_init")
+    try:
+        logging.warning("Attempting to show Cool dock")
+        self.cccore.widget_manager.show_cool_dock()
+        logging.warning("Cool dock shown successfully")
+    except Exception as e:
+        logging.error(f"Error showing Cool dock in post_show_init: {str(e)}")
+        logging.error(traceback.format_exc())
+    logging.warning("Exiting post_show_init")
         #$self.create_workspace()
 def exception_hook(exctype, value, tb):
     logging.error("Uncaught exception", exc_info=(exctype, value, tb))
@@ -758,15 +789,18 @@ def main():
             super().show()
             
         def show_app():
-            logging.info("Showing main application")
-            
+            logging.info("Entering show_app function")
             try:
                 logging.info("Attempting to show main application window")
                 main_app.show()
                 logging.info("Main application window shown successfully")
+                logging.info("Attempting to fade in main application")
+                main_app.fade_in()
+                logging.info("Main application faded in successfully")
             except Exception as e:
-                logging.critical(f"Failed to show main application window: {e}", exc_info=True)
+                logging.critical(f"Failed to show or fade in main application window: {e}", exc_info=True)
                 QApplication.quit()
+            logging.info("Exiting show_app function")
             try:
                 splash_process.terminate()
                 splash_process.wait(5000)  # Wait up to 5 seconds for the process to terminate
@@ -775,7 +809,6 @@ def main():
                     splash_process.kill()
             except Exception as e:
                 logging.error(f"Error terminating splash process: {e}")
-            main_app.fade_in()
 
         logging.info("Scheduling application display")
         QTimer.singleShot(0, show_app)
@@ -797,14 +830,12 @@ def main():
             if 'main_app' in locals():
                 main_app.cleanup()
             if 'global_thread_tracker' in globals():
-                global_thread_tracker.dump_thread_info()
-       
-               
-          
+                global_thread_tracker.dump_thread_info()      
     except Exception as e:
         logging.error(f"Unhandled exception in main: {e}", exc_info=True)
         sys.exit(1)
-    finally:pass
+    finally:
+        logging.warning("Main function completed")
         # try:    
         #     profiler.disable()
         #     s = io.StringIO()
