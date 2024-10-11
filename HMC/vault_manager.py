@@ -55,7 +55,8 @@ class Vault:
 
     def get_all_files(self):
         return self.knowledge_graph.get_all_files()
-
+    def get_all_filesets(self):
+        return self.knowledge_graph.get_all_filesets()
     def get_all_backlinks(self):
         return self.knowledge_graph.get_all_backlinks()
     
@@ -478,6 +479,9 @@ class VaultManager(QObject):
         with open(self.vaults_config_file, 'w') as f:
             json.dump(config, f, indent=4)
         logging.info("Vaults configuration saved successfully")
+        if self.current_vault and self.current_vault.knowledge_graph.is_dirty:
+            self.save_knowledge_graph()
+            self.current_vault.knowledge_graph.mark_clean()
 
     def remove_vault_directory(self, name):
         if name not in self.vaults:
@@ -752,3 +756,5 @@ class VaultManager(QObject):
             except ValueError:
                 continue
         return None
+    def get_all_filesets(self):
+        return self.current_vault.get_all_filesets() if self.current_vault else []

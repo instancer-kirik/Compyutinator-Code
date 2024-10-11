@@ -1,6 +1,6 @@
 import logging
 from PyQt6.Qsci import QsciScintilla
-from PyQt6.QtWidgets import QMessageBox, QFileDialog, QInputDialog
+from PyQt6.QtWidgets import QMessageBox, QFileDialog, QInputDialog, QWidget, QVBoxLayout
 from AuraText.auratext.Core.CodeEditor import CodeEditor
 from PyQt6.QtGui import QColor
 from PyQt6.QtCore import pyqtSignal
@@ -8,6 +8,45 @@ import traceback
 import os
 import time
 from NITTY_GRITTY.ThreadTrackers import SafeQThread
+from PyQt6.QtWidgets import QHBoxLayout, QComboBox, QPushButton, QLabel, QSpacerItem, QSizePolicy
+from PyQt6.QtCore import Qt, QTimer
+
+class EditorContextBar(QWidget):
+    def __init__(self, editor, parent=None):
+        super().__init__(parent)
+        self.editor = editor
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(5, 2, 5, 2)  # Reduce vertical space
+
+        # Left side: Empty space
+        layout.addItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
+
+        # Right side: Context information, fileset selector, and add file button
+        self.context_label = QLabel()
+        self.fileset_selector = QComboBox()
+        self.add_file_button = QPushButton("+")
+        self.add_file_button.setFixedSize(24, 24)  # Make it compact
+
+        layout.addWidget(self.context_label)
+        layout.addWidget(self.fileset_selector)
+        layout.addWidget(self.add_file_button)
+
+        self.setLayout(layout)
+
+    def update_context(self, context_info):
+        self.context_label.setText(context_info)
+
+    def update_fileset_selector(self, filesets):
+        self.fileset_selector.clear()
+        self.fileset_selector.addItems(filesets)
+
+    def set_current_fileset(self, fileset):
+        index = self.fileset_selector.findText(fileset)
+        if index >= 0:
+            self.fileset_selector.setCurrentIndex(index)
 
 class FileLoaderThread(SafeQThread):
     file_loaded = pyqtSignal(str, str)
@@ -25,20 +64,24 @@ class FileLoaderThread(SafeQThread):
             logging.error(f"Error reading file: {e}")
 
 class EditorManager:
+    
     def __init__(self, cccore):
         self.cccore = cccore
         self.windows = []
         self.current_window = None
         self.current_editor = None
         self.window_editors = {}  # Map of windows to their editors
-
+        self.late_init_done = False
     def add_window(self, window):
         
         self.windows.append(window)
         self.window_editors[window] = []
         self.set_current_window(window)
    
-        
+    def late_init(self):
+        if not self.late_init_done:
+            QTimer.singleShot(5, lambda: self.current_window.tab_widget.currentChanged.connect(self.on_tab_changed))
+            self.late_init_done = True
     def set_current_window(self, window):
         if window in self.windows:
             self.current_window = window
@@ -46,64 +89,45 @@ class EditorManager:
         else:
             self.windows.append(window)
             self.current_window=window
-    def open_file(self, file_path, line=0):
-        if self.is_file_in_current_context(file_path):
-            # Existing open_file logic
-            pass
-        else:
-            logging.warning(f"File {file_path} is not in the current project context")
-
-        existing_editor = self.get_editor_by_path(file_path)
-        if existing_editor:
-            self.set_current_editor(existing_editor)
-            return existing_editor
-
-        if not os.path.exists(file_path):
-            logging.error(f"File not found: {file_path}")
-            return None
-
+    def open_file(self, file_path, line=None):
         try:
-            with open(file_path, 'r') as file:
-                content = file.read()
-            new_editor = self.create_new_editor_tab(file_path, content)
-            new_editor.goto_line(line)
-            return new_editor
+            existing_editor = self.get_editor_by_file_path(file_path)
+            if existing_editor:
+                self.set_current_editor(existing_editor)
+                if line:
+                    existing_editor.goto_line(line)
+                return existing_editor
+
+            new_editor = self.create_new_editor_tab(file_path)
+            if new_editor:
+                if line:
+                    new_editor.goto_line(line)
+                return new_editor
+            else:
+                raise Exception("Failed to create new editor tab")
         except Exception as e:
             logging.error(f"Error opening file: {file_path}")
             logging.error(traceback.format_exc())
-            QMessageBox.critical(self.current_window, "Error", f"Could not open file: {e}")
+            QMessageBox.critical(self.current_window, "Error", f"Could not open file: {str(e)}")
             return None
 
-    def create_new_editor_tab(self, file_path=None, content=None):
-        if self.current_window is None:
-            logging.warning("No current AuraText window set in EditorManager")
-            return None
-       
-        if file_path is None:
-            logging.warning("No file path provided for new editor tab")
-            file_path = "Untitled"
-        if content is None:
-            logging.warning("No content provided for new editor tab")
-            content = ""
-        
+    def create_new_editor_tab(self, file_path=None):
         try:
             editor = CodeEditor(mm=self.cccore, parent=self.current_window)
-            editor.set_file_path(file_path)
-            editor.setText(content)
+            if file_path and file_path != "Untitled":
+                editor.file_path = file_path
+                with open(file_path, 'r', encoding='utf-8') as file:
+                    content = file.read()
+                editor.set_text(content)
+                editor.set_language_from_file_path(file_path)
+            else:
+                editor.file_path = None
+                editor.set_text("")  # Set empty content for new files
             
-            file_extension = self.get_file_extension(file_path)
-            self.apply_lexer(editor, file_extension)
-            
-            index = self.current_window.add_new_tab(editor, os.path.basename(file_path))
-            if index is not None:
-                if self.current_window not in self.window_editors:
-                    self.window_editors[self.current_window] = []#mAYBE this deletes old editors
-                self.window_editors[self.current_window].append(editor)
-                self.set_current_editor(editor)
-            
+            self.add_editor_to_window(editor)
             return editor
         except Exception as e:
-            logging.error(f"Error creating new editor tab: {e}")
+            logging.error(f"Error creating new editor tab: {str(e)}")
             logging.error(traceback.format_exc())
             return None
 
@@ -141,14 +165,28 @@ class EditorManager:
         return False
 
     def close_tab(self, index):
-        if self.current_window is None:
-            logging.error("No current window set in EditorManager")
-            return False
-
         editor = self.current_window.tab_widget.widget(index)
-        if editor is None:
-            logging.error(f"No editor found at index {index}")
-            return False
+        if isinstance(editor, CodeEditor):
+            if editor.isModified():
+                reply = QMessageBox.question(self.tab_widget, 'Save Changes?',
+                                             'This file has unsaved changes. Do you want to save them?',
+                                             QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+                                             QMessageBox.StandardButton.Save)
+                if reply == QMessageBox.StandardButton.Save:
+                    self.save_file(index)
+                elif reply == QMessageBox.StandardButton.Cancel:
+                    return False
+            
+            # Remove the file from the current fileset if it exists
+            current_vault = self.mm.vault_manager.get_current_vault()
+            current_workspace = self.mm.workspace_manager.get_active_workspace()
+            if current_vault and current_workspace:
+                file_path = editor.file_path
+                self.mm.workspace_manager.remove_file_from_active_fileset(
+                    current_vault.path, 
+                    current_workspace.name, 
+                    file_path
+                )
 
         # Check if the file needs to be saved
         if editor.document().isModified():
@@ -266,6 +304,10 @@ class EditorManager:
     def on_current_tab_changed(self, index):
         if self.current_window and index >= 0:
             self.set_current_editor(self.current_window.tab_widget.widget(index))
+
+        editor = self.get_current_editor()
+        if isinstance(editor, CodeEditor):
+            editor.update_context_bar()
 
     def comment_selection(self):
         if self.current_editor:
@@ -405,3 +447,22 @@ class EditorManager:
                     # For untitled files, we'll use a placeholder name
                     open_files.append(f"Untitled_{id(editor)}")
         return open_files
+
+    def on_tab_changed(self, index):
+        editor = self.current_window.tab_widget.widget(index)
+        if isinstance(editor, CodeEditor):
+            editor.update_context_bar()
+            
+    def add_editor_to_window(self, editor):
+      
+        file_extension = self.get_file_extension(editor.file_path)
+        self.apply_lexer(editor, file_extension)
+        
+        index = self.current_window.add_new_tab(editor, os.path.basename(editor.file_path))
+        if index is not None:
+            if self.current_window not in self.window_editors:
+                self.window_editors[self.current_window] = []#mAYBE this deletes old editors
+            self.window_editors[self.current_window].append(editor)
+            self.set_current_editor(editor)
+
+   

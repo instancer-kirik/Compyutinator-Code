@@ -28,7 +28,7 @@ class KnowledgeGraphView(QWidget):
         edges = []
         for file in self.vault.index['files']:
             file_path = file['path']
-            nodes.append({"id": file_path, "label": file_path})
+            nodes.append({"id": file_path, "label": file_path, "group": "file"})
             
             for linked_file in self.vault.knowledge_graph.links[file_path]:
                 edges.append({"from": file_path, "to": linked_file, "label": "link"})
@@ -44,5 +44,12 @@ class KnowledgeGraphView(QWidget):
                 if ref_id not in [node['id'] for node in nodes]:
                     nodes.append({"id": ref_id, "label": f"@{ref}", "group": "reference"})
                 edges.append({"from": file_path, "to": ref_id, "label": "reference"})
+            
+            # Add fileset connections
+            for fileset in self.vault.knowledge_graph.get_filesets_for_file(file_path):
+                fileset_id = f"fileset_{fileset}"
+                if fileset_id not in [node['id'] for node in nodes]:
+                    nodes.append({"id": fileset_id, "label": fileset, "group": "fileset"})
+                edges.append({"from": file_path, "to": fileset_id, "label": "belongs_to"})
 
         return {"nodes": nodes, "edges": edges}

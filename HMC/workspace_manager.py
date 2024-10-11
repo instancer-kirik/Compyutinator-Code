@@ -119,3 +119,53 @@ class WorkspaceManager:
         vault_dir = os.path.dirname(workspace_path)
         workspace_name = os.path.basename(workspace_path)
         return self.switch_workspace(vault_dir, workspace_name)
+
+    def create_fileset(self, vault_path, workspace_name, fileset_name, files=None):
+        workspace = self.get_workspace(vault_path, workspace_name)
+        if workspace:
+            workspace.add_fileset(fileset_name, files or [])
+            # Add to knowledge graph
+            for file in files or []:
+                self.cccore.vault_manager.get_current_vault().knowledge_graph.add_file_to_fileset(fileset_name, file)
+            return True
+        return False
+
+    def remove_fileset(self, vault_path, workspace_name, fileset_name):
+        workspace = self.get_workspace(vault_path, workspace_name)
+        if workspace:
+            workspace.remove_fileset(fileset_name)
+            # Remove from knowledge graph
+            self.cccore.vault_manager.get_current_vault().knowledge_graph.filesets.pop(fileset_name, None)
+            return True
+        return False
+
+    def set_active_fileset(self, vault_path, workspace_name, fileset_name):
+        workspace = self.get_workspace(vault_path, workspace_name)
+        if workspace:
+            workspace.set_active_fileset(fileset_name)
+            return True
+        return False
+
+    def get_active_files(self, vault_path, workspace_name):
+        workspace = self.get_workspace(vault_path, workspace_name)
+        if workspace:
+            return workspace.get_active_files()
+        return []
+
+    def add_file_to_active_fileset(self, vault_path, workspace_name, file_path):
+        workspace = self.get_workspace(vault_path, workspace_name)
+        if workspace and workspace.active_fileset:
+            workspace.add_file_to_active_fileset(file_path)
+            # Add to knowledge graph
+            self.cccore.vault_manager.get_current_vault().knowledge_graph.add_file_to_fileset(workspace.active_fileset, file_path)
+            return True
+        return False
+
+    def remove_file_from_active_fileset(self, vault_path, workspace_name, file_path):
+        workspace = self.get_workspace(vault_path, workspace_name)
+        if workspace and workspace.active_fileset:
+            workspace.remove_file_from_active_fileset(file_path)
+            # Remove from knowledge graph
+            self.cccore.vault_manager.get_current_vault().knowledge_graph.remove_file_from_fileset(workspace.active_fileset, file_path)
+            return True
+        return False

@@ -13,7 +13,10 @@ import logging
 import os
 import tempfile
 from .file_manager import FileManager
+from PyQt6.QtWidgets import QDockWidget
+from PyQt6.QtCore import Qt
 from .workspace_manager import WorkspaceManager
+from GUX.fileset_manager_widget import FilesetManagerWidget
 from .project_manager import ProjectManager
 from .build_manager import BuildManager
 from GUX.radial_menu import RadialMenu
@@ -122,8 +125,9 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
             self.editor_manager = EditorManager(self)
             self.editor_manager.set_current_window(self.main_window)
             self.init_lsp_manager()
+            self.editor_manager.late_init()
+            
             self.late_init_done = True
-
     def init_lsp_manager(self):
         self.lsp_manager = LSPManager(self)
         self.lsp_manager.initialize()

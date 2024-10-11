@@ -13,6 +13,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import traceback
 import logging
+from GUX.fileset_manager_widget import FilesetManagerWidget
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from NITTY_GRITTY.ThreadTrackers import global_thread_tracker, global_qthread_tracker
 from PyQt6.QtCore import pyqtSignal
@@ -199,7 +200,8 @@ class CoolWidget(QWidget):
             # Forest tab
             self.forest_widget = ForestWidget(self)
             right_widget.addTab(self.forest_widget, "Forest")
-
+            self.fileset_manager_widget = FilesetManagerWidget(self.cccore)
+            right_widget.addTab(self.fileset_manager_widget, "Filesets")
             splitter.addWidget(right_widget)
 
             layout.addWidget(splitter)
@@ -353,7 +355,7 @@ class CoolWidget(QWidget):
         if hasattr(self.cccore, 'lsp_manager'):
             log_calls = self.cccore.lsp_manager.get_log_function_calls()
             self.forest_widget.update_forest(log_calls)
-
+        
     def cleanup(self):
         logging.info("Cleaning up CoolWidget")
         # Add any necessary cleanup code here

@@ -5,7 +5,9 @@ from PyQt6.QtWidgets import (
     QTextEdit, QFileDialog, QMessageBox
 )
 from PyQt6.QtGui import QClipboard
-
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication
+#unused
 class TextEntryWidget(QWidget):
     def __init__(self):
         super().__init__()

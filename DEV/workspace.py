@@ -63,6 +63,18 @@ class Workspace:
     def get_active_files(self):
         return self.filesets.get(self.active_fileset, [])
 
+    def add_file_to_active_fileset(self, file_path):
+        if self.active_fileset and self.active_fileset in self.filesets:
+            if file_path not in self.filesets[self.active_fileset]:
+                self.filesets[self.active_fileset].append(file_path)
+                self.save_config()
+
+    def remove_file_from_active_fileset(self, file_path):
+        if self.active_fileset and self.active_fileset in self.filesets:
+            if file_path in self.filesets[self.active_fileset]:
+                self.filesets[self.active_fileset].remove(file_path)
+                self.save_config()
+
     def set_layout(self, layout, visible_docks):
         self.layout = layout
         self.visible_docks = visible_docks
