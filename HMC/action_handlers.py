@@ -8,12 +8,24 @@ class ActionHandlers:
     def __init__(self, cccore = None):
         self.cccore = cccore
         self.settings_manager = cccore.settings_manager
+        self.macro_recording = False
+        self.current_macro = []
+        self.current_macro_name = None
+
+    def record_action(self, action_name, *args):
+        if self.macro_recording:
+            self.current_macro.append((action_name, *args))
+
     def new_file(self):
+        self.record_action('new_file')
         self.cccore.editor_manager.new_document()
+
     def new_project(self):
+        self.record_action('new_project')
         self.cccore.project_manager.new_project()
     
     def open_file(self, path=None, file_path=None):
+        self.record_action('open_file', path, file_path)
         if path is None:
             
             file_path, _ = QFileDialog.getOpenFileName(self.cccore.main_window, "Open File")
@@ -344,6 +356,29 @@ class ActionHandlers:
     def check_for_updates(self):
         # Implement update checking functionality
         pass
+
+    def handle_action(self, action):
+        action_name, *args = action
+        if hasattr(self, action_name):
+            method = getattr(self, action_name)
+            method(*args)
+            if self.macro_recording:
+                logging.warning(f"Recording action: {action_name} with args: {args}")
+               # self.current_macro.append(action)
+        else:
+            logging.warning(f"Action '{action_name}' not found in action handlers")
+
+    def start_macro_recording(self, name):
+        self.macro_recording = True
+        self.current_macro = []
+        self.current_macro_name = name
+
+    def stop_macro_recording(self):
+        self.macro_recording = False
+        recorded_macro = self.current_macro
+        self.current_macro = []
+        self.current_macro_name = None
+        return recorded_macro
         #self.cccore.terminal_emulator.toggle_visibility()
     # def toggle_file_explorer(self):
     #     self.cccore.file_explorer.toggle_visibility()

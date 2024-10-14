@@ -37,6 +37,7 @@ from PyQt6.QtWidgets import QApplication
 import time
 import logging
 from PyQt6.QtCore import QTimer, pyqtSignal, QObject
+from .macro_manager import MacroManager
 
 class CCCore(QObject):  # referred to as mm in other files (auratext)
     lsp_manager_initialized = pyqtSignal()
@@ -57,6 +58,7 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         self.workspace_manager = None
         self.project_manager = None
         self.secrets_manager = None
+        self.macro_manager = MacroManager(self)
         self.env_manager = EnvironmentManager(self.settings_manager.get_value("environments_path", "./environments"))
         self.vault_manager = VaultManager(self.settings_manager, cccore=self)
         self.ai_memory_manager = AIMemoryManager()
@@ -310,3 +312,24 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         return self.vault_manager
     def get_current_window(self):
         return self.editor_manager.current_window
+    def start_macro_recording(self, name):
+        self.action_handlers.start_macro_recording(name)
+        logging.info(f"Started recording macro: {name}")
+
+    def stop_macro_recording(self):
+        actions = self.action_handlers.stop_macro_recording()
+        if actions:
+            self.macro_manager.record_macro(self.action_handlers.current_macro_name, actions)
+            logging.info(f"Recorded macro: {self.action_handlers.current_macro_name} with {len(actions)} actions")
+        else:
+            logging.warning("No actions recorded in the macro")
+
+    def play_macro(self, name):
+        logging.info(f"Playing macro: {name}")
+        self.macro_manager.play_macro(name)
+
+    def get_macro_list(self):
+        return self.macro_manager.get_macro_list()
+
+    def delete_macro(self, name):
+        self.macro_manager.delete_macro(name)

@@ -168,14 +168,9 @@ class ContextManager:
                 continue
             
             if desc.startswith("File:"):
-                file_path = desc.split("File: ", 1)[1]
-                if self.is_code_file(file_path):
-                    processed_content = self.reduce_code_tokens(content)
-                else:
-                    processed_content = content
-                processed_contexts.append((f"File: {os.path.abspath(file_path)}", processed_content))
-            else:
-                processed_contexts.append((desc, content))
+                desc = desc.split("File:", 1)[1].strip()
+            processed_contexts.append((f"File: {desc}", content))
+        
         return processed_contexts
 
     def is_code_file(self, file_path):

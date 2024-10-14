@@ -132,6 +132,7 @@ class ProjectManager:
         self.update_project_selector()
         logging.warning(f"Loaded projects: {self.projects}")
         self.project_config_filename = "project_config.json"
+        self.load_current_project()  # Add this line to load the current project on initialization
 
     def create_project(self, project_name, project_path):
         full_path = os.path.join(project_path, project_name)
@@ -206,25 +207,34 @@ class ProjectManager:
     def get_many_projects(self):
         many_projects = []
         for vault in self.cccore.vault_manager.vaults.values():
-            many_projects.extend(vault.projects.keys())
+            many_projects.extend(vault.get_project_names())
         return many_projects
 
-    def get_project_path(self, vault_name, project_name):
-        vault = self.cccore.vault_manager.get_vault(vault_name)
-        if vault:
-            return vault.get_project_path(project_name)
-        return None
+    
+    def set_current_project(self, vault_name=None, project_name=None, project_path=None):
+        if project_name is None:
+            logging.warning("No project name provided to set_current_project")
+            return False
 
-    def set_current_project(self, vault_name, project_name):
-        project_path = self.get_project_path(vault_name, project_name)
-        if project_path:
+        if project_name in self.get_many_projects():
+            if project_path is None:
+                project_path = self.get_project_path(project_name)
+            
+            if vault_name is None:
+                vault_name = self.cccore.vault_manager.get_vault_for_project(project_name)
+
             self.current_project = {
                 'name': project_name,
                 'path': project_path,
                 'vault': vault_name
             }
+            self.settings_manager.set_value("current_project", project_name)
+            self.project_changed.emit(project_name)
+            logging.info(f"Current project set to: {project_name} in vault: {vault_name}")
             return True
-        return False
+        else:
+            logging.warning(f"Attempted to set non-existent project: {project_name}")
+            return False
     
     def remove_project(self, name):
         if name in self.projects:
@@ -253,38 +263,23 @@ class ProjectManager:
             return True
         return False
 
-    def set_current_project(self, name):
-        if name in self.projects:
-            self.current_project = name
-            self.add_recent_project(name)
-            self.save_projects()
-            return True
-        return False
-
-    # def get_projects(self):
-    #     return list(self.projects.keys())
-
     def get_current_project(self):
         return self.current_project
+   
+    def get_project_path(self, project_name=None):
+        if project_name is None:
+            project_name = self.get_current_project()
+        
+        if project_name:
+            for vault in self.cccore.vault_manager.vaults.values():
+                project = vault.get_project(project_name)
+                if project:
+                    return project.path
+        
+        logging.warning(f"No path found for project: {project_name}")
+        return None
 
-    def get_project_path(self, name):
-        logging.debug(f"Attempting to get path for project: {name}")
-        logging.debug(f"Current projects: {self.projects}")
-        if isinstance(self.projects, dict):
-            project_data = self.projects.get(name, {})
-            if isinstance(project_data, dict):
-                path = project_data.get("path")
-            elif isinstance(project_data, str):
-                path = project_data
-            else:
-                logging.error(f"Invalid project data for {name}: {project_data}")
-                path = None
-        else:
-            logging.error(f"self.projects is not a dictionary: {self.projects}")
-            path = None
-        logging.debug(f"Retrieved path: {path}")
-        return path
-
+   
     def get_project_environment(self, name):
         return self.env_manager.get_environment_path(name)
 
@@ -465,12 +460,41 @@ class ProjectManager:
         
         pass
 
+    def find_file_in_current_project(self, file_name):
+        if not self.current_project:
+            return None
+        
+        project_path = self.current_project.get('path')
+        if not project_path:
+            return None
+        
+        for root, dirs, files in os.walk(project_path):
+            if file_name in files:
+                return os.path.join(root, file_name)
+        
+        return None
+
+    def get_relative_path_in_project(self, file_path):
+        if not self.current_project:
+            return file_path
+        
+        project_path = self.current_project.get('path')
+        if not project_path:
+            return file_path
+        
+        try:
+            return os.path.relpath(file_path, project_path)
+        except ValueError:  # This occurs if the file is on a different drive than the project
+            return file_path
+
     def is_file_in_project_context(self, file_path):
         current_project = self.get_current_project()
         if not current_project:
             return True  # Allow opening files if no project is active
-        project_path = os.path.dirname(current_project.path)
-        return file_path.startswith(project_path) or "Daily Notes" in file_path
+        project_path = current_project.get('path')
+        if not project_path:
+            return True
+        return os.path.commonpath([file_path, project_path]) == project_path or "Daily Notes" in file_path
 
     def handle_file_not_in_context(self, file_path):
         # Implement logic to handle files not in the current project context
@@ -499,6 +523,16 @@ class ProjectManager:
             'run_command': '',
             'registered_scripts': []
         }  # Return an empty dict if no data is found
+
+    def load_current_project(self):
+        current_project = self.settings_manager.get_value("current_project")
+        if current_project:
+            self.set_current_project(current_project)
+        else:
+            # If no current project is set, try to set the first available project
+            projects = self.get_many_projects()
+            if projects:
+                self.set_current_project(projects[0])
     
         # Add project path input field
         # current_project = self.get_current_project()

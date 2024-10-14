@@ -267,9 +267,7 @@ class Vault:
     def get_project_path(self, project_name):
         return self.projects.get(project_name)
 
-    def get_project_names(self):
-        return list(self.projects.keys())
-
+   
     def get_backlinks(self, file_path):
         return self.knowledge_graph.get_backlinks(file_path)
 
@@ -758,3 +756,9 @@ class VaultManager(QObject):
         return None
     def get_all_filesets(self):
         return self.current_vault.get_all_filesets() if self.current_vault else []
+
+    def get_vault_for_project(self, project_name):
+        for vault_name, vault in self.vaults.items():
+            if project_name in vault.get_project_names():
+                return vault_name
+        return None

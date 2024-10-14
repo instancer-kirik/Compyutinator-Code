@@ -28,14 +28,14 @@ from GUX.theme_builder import ThemeBuilderWidget
 import serial
 import serial.tools.list_ports
 from HMC.project_manager import ProjectManagerWidget, ManyProjectsManagerWidget
-from GUX.diff_merger import DiffMergerWidget
+from GUX.merge_widget import MergeWidget
 from AuraText.auratext.Core.window import AuraTextWindow
 from AuraText.auratext.Core.TabWidget import TabWidget
 import logging
 import traceback
 from GUX.file_search_widget import FileSearchWidget
 from HMC.project_manager import ManyProjectsManagerWidget
-from GUX.widget_vault import VaultWidget, VaultsManagerWidget, MergeWidget, AdvancedDataViewerWidget, StateInspectorWidget
+from GUX.widget_vault import VaultWidget, VaultsManagerWidget,  AdvancedDataViewerWidget, StateInspectorWidget
 class WidgetManager:
     def __init__(self, cccore):
         self.cccore = cccore
@@ -162,6 +162,8 @@ class WidgetManager:
                             logging.info(f"Adding {dock_name} to {area} area")
                             qt_area = self.get_qt_dock_area(area)
                             if qt_area is not None:
+                                if dock_name == "AI Chat":
+                                    qt_area = Qt.DockWidgetArea.RightDockWidgetArea
                                 self.main_window.addDockWidget(qt_area, dock)
                             else:
                                 logging.warning(f"Unknown dock area: {area}")
@@ -186,6 +188,15 @@ class WidgetManager:
             self.create_dock("Projects Manager", self.ProjectManagerWidget(self.cccore, parent=self.main_window), parent=self.main_window)
             #self.add_cool_dock()  # Add this line to create the Cool dock on startup
             # ... other startup docks
+            
+            # Create and add the AI Chat dock
+            ai_chat_widget = self.AIChatWidget(self.cccore, parent=self.main_window)
+            ai_chat_dock = self.create_dock("AI Chat", ai_chat_widget, parent=self.main_window)
+            if ai_chat_dock:
+                self.main_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, ai_chat_dock)
+                logging.info("AI Chat dock created and added to the right dock area")
+            else:
+                logging.error("Failed to create AI Chat dock")
         except Exception as e:
             logging.error(f"Error creating startup docks: {e}")
             logging.error(traceback.format_exc())
@@ -395,18 +406,17 @@ class WidgetManager:
         if 'process_manager' not in self.widgets:
             self.widgets['process_manager'] = ProcessManagerWidget(parent=self.main_window, cccore=self.cccore)
         return self.widgets['process_manager']
-    def AIChatWidget(self, cccore):
-        if not hasattr(self, '_ai_chat_widget'):
-            self._ai_chat_widget = AIChatWidget(
-                parent=self.main_window,
-                context_manager=cccore.context_manager,
-                editor_manager=cccore.editor_manager,
-                model_manager=cccore.model_manager,
-                download_manager=cccore.download_manager,
-                settings_manager=cccore.settings_manager,
-                vault_manager=  cccore.vault_manager
-            )
-        return self._ai_chat_widget
+    def AIChatWidget(self, cccore, parent=None):
+        if 'ai_chat' not in self.widgets:
+            self.widgets['ai_chat'] = AIChatWidget(parent=parent, 
+                                                   context_manager=cccore.context_manager, 
+                                                   editor_manager=cccore.editor_manager, 
+                                                   model_manager=cccore.model_manager, 
+                                                   download_manager=cccore.download_manager, 
+                                                   settings_manager=cccore.settings_manager, 
+                                                   vault_manager=cccore.vault_manager,
+                                                   project_manager=cccore.project_manager)
+        return self.widgets['ai_chat']
 
     def MergeWidget(self, cccore):
         if not hasattr(self, 'merge_widget'):

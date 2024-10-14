@@ -1,8 +1,9 @@
 from PyQt6.QtWidgets import QMenuBar, QMenu
 from PyQt6.QtGui import QAction, QIcon
 from .action_handlers import ActionHandlers
-from GUX.widget_vault import MergeWidget
+from GUX.merge_widget import MergeWidget
 import logging
+from PyQt6.QtWidgets import QInputDialog, QMessageBox
 from PyQt6.QtCore import QObject, Qt
 class MenuManager:
     def __init__(self, main_window, cccore = None):
@@ -106,7 +107,6 @@ class MenuManager:
         except AttributeError:
             logging.warning("Advanced Data Viewer not found, skipping addition of toggle action.")
         return self.view_menu
-
 
     
     def create_tools_menu(self):
@@ -222,3 +222,33 @@ if __name__ == "__main__":
             Qt.DockWidgetArea.RightDockWidgetArea
         )
         dock.show()
+    def create_macro_menu(self):
+       
+        # Add a Macros menu
+        self.macro_menu = QMenu("&Macros", self.main_window)
+        
+        start_recording_action = self.macro_menu.addAction("Start Recording")
+        start_recording_action.triggered.connect(self.start_macro_recording)
+
+        stop_recording_action = self.macro_menu.addAction("Stop Recording")
+        stop_recording_action.triggered.connect(self.stop_macro_recording)
+
+        play_macro_action = self.macro_menu.addAction("Play Macro")
+        play_macro_action.triggered.connect(self.play_macro)
+        return self.macro_menu
+    def start_macro_recording(self):
+        name, ok = QInputDialog.getText(self.main_window, "Record Macro", "Enter macro name:")
+        if ok and name:
+            self.cccore.start_macro_recording(name)
+
+    def stop_macro_recording(self):
+        self.cccore.stop_macro_recording()
+
+    def play_macro(self):
+        macros = self.cccore.get_macro_list()
+        if not macros:
+            QMessageBox.information(self.main_window, "Play Macro", "No macros available.")
+            return
+        name, ok = QInputDialog.getItem(self.main_window, "Play Macro", "Select a macro:", macros, 0, False)
+        if ok and name:
+            self.cccore.macro_manager.play_macro(name)

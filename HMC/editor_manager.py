@@ -111,14 +111,17 @@ class EditorManager:
             QMessageBox.critical(self.current_window, "Error", f"Could not open file: {str(e)}")
             return None
 
-    def create_new_editor_tab(self, file_path=None):
+    def create_new_editor_tab(self, file_path=None,content=None):
         try:
             editor = CodeEditor(mm=self.cccore, parent=self.current_window)
             if file_path and file_path != "Untitled":
                 editor.file_path = file_path
-                with open(file_path, 'r', encoding='utf-8') as file:
-                    content = file.read()
-                editor.set_text(content)
+                if content:
+                    editor.set_text(content)
+                else:
+                    with open(file_path, 'r', encoding='utf-8') as file:
+                        content = file.read()
+                    editor.set_text(content)
                 editor.set_language_from_file_path(file_path)
             else:
                 editor.file_path = None
@@ -454,14 +457,17 @@ class EditorManager:
             editor.update_context_bar()
             
     def add_editor_to_window(self, editor):
-      
-        file_extension = self.get_file_extension(editor.file_path)
-        self.apply_lexer(editor, file_extension)
+        if editor.file_path:
+            file_extension = self.get_file_extension(editor.file_path)
+            self.apply_lexer(editor, file_extension)
+            tab_name = os.path.basename(editor.file_path)
+        else:
+            tab_name = "Untitled"
         
-        index = self.current_window.add_new_tab(editor, os.path.basename(editor.file_path))
+        index = self.current_window.add_new_tab(editor, tab_name)
         if index is not None:
             if self.current_window not in self.window_editors:
-                self.window_editors[self.current_window] = []#mAYBE this deletes old editors
+                self.window_editors[self.current_window] = []
             self.window_editors[self.current_window].append(editor)
             self.set_current_editor(editor)
 

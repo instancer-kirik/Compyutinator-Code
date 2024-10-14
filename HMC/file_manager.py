@@ -45,7 +45,7 @@ class FileManager:
             self.vault_explorer.set_root_path(default_path)
 
     def new_document(self):
-        editor = self.cccore.editor_manager.create_new_editor_tab(tempfile.NamedTemporaryFile().name, "")
+        editor = self.cccore.editor_manager.create_new_editor_tab(file_path=tempfile.NamedTemporaryFile().name,content="")
         self.cccore.current_window.tab_widget.addTab(editor, "Untitled")
 
     def open_file(self, file_path):
@@ -56,7 +56,7 @@ class FileManager:
         try:
             with open(file_path, 'r', encoding='utf-8') as file:
                 content = file.read()
-            new_editor = self.cccore.editor_manager.create_new_editor_tab(file_path, content)
+            new_editor = self.cccore.editor_manager.create_new_editor_tab(file_path=file_path,content=content)
             if new_editor:
                 self.cccore.editor_manager.set_current_editor(new_editor)
                 logging.info(f"File opened successfully: {file_path}")
