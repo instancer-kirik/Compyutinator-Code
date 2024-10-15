@@ -411,7 +411,7 @@ class VaultManager(QObject):
         if not self.vaults:
             logging.warning("No vaults found. Creating default vault.")
             local_default_path = self.app_config_dir / "default_vault"
-            local_default_name = self.add_vault_directory(str(local_default_path), "Default Vault")
+            local_default_name = self.add_vault_directory(str(local_default_path), "AppData Vault")
             
             if local_default_name:
                 logging.info(f"Created default vault: {local_default_name}")

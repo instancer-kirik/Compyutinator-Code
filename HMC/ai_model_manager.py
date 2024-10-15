@@ -166,6 +166,7 @@ class ModelManager(QObject):
         self.current_remote_model_name = None
         self.generate_worker = None
         self.load_worker = None
+        self.static_model_name = "Llama-3.1-SuperNova-Lite-8.0B-OQ8_0.EF32.IQ4_K-Q8_0-GGUF"  # Add this line
 
     def load_model(self, model_type, filename, repo_id=None):
         self.model_loading.emit()
@@ -176,7 +177,7 @@ class ModelManager(QObject):
             self.load_worker = ModelLoadWorker(repo_id, filename)
             self.load_worker.progress.connect(self.model_download_progress)
             self.load_worker.finished.connect(self.on_local_model_loaded)
-            self.load_worker.error.connect(self.on_model_error)
+            self.load_worker.error.connect(self.on_local_model_load_error)  # Change this line
             self.load_worker.start()
         elif model_type == 'remote':
             self.current_remote_model_name = filename
@@ -259,3 +260,8 @@ class ModelManager(QObject):
 
     def on_model_error(self, error):
         self.model_error.emit(str(error))
+
+    def on_local_model_load_error(self, error):
+        logging.error(f"Error loading local model: {error}")
+        logging.info(f"Falling back to static model: {self.static_model_name}")
+        self.load_model('local', self.static_model_name)

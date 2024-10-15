@@ -46,6 +46,7 @@ from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, QEvent
 from NITTY_GRITTY.ThreadTrackers import SafeQThread
 from HMC.project_manager import ManyProjectsManagerWidget
 from PyQt6.QtWidgets import QDockWidget
+from HMC.vm_manager import VMManagerWidget
 log_directory = os.path.join(os.getcwd(), 'logs')
 if not os.path.exists(log_directory):
     os.makedirs(log_directory)
@@ -142,7 +143,7 @@ class MainApplication(QMainWindow):
         
         # Schedule the rest of the initialization for after the event loop starts
 #        QTimer.singleShot(0, self.post_show_init)
-        
+        self.vm_manager_widget = VMManagerWidget()
         self.settings_manager = settings_manager
         self.menu_manager = MenuManager(self.cccore.main_window, cccore=self.cccore)
         self.cccore.set_menu_manager(self.menu_manager)
@@ -193,7 +194,8 @@ class MainApplication(QMainWindow):
         # Apply the saved theme
         saved_theme = self.cccore.theme_manager.get_current_theme()
         self.cccore.theme_manager.apply_theme(saved_theme)
-
+       
+        
         self.create_docks()
         self.auratext_windows = []
         self.cccore.set_main_window(self)
@@ -202,6 +204,7 @@ class MainApplication(QMainWindow):
     def init_ui(self):
         # ... (other initializations)
         
+
         # Add this line to create the toolbar
         self.toolbar = self.addToolBar("Main Toolbar")
 
@@ -231,7 +234,7 @@ class MainApplication(QMainWindow):
         self.toolbar = self.addToolBar("Main Toolbar")
         
         # Add other widgets or tabs
-        self.add_support_box()
+        self.create_central_tabs()
         self.add_transcriptor_live_tab()
         self.add_logs_viewer_tab()
         
@@ -370,7 +373,7 @@ class MainApplication(QMainWindow):
         if isinstance(current_theme, dict):  # Add this check
             tab_color = current_theme.get("tab_colors", {}).get(index,
                                                                 current_theme.get("theme_color", "#81A1C1"))
-            self.tabWidget.tabBar().setTabTextColor(index, QColor(tab_color))
+            self.tab_widget.tabBar().setTabTextColor(index, QColor(tab_color))
         else:
             logging.error(f"Invalid theme type: {type(current_theme)}")
 
@@ -438,7 +441,7 @@ class MainApplication(QMainWindow):
         if self.serial_port:
             self.overlay.set_serial_port(port)
 
-    def add_support_box(self):
+    def create_central_tabs(self):
         support_box = QWidget()
         support_layout = QVBoxLayout()
         support_label = QLabel("Support Me - links on github")
@@ -448,8 +451,10 @@ class MainApplication(QMainWindow):
         support_layout.addWidget(support_label)
         support_layout.addWidget(github_button)
         support_box.setLayout(support_layout)
-        
         self.tab_widget.addTab(support_box, "Support Me")
+        
+        self.tab_widget.addTab(self.vm_manager_widget, "VM Manager")
+
 
     def open_github(self):
         QDesktopServices.openUrl(QUrl("https://github.com/instancer-kirik/BigLinks"))
@@ -757,7 +762,7 @@ def main():
                 color: #D8DEE9;
             }
         """)
-
+       
         logging.debug("Creating SettingsManager")
         settings_manager = SettingsManager()
         

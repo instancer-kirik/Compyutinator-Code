@@ -10,6 +10,43 @@ from PyQt6.QtGui import QAction, QIcon, QStandardItemModel, QStandardItem, QColo
 from PyQt6.QtWebEngineCore import QWebEngineDownloadRequest, QWebEngineSettings,QWebEngineScript
 from html_viewer import HTMLViewerWidget
 from PyQt6.QtCore import QRect, QPoint
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import hashes
+class ExtensionVM:
+    def __init__(self, extension_id, vm_manager):
+        self.extension_id = extension_id
+        self.vm_manager = vm_manager
+        self.vm_name = f"Extension_{extension_id}"
+
+    def start(self):
+        self.vm_manager.create_vm(self.vm_name)
+        self.vm_manager.start_vm(self.vm_name)
+        # Set up communication channel, load extension code, etc.
+
+    def stop(self):
+        self.vm_manager.stop_vm(self.vm_name)
+        self.vm_manager.delete_vm(self.vm_name)
+
+    def run_in_vm(self, code):
+        return self.vm_manager.run_command_in_vm(self.vm_name, code)
+
+class ExtensionAPI:
+    def __init__(self, vm_manager, tab_id):
+        self.vm_manager = vm_manager
+        self.tab_id = tab_id
+
+    def inject_script(self, extension_id, script):
+        vm_name = f"Extension_{extension_id}"
+        self.vm_manager.run_command_in_vm(vm_name, f"inject_script {self.tab_id} '{script}'")
+
+    def get_tab_content(self, extension_id):
+        # Implement a way to get tab content and send it to the extension VM
+        pass
+
+    def update_browser_action(self, extension_id, icon, title):
+        # Update the extension's browser action in the main UI
+        pass
 
 class CircularTabBar(QTabBar):
     def __init__(self, parent=None):
@@ -52,13 +89,25 @@ class ImprovedTabWidget(QTabWidget):
         self.setMovable(True)
         self.setTabsClosable(True)
 
+from PyQt6.QtWebEngineCore import QWebEngineProfile, QWebEngineScript
+import json
+import os
+
+from HMC.vm_manager import VMManager
+
 class AdvancedBrowser(QMainWindow):
     def __init__(self):
         super().__init__()
         self.initUI()
+        self.vm_manager = VMManager()
+        self.dev_tools_windows = {}
+        self.page_profiles = {}
+        self.extension_vms = {}
         self.dev_tools_windows = {}  # Store dev tools windows for each tab
         self.page_profiles = {}
-
+     
+        self.public_key = self.load_public_key()
+        self.load_extensions()
     def initUI(self):
         self.setWindowTitle('Custom Web Browser')
         self.setGeometry(100, 100, 1280, 800)
@@ -315,6 +364,10 @@ class AdvancedBrowser(QMainWindow):
         # Update grouped tabs
         self.update_grouped_tabs()
 
+        # Apply extension scripts to new tabs
+        for script in QWebEngineProfile.defaultProfile().scripts().scripts():
+            browser.page().scripts().insert(script)
+
     def current_tab(self):
         return self.tabs.currentWidget()
 
@@ -447,7 +500,101 @@ class AdvancedBrowser(QMainWindow):
                 window.show()
             else:
                 window.hide()
+    def create_extension_api(self, tab_id):
+        return ExtensionAPI(self.vm_manager, tab_id)
 
+    def load_extensions(self):
+        extensions_dir = os.path.join(os.path.dirname(__file__), 'extensions')
+        if not os.path.exists(extensions_dir):
+            return
+
+        public_key_path = os.path.join(extensions_dir, 'public_key.pem')
+        if not os.path.exists(public_key_path):
+            print("Public key not found. Extensions will not be loaded.")
+            return
+
+        with open(public_key_path, 'rb') as key_file:
+            public_key = serialization.load_pem_public_key(key_file.read())
+
+        for ext_dir in os.listdir(extensions_dir):
+            ext_path = os.path.join(extensions_dir, ext_dir)
+            if os.path.isdir(ext_path):
+                manifest_path = os.path.join(ext_path, 'manifest.json')
+                signature_path = os.path.join(ext_path, 'signature.bin')
+                if os.path.exists(manifest_path) and os.path.exists(signature_path):
+                    with open(manifest_path, 'r') as f:
+                        manifest = json.load(f)
+                    
+                    with open(signature_path, 'rb') as f:
+                        signature = f.read()
+
+                    if self.verify_extension(manifest_path, signature):
+                        if manifest.get('manifest_version') == 2:
+                            self.load_manifest_v2_extension(ext_path, manifest)
+                    else:
+                        print(f"Extension verification failed: {ext_dir}")
+
+    def verify_extension(self, manifest_path, signature):
+        with open(manifest_path, 'rb') as f:
+            manifest_data = f.read()
+
+        try:
+            self.public_key.verify(
+                signature,
+                manifest_data,
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH
+                ),
+                hashes.SHA256()
+            )
+            return True
+        except:
+            return False
+
+    def load_manifest_v2_extension(self, ext_path, manifest):
+        # Load content scripts
+        for cs in manifest.get('content_scripts', []):
+            for js_file in cs.get('js', []):
+                js_path = os.path.join(ext_path, js_file)
+                if os.path.exists(js_path):
+                    with open(js_path, 'r') as f:
+                        js_code = f.read()
+                    
+                    script = QWebEngineScript()
+                    script.setName(f"Extension: {manifest['name']} - {js_file}")
+                    script.setSourceCode(js_code)
+                    script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentReady)
+                    script.setWorldId(QWebEngineScript.ScriptWorldId.ApplicationWorld)
+                    script.setRunsOnSubFrames(True)
+
+                    QWebEngineProfile.defaultProfile().scripts().insert(script)
+
+        # Load background scripts
+        background_scripts = manifest.get('background', {}).get('scripts', [])
+        for bg_script in background_scripts:
+            bg_path = os.path.join(ext_path, bg_script)
+            if os.path.exists(bg_path):
+                with open(bg_path, 'r') as f:
+                    bg_code = f.read()
+                
+                script = QWebEngineScript()
+                script.setName(f"Background: {manifest['name']} - {bg_script}")
+                script.setSourceCode(bg_code)
+                script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentReady)
+                script.setWorldId(QWebEngineScript.ScriptWorldId.ApplicationWorld)
+                script.setRunsOnSubFrames(True)
+
+                QWebEngineProfile.defaultProfile().scripts().insert(script)
+   
+
+    def load_public_key(self):
+        public_key_path = os.path.join(os.path.dirname(__file__), 'extensions', 'public_key.pem')
+        if not os.path.exists(public_key_path):
+            print("Public key not found. Extensions will not be loaded.")
+            return None
+        with open(public_key_path, 'rb') as key_file:
+            return serialization.load_pem_public_key(key_file.read())  
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     browser = AdvancedBrowser()

@@ -1,7 +1,7 @@
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTextEdit
-from PyQt5.QtGui import QFont, QColor, QPainter
-from PyQt5.QtCore import Qt, pyqtSignal, QTextCursor
-from widget_vault import DiffHighlighter
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTextEdit
+from PyQt6.QtGui import QFont, QColor, QPainter, QTextCursor
+from PyQt6.QtCore import Qt, pyqtSignal
+from GUX.widget_vault import DiffHighlighter
 from difflib import unified_diff
 
 class MergeTextEdit(QTextEdit):

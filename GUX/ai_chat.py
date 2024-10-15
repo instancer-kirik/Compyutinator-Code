@@ -313,12 +313,13 @@ class AIChatWidget(QWidget):
         
         # Local model dropdown (now on the right)
         self.local_model_dropdown = QComboBox()
+        self.load_local_button = QPushButton("Load Local Model")
+        
         self.populate_local_model_dropdown()
         model_layout.addWidget(QLabel("Local Model:"))
         model_layout.addWidget(self.local_model_dropdown)
-        
-        self.load_local_button = QPushButton("Load Local Model")
         model_layout.addWidget(self.load_local_button)
+        
         
         main_layout.addLayout(model_layout)
         main_layout.addWidget(self.chat_reference_widget)

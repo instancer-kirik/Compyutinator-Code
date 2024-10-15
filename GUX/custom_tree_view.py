@@ -239,7 +239,7 @@ class CustomTreeView(QTreeView):
 
     def dragMoveEvent(self, event):
         event.acceptProposedAction()
-        self.start_auto_scroll(event.position())
+#        self.start_auto_scroll(event.position())
 
         index = self.indexAt(event.position().toPoint())
         if not index.isValid():
@@ -297,11 +297,11 @@ class CustomTreeView(QTreeView):
     def paste_path_as_text(self, file_path):
         if hasattr(self.file_explorer.parent, 'code_editor_widget'):
             self.file_explorer.parent.code_editor_widget.paste_text(file_path)
-        def start_auto_scroll(self, pos):
-            if pos.y() < 30 or pos.y() > self.viewport().height() - 30:
-                self.auto_scroll_timer.start(50)
-            else:
-                self.auto_scroll_timer.stop()
+    # def start_auto_scroll(self, pos):
+    #         if pos.y() < 30 or pos.y() > self.viewport().height() - 30:
+    #             self.auto_scroll_timer.start(50)
+    #         else:
+    #             self.auto_scroll_timer.stop()
 
     def stop_auto_scroll(self):
         self.auto_scroll_timer.stop()
