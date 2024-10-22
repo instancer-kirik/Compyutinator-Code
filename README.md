@@ -4,6 +4,17 @@
 
 How to run it?
 Good luck, still in active development
+first you're gonna need 
+```
+cd AuraText
+git clone https://github.com/instancer-kirik/Aura-Text.git
+mv Aura-text/* .
+
+cd ..
+poetry install
+
+```
+maybe need postgres installed
 I do command
 C:Users/ME/miniconda3/python.exe x:/_WORK/Python/Qt/BigLinks/main.py
 BUILD WITH POETRY
