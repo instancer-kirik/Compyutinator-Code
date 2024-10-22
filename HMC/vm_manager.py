@@ -1,200 +1,209 @@
-import time
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QLineEdit, QLabel, QComboBox
-from PyQt6.QtCore import pyqtSignal
-import virtualbox
+import subprocess
+import json
 import os
+import websockets
+import asyncio
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QLineEdit, QLabel, QComboBox
+from PyQt6.QtCore import pyqtSignal, QThread
+from PyQt6.QtCore import QObject
 
-class VMManagerWidget(QWidget):
-    vm_status_changed = pyqtSignal(str, str)  # VM name, new status
+class DevPodManager(QObject):
+    workspace_status_changed = pyqtSignal(str, str)  # Workspace name, new status
+    message_received = pyqtSignal(str, str)  # Workspace name, message
 
     def __init__(self, vault_manager):
         super().__init__()
-        self.vm_manager = VMManager(vault_manager)
+        self.vault_manager = vault_manager
+        self.workspace_folder = self.vault_manager.get_workspace_folder()
+        self.websocket_servers = {}
+
+    def run_command(self, command):
+        result = subprocess.run(command, capture_output=True, text=True, shell=True)
+        if result.returncode != 0:
+            print(f"Error running command: {result.stderr}")
+        return result.stdout
+
+    def list_workspaces(self):
+        output = self.run_command("devpod list -o json")
+        return json.loads(output) if output else []
+
+    def create_workspace(self, name, provider="docker"):
+        # Add WebSocket server setup to the DevPod workspace
+        websocket_port = self._get_available_port()
+        self.run_command(f"devpod up {name} --provider {provider} "
+                         f"--env WEBSOCKET_PORT={websocket_port}")
+        self._start_websocket_server(name, websocket_port)
+        self.workspace_status_changed.emit(name, "created")
+
+    def _get_available_port(self):
+        # Implement logic to find an available port
+        pass
+
+    def _start_websocket_server(self, name, port):
+        server = WebSocketServer(self, name, port)
+        self.websocket_servers[name] = server
+        server.start()
+
+    def send_message_to_workspace(self, name, message):
+        if name in self.websocket_servers:
+            self.websocket_servers[name].send_message(message)
+
+    def start_workspace(self, name):
+        self.run_command(f"devpod up {name}")
+
+    def stop_workspace(self, name):
+        self.run_command(f"devpod stop {name}")
+
+    def delete_workspace(self, name):
+        self.run_command(f"devpod delete {name}")
+
+    def get_workspace_state(self, name):
+        workspaces = self.list_workspaces()
+        for workspace in workspaces:
+            if workspace['name'] == name:
+                return workspace['status']
+        return "Not Found"
+
+    def run_command_in_workspace(self, name, command):
+        return self.run_command(f"devpod exec {name} -- {command}")
+
+class WebSocketServer(QThread):
+    def __init__(self, manager, workspace_name, port):
+        super().__init__()
+        self.manager = manager
+        self.workspace_name = workspace_name
+        self.port = port
+        self.websocket = None
+
+    def run(self):
+        asyncio.set_event_loop(asyncio.new_event_loop())
+        start_server = websockets.serve(self.handler, "localhost", self.port)
+        asyncio.get_event_loop().run_until_complete(start_server)
+        asyncio.get_event_loop().run_forever()
+
+    async def handler(self, websocket, path):
+        self.websocket = websocket
+        try:
+            async for message in websocket:
+                self.manager.message_received.emit(self.workspace_name, message)
+        finally:
+            self.websocket = None
+
+    def send_message(self, message):
+        if self.websocket:
+            asyncio.run(self.websocket.send(message))
+
+class VMManagerWidget(QWidget):
+    workspace_status_changed = pyqtSignal(str, str)  # Workspace name, new status
+
+    def __init__(self, vault_manager):
+        super().__init__()
+        self.devpod_manager = DevPodManager(vault_manager)
+        self.devpod_manager.workspace_status_changed.connect(self.on_workspace_status_changed)
+        self.devpod_manager.message_received.connect(self.on_message_received)
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout()
 
-        # VM List
-        self.vm_list = QListWidget()
-        layout.addWidget(QLabel("VMs:"))
-        layout.addWidget(self.vm_list)
+        # Workspace List
+        self.workspace_list = QListWidget()
+        layout.addWidget(QLabel("Workspaces:"))
+        layout.addWidget(self.workspace_list)
 
-        # VM Controls
+        # Workspace Controls
         controls_layout = QHBoxLayout()
-        self.create_btn = QPushButton("Create VM")
-        self.start_btn = QPushButton("Start VM")
-        self.stop_btn = QPushButton("Stop VM")
+        self.create_btn = QPushButton("Create Workspace")
+        self.start_btn = QPushButton("Start Workspace")
+        self.stop_btn = QPushButton("Stop Workspace")
         controls_layout.addWidget(self.create_btn)
         controls_layout.addWidget(self.start_btn)
         controls_layout.addWidget(self.stop_btn)
         layout.addLayout(controls_layout)
 
-        # VM Creation inputs
+        # Workspace Creation inputs
         create_layout = QHBoxLayout()
-        self.vm_name_input = QLineEdit()
-        self.vm_name_input.setPlaceholderText("VM Name")
-        self.os_type_combo = QComboBox()
-        self.os_type_combo.addItems(["Other", "Windows", "Linux"])
-        self.iso_combo = QComboBox()
-        self.iso_combo.addItems(["<No ISO>"] + self.vm_manager.list_available_isos())
-        create_layout.addWidget(self.vm_name_input)
-        create_layout.addWidget(self.os_type_combo)
-        create_layout.addWidget(self.iso_combo)
+        self.workspace_name_input = QLineEdit()
+        self.workspace_name_input.setPlaceholderText("Workspace Name")
+        self.provider_combo = QComboBox()
+        self.provider_combo.addItems(["docker", "virtualbox", "kubernetes"])
+        create_layout.addWidget(self.workspace_name_input)
+        create_layout.addWidget(self.provider_combo)
         layout.addLayout(create_layout)
+
+        # Add message input and send button
+        self.message_input = QLineEdit()
+        self.send_button = QPushButton("Send")
+        self.send_button.clicked.connect(self.send_message)
+
+        message_layout = QHBoxLayout()
+        message_layout.addWidget(self.message_input)
+        message_layout.addWidget(self.send_button)
+        layout.addLayout(message_layout)
 
         self.setLayout(layout)
 
         # Connect signals
-        self.create_btn.clicked.connect(self.create_vm)
-        self.start_btn.clicked.connect(self.start_vm)
-        self.stop_btn.clicked.connect(self.stop_vm)
-        self.vm_list.itemSelectionChanged.connect(self.update_buttons)
+        self.create_btn.clicked.connect(self.create_workspace)
+        self.start_btn.clicked.connect(self.start_workspace)
+        self.stop_btn.clicked.connect(self.stop_workspace)
+        self.workspace_list.itemSelectionChanged.connect(self.update_buttons)
 
-        self.update_vm_list()
+        self.update_workspace_list()
 
-    def create_vm(self):
-        vm_name = self.vm_name_input.text()
-        os_type = self.os_type_combo.currentText()
-        iso_name = self.iso_combo.currentText() if self.iso_combo.currentText() != "<No ISO>" else None
-        self.vm_manager.create_vm(vm_name, os_type, iso_name)
-        self.update_vm_list()
-        self.vm_status_changed.emit(vm_name, "created")
+    def create_workspace(self):
+        workspace_name = self.workspace_name_input.text()
+        provider = self.provider_combo.currentText()
+        self.devpod_manager.create_workspace(workspace_name, provider)
+        self.update_workspace_list()
+        self.workspace_status_changed.emit(workspace_name, "created")
 
-    def start_vm(self):
-        selected_items = self.vm_list.selectedItems()
+    def start_workspace(self):
+        selected_items = self.workspace_list.selectedItems()
         if selected_items:
-            vm_name = selected_items[0].text().split(" ")[0]
-            self.vm_manager.start_vm(vm_name)
-            self.update_vm_list()
-            self.vm_status_changed.emit(vm_name, "running")
+            workspace_name = selected_items[0].text().split(" ")[0]
+            self.devpod_manager.start_workspace(workspace_name)
+            self.update_workspace_list()
+            self.workspace_status_changed.emit(workspace_name, "running")
 
-    def stop_vm(self):
-        selected_items = self.vm_list.selectedItems()
+    def stop_workspace(self):
+        selected_items = self.workspace_list.selectedItems()
         if selected_items:
-            vm_name = selected_items[0].text().split(" ")[0]
-            self.vm_manager.stop_vm(vm_name)
-            self.update_vm_list()
-            self.vm_status_changed.emit(vm_name, "stopped")
+            workspace_name = selected_items[0].text().split(" ")[0]
+            self.devpod_manager.stop_workspace(workspace_name)
+            self.update_workspace_list()
+            self.workspace_status_changed.emit(workspace_name, "stopped")
 
-    def update_vm_list(self):
-        self.vm_list.clear()
-        for vm_name in self.vm_manager.list_vms():
-            state = self.vm_manager.get_vm_state(vm_name)
-            self.vm_list.addItem(f"{vm_name} ({state})")
+    def update_workspace_list(self):
+        self.workspace_list.clear()
+        for workspace in self.devpod_manager.list_workspaces():
+            self.workspace_list.addItem(f"{workspace['name']} ({workspace['status']})")
 
     def update_buttons(self):
-        selected_items = self.vm_list.selectedItems()
+        selected_items = self.workspace_list.selectedItems()
         if selected_items:
-            vm_name = selected_items[0].text().split(" ")[0]
-            state = self.vm_manager.get_vm_state(vm_name)
+            workspace_name = selected_items[0].text().split(" ")[0]
+            state = self.devpod_manager.get_workspace_state(workspace_name)
             self.start_btn.setEnabled(state != "Running")
             self.stop_btn.setEnabled(state == "Running")
         else:
             self.start_btn.setEnabled(False)
             self.stop_btn.setEnabled(False)
 
-class VMManager:
-    def __init__(self, vault_manager):
-        self.vbox = virtualbox.VirtualBox()
-        self.vault_manager = vault_manager
-        self.iso_folder = self.vault_manager.get_iso_folder()
+    def send_message(self):
+        selected_items = self.workspace_list.selectedItems()
+        if selected_items:
+            workspace_name = selected_items[0].text().split(" ")[0]
+            message = self.message_input.text()
+            self.devpod_manager.send_message_to_workspace(workspace_name, message)
+            self.message_input.clear()
 
-    def list_vms(self):
-        return [machine.name for machine in self.vbox.machines]
+    def on_workspace_status_changed(self, workspace_name, status):
+        self.update_workspace_list()
 
-    def start_vm(self, vm_name):
-        try:
-            machine = self.vbox.find_machine(vm_name)
-            session = virtualbox.Session()
-            progress = machine.launch_vm_process(session, "gui", [])
-            progress.wait_for_completion(60000)
-            print(f"Started VM: {vm_name}")
-        except Exception as e:
-            print(f"Error starting VM {vm_name}: {str(e)}")
-
-    def stop_vm(self, vm_name):
-        try:
-            machine = self.vbox.find_machine(vm_name)
-            session = machine.create_session()
-            progress = session.console.power_down()
-            progress.wait_for_completion(60000)
-            print(f"Stopped VM: {vm_name}")
-        except Exception as e:
-            print(f"Error stopping VM {vm_name}: {str(e)}")
-
-    def get_vm_state(self, vm_name):
-        try:
-            machine = self.vbox.find_machine(vm_name)
-            return str(machine.state)
-        except Exception as e:
-            print(f"Error getting state for VM {vm_name}: {str(e)}")
-            return None
-
-    def create_vm(self, vm_name, os_type="Other", iso_name=None):
-        try:
-            machine = self.vbox.create_machine("", vm_name, [], os_type, "")
-            self.vbox.register_machine(machine)
-            
-            session = machine.create_session()
-            
-            # Set memory and CPU
-            session.machine.memory_size = 1024  # 1 GB RAM
-            session.machine.cpu_count = 1
-
-            # Create and attach a virtual hard disk
-            hdd = self.vbox.create_medium("vdi", f"{vm_name}.vdi", virtualbox.AccessMode.read_write, virtualbox.DeviceType.hard_disk)
-            progress = hdd.create_base_storage(10 * 1024 * 1024 * 1024)  # 10 GB
-            progress.wait_for_completion(60000)
-            session.machine.attach_device("SATA Controller", 0, 0, virtualbox.DeviceType.hard_disk, hdd)
-
-            if iso_name:
-                iso_path = os.path.join(self.iso_folder, iso_name)
-                if os.path.exists(iso_path):
-                    self.attach_iso_to_vm(session.machine, iso_path)
-                else:
-                    print(f"Warning: ISO file {iso_name} not found in the ISO folder.")
-            
-            session.machine.save_settings()
-            session.unlock_machine()
-            
-            print(f"Created VM: {vm_name}")
-        except Exception as e:
-            print(f"Error creating VM {vm_name}: {str(e)}")
-
-    def attach_iso_to_vm(self, machine, iso_path):
-        try:
-            session = machine.create_session()
-            session.machine.attach_device("IDE Controller", 1, 0, virtualbox.DeviceType.dvd, None)
-            dvd = session.machine.get_medium("IDE Controller", 1, 0)
-            dvd.host_drive = iso_path
-            session.machine.save_settings()
-            session.unlock_machine()
-        except Exception as e:
-            print(f"Error attaching ISO to VM: {str(e)}")
-
-    def list_available_isos(self):
-        return [f for f in os.listdir(self.iso_folder) if f.endswith('.iso')]
-
-    def delete_vm(self, vm_name):
-        try:
-            machine = self.vbox.find_machine(vm_name)
-            machine.remove(delete=True)
-            print(f"Deleted VM: {vm_name}")
-        except Exception as e:
-            print(f"Error deleting VM {vm_name}: {str(e)}")
-
-    def run_command_in_vm(self, vm_name, command):
-        try:
-            machine = self.vbox.find_machine(vm_name)
-            session = machine.create_session()
-            guest_session = session.console.guest.create_session("user", "password")
-            process, stdout, stderr = guest_session.execute(command)
-            print(f"Command output: {stdout}")
-            guest_session.close()
-            session.unlock_machine()
-        except Exception as e:
-            print(f"Error running command in VM {vm_name}: {str(e)}")
+    def on_message_received(self, workspace_name, message):
+        print(f"Message from {workspace_name}: {message}")
+        # Handle the received message (e.g., update UI, process command, etc.)
 
 # Example usage
 if __name__ == "__main__":
