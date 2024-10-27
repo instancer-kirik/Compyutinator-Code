@@ -1,16 +1,24 @@
 import os
 import shutil
 import logging
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QInputDialog, QProgressBar, QFileDialog, QMessageBox
-from PyQt6.QtCore import pyqtSignal
+import stat
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QInputDialog, QProgressBar, QFileDialog, QMessageBox, QTreeView, QStyle, QStyledItemDelegate
+from PyQt6.QtCore import pyqtSignal, Qt, QDir, QModelIndex
+from PyQt6.QtGui import QFileSystemModel, QIcon, QPainter
 from NITTY_GRITTY.ThreadTrackers import SafeQThread
 
 def is_admin():
     try:
-        return os.getuid() == 0
-    except AttributeError:
-        import ctypes
-        return ctypes.windll.shell32.IsUserAnAdmin() != 0
+        # Linux/Unix check
+        if os.name == 'posix':
+            return os.geteuid() == 0
+        # Windows check
+        else:
+            import ctypes
+            return ctypes.windll.shell32.IsUserAnAdmin() != 0
+    except Exception as e:
+        logging.error(f"Failed to check admin status: {e}")
+        return False
 
 class WorkerThread(SafeQThread):
     update_progress = pyqtSignal(int)
@@ -24,14 +32,21 @@ class WorkerThread(SafeQThread):
 
     def run(self):
         logging.info(f"WorkerThread started with source: {self.source_path} and target: {self.target_path}")
-        if not is_admin():
-            logging.error("Admin privileges required.")
-            self.finalize_operation.emit("Admin privileges required.", False)
+        
+        # Validate paths
+        if not os.path.exists(self.source_path):
+            self.finalize_operation.emit("Source directory does not exist.", False)
+            return
+        if not os.path.exists(self.target_path):
+            self.finalize_operation.emit("Target directory does not exist.", False)
             return
 
-        if os.listdir(self.target_path):
-            logging.info("Target directory is not empty.")
-            self.finalize_operation.emit("Target directory is not empty.", False)
+        # Check write permissions
+        if not os.access(os.path.dirname(self.source_path), os.W_OK):
+            self.finalize_operation.emit("No write permission in source directory parent.", False)
+            return
+        if not os.access(self.target_path, os.W_OK):
+            self.finalize_operation.emit("No write permission in target directory.", False)
             return
 
         try:
@@ -50,19 +65,92 @@ class WorkerThread(SafeQThread):
             try:
                 os.rmdir(self.source_path)
                 logging.info(f"Source directory {self.source_path} removed successfully.")
-                try:
+                
+                # Handle symlink creation based on OS
+                if os.name == 'posix':
+                    # Ensure proper permissions on Linux
                     os.symlink(self.target_path, self.source_path)
-                    logging.info(f"Symlink created from {self.source_path} to {self.target_path}.")
-                    self.finalize_operation.emit("Operation completed successfully.", True)
-                except OSError as e:
-                    logging.error(f"Failed to create symlink: {e}")
-                    self.finalize_operation.emit(f"Failed to create symlink: {e}", False)
+                    # Make symlink readable by all users
+                    os.chmod(self.source_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR |
+                                                    stat.S_IRGRP | stat.S_IXGRP |
+                                                    stat.S_IROTH | stat.S_IXOTH)
+                else:
+                    # Windows might need admin rights
+                    os.symlink(self.target_path, self.source_path, target_is_directory=True)
+                
+                logging.info(f"Symlink created from {self.source_path} to {self.target_path}.")
+                self.finalize_operation.emit("Operation completed successfully.", True)
             except OSError as e:
-                logging.error(f"Failed to remove source directory: {e}")
-                self.finalize_operation.emit(f"Failed to remove source directory: {e}", False)
+                logging.error(f"Failed to create symlink: {e}")
+                self.finalize_operation.emit(f"Failed to create symlink: {e}", False)
+                # Attempt to restore the source directory
+                self.undo_move()
         except Exception as e:
             logging.error(f"Operation failed: {e}")
             self.finalize_operation.emit(f"Operation failed: {e}", False)
+
+class PermissionDelegate(QStyledItemDelegate):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.readable_icon = self.parent().style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton)
+        self.not_readable_icon = self.parent().style().standardIcon(QStyle.StandardPixmap.SP_DialogCancelButton)
+        self.writable_icon = self.parent().style().standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton)
+        self.symlink_icon = self.parent().style().standardIcon(QStyle.StandardPixmap.SP_DirLinkIcon)
+
+    def paint(self, painter: QPainter, option, index: QModelIndex):
+        super().paint(painter, option, index)
+        
+        file_path = self.parent().model().filePath(index)
+        icon_size = 16
+        x = option.rect.right() - icon_size * 3
+        y = option.rect.center().y() - icon_size // 2
+
+        # Draw read permission icon
+        if os.access(file_path, os.R_OK):
+            self.readable_icon.paint(painter, x, y, icon_size, icon_size)
+        else:
+            self.not_readable_icon.paint(painter, x, y, icon_size, icon_size)
+
+        # Draw write permission icon
+        if os.access(file_path, os.W_OK):
+            self.writable_icon.paint(painter, x + icon_size, y, icon_size, icon_size)
+
+        # Draw symlink icon
+        if os.path.islink(file_path):
+            self.symlink_icon.paint(painter, x + icon_size * 2, y, icon_size, icon_size)
+
+class FileExplorerWidget(QTreeView):
+    path_selected = pyqtSignal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setup_ui()
+
+    def setup_ui(self):
+        self.model = QFileSystemModel()
+        self.model.setRootPath(QDir.rootPath())
+        self.setModel(self.model)
+        
+        # Hide unnecessary columns and set proper width
+        self.setColumnWidth(0, 250)
+        for col in range(1, self.model.columnCount()):
+            self.hideColumn(col)
+
+        # Set item delegate for permission icons
+        self.setItemDelegate(PermissionDelegate(self))
+        
+        # Enable selection and drag-drop
+        self.setSelectionMode(QTreeView.SelectionMode.SingleSelection)
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.setDropIndicatorShown(True)
+
+    def mouseDoubleClickEvent(self, event):
+        super().mouseDoubleClickEvent(event)
+        index = self.currentIndex()
+        if index.isValid():
+            path = self.model.filePath(index)
+            self.path_selected.emit(path)
 
 class SymbolicLinkerWidget(QWidget):
     def __init__(self, parent=None, cccore=None):
@@ -76,46 +164,101 @@ class SymbolicLinkerWidget(QWidget):
         logging.info("Initializing SymbolicLinkerWidget UI.")
         main_layout = QVBoxLayout()
 
+        # Add header with instructions
+        header_label = QLabel("Select source and target directories to create a symbolic link")
+        header_label.setStyleSheet("font-weight: bold; padding: 5px;")
+        main_layout.addWidget(header_label)
+
+        # Create horizontal layout for dual file explorers
+        explorer_layout = QHBoxLayout()
+
+        # Source file explorer
+        source_group = QVBoxLayout()
+        source_label = QLabel("Source Directory:")
+        self.source_explorer = FileExplorerWidget()
+        self.source_explorer.path_selected.connect(self.set_source_path)
+        source_group.addWidget(source_label)
+        source_group.addWidget(self.source_explorer)
+        explorer_layout.addLayout(source_group)
+
+        # Target file explorer
+        target_group = QVBoxLayout()
+        target_label = QLabel("Target Directory:")
+        self.target_explorer = FileExplorerWidget()
+        self.target_explorer.path_selected.connect(self.set_target_path)
+        target_group.addWidget(target_label)
+        target_group.addWidget(self.target_explorer)
+        explorer_layout.addLayout(target_group)
+
+        main_layout.addLayout(explorer_layout)
+
+        # Add path display
         self.path_display = QLabel('Source: None\nTarget: None')
+        self.path_display.setStyleSheet("background-color: #f0f0f0; padding: 5px; border-radius: 3px;")
         main_layout.addWidget(self.path_display)
-        self.message_container = QLabel('Hi!! Big links make big chains')
+
+        # Add message container
+        self.message_container = QLabel('Select directories to begin')
+        self.message_container.setStyleSheet("color: #666; padding: 5px;")
         main_layout.addWidget(self.message_container)
-        
-        self.select_source_button = QPushButton('Select Source Directory')
-        self.select_source_button.clicked.connect(self.select_source_directory)
-        main_layout.addWidget(self.select_source_button)
 
-        self.select_target_button = QPushButton('Select Target Directory')
-        self.select_target_button.clicked.connect(self.select_target_directory)
-        main_layout.addWidget(self.select_target_button)
+        # Create button layout
+        button_layout = QHBoxLayout()
 
-        self.start_move_button = QPushButton('Start Move/Symlink Operation')
+        # Add operation buttons
+        self.start_move_button = QPushButton('Create Symlink')
+        self.start_move_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DirLinkIcon))
         self.start_move_button.clicked.connect(self.move_contents_and_create_symlink)
         self.start_move_button.setEnabled(False)
-        main_layout.addWidget(self.start_move_button)
+        button_layout.addWidget(self.start_move_button)
 
         self.remove_symlink_button = QPushButton('Remove Symlink')
+        self.remove_symlink_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogCancelButton))
         self.remove_symlink_button.clicked.connect(self.remove_symlink)
         self.remove_symlink_button.setEnabled(False)
-        main_layout.addWidget(self.remove_symlink_button)
+        button_layout.addWidget(self.remove_symlink_button)
 
-        self.rollback_button = QPushButton('Undo move if failed symlink creation')
+        self.rollback_button = QPushButton('Undo Operation')
+        self.rollback_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogResetButton))
         self.rollback_button.clicked.connect(self.undo_move)
         self.rollback_button.setEnabled(False)
-        main_layout.addWidget(self.rollback_button)
+        button_layout.addWidget(self.rollback_button)
 
+        main_layout.addLayout(button_layout)
+
+        # Add progress bar
         self.progress_bar = QProgressBar()
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid grey;
+                border-radius: 5px;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background-color: #05B8CC;
+                width: 20px;
+            }
+        """)
         main_layout.addWidget(self.progress_bar)
+
+        # Add permission legend
+        legend_layout = QHBoxLayout()
+        legend_layout.addWidget(QLabel("Legend:"))
+        legend_layout.addWidget(QLabel("✓ Readable"))
+        legend_layout.addWidget(QLabel("💾 Writable"))
+        legend_layout.addWidget(QLabel("🔗 Symlink"))
+        legend_layout.addStretch()
+        main_layout.addLayout(legend_layout)
 
         self.setLayout(main_layout)
 
-    def select_source_directory(self):
-        self.source_path = QFileDialog.getExistingDirectory(self, "Select Source Directory")
+    def set_source_path(self, path):
+        self.source_path = path
         self.update_button_states()
         self.update_path_display()
 
-    def select_target_directory(self):
-        self.target_path = QFileDialog.getExistingDirectory(self, "Select Target Directory")
+    def set_target_path(self, path):
+        self.target_path = path
         self.update_button_states()
         self.update_path_display()
 
