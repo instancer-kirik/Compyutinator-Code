@@ -387,6 +387,11 @@ class KeyboardManager(QMainWindow):
         self.autostart_checkbox.stateChanged.connect(self.toggle_autostart)
         controls_row.addWidget(self.autostart_checkbox)
         
+        # Add the new "Terminate All KMonads" button
+        terminate_all_btn = QPushButton("Terminate All KMonads")
+        terminate_all_btn.clicked.connect(self.terminate_all_kmonads)
+        controls_row.addWidget(terminate_all_btn)
+        
         # Add stretch to push controls to the left
         controls_row.addStretch()
         
@@ -395,7 +400,7 @@ class KeyboardManager(QMainWindow):
         clear_btn.clicked.connect(self.output_text.clear)
         controls_row.addWidget(clear_btn)
         
-        # Add layout switcher button to controls_row
+        # Layout switcher button
         layout_btn = QPushButton("Switch to US QWERTY")
         layout_btn.clicked.connect(lambda: self.switch_to_us_qwerty())
         controls_row.addWidget(layout_btn)
@@ -1091,29 +1096,12 @@ class KeyboardManager(QMainWindow):
             return
 
         try:
-            # Create startup script directory if it doesn't exist
-            script_dir = os.path.expanduser("~/.local/share/kmonad")
-            os.makedirs(script_dir, exist_ok=True)
-            script_path = os.path.join(script_dir, "kmonad_starter.sh")
-
-            # Create startup script
-            script_content = f"""#!/bin/bash
-# KMonad startup script
-# Start KMonad with current config
-kmonad "{self.kmonad_config_path}" &
-
-# Store PID for management
-echo $! > "{script_dir}/kmonad.pid"
-"""
-            # Write the script
-            with open(script_path, 'w') as f:
-                f.write(script_content)
-            
-            # Make script executable
-            os.chmod(script_path, 0o755)
-
-            # Start KMonad process
+            # Start KMonad directly using QProcess
             self.kmonad_process = QProcess(self)
+            self.kmonad_process.setProgram("kmonad")
+            self.kmonad_process.setArguments([self.kmonad_config_path])
+
+            # Capture standard output and error
             self.kmonad_process.readyReadStandardOutput.connect(
                 lambda: self.output_text.append(
                     str(self.kmonad_process.readAllStandardOutput(), 'utf-8')
@@ -1124,19 +1112,21 @@ echo $! > "{script_dir}/kmonad.pid"
                     str(self.kmonad_process.readAllStandardError(), 'utf-8')
                 )
             )
-            
-            # Connect finished signal
+
+            # Connect the finished signal to handle process exit
             self.kmonad_process.finished.connect(self.handle_kmonad_exit)
-            
+
             # Start the process
-            self.kmonad_process.start(script_path)
-            
-            if self.kmonad_process.waitForStarted(3000):  # 3 second timeout
+            self.kmonad_process.start()
+
+            if self.kmonad_process.waitForStarted(3000):  # 3-second timeout
                 self.is_kmonad_running = True
                 self.output_text.append("KMonad started successfully")
             else:
                 self.output_text.append("Failed to start KMonad")
-                
+                error = self.kmonad_process.errorString()
+                QMessageBox.critical(self, "Error", f"Failed to start KMonad: {error}")
+
         except Exception as e:
             self.output_text.append(f"Error starting KMonad: {e}")
             QMessageBox.critical(self, "Error", f"Failed to start KMonad: {str(e)}")
@@ -1369,6 +1359,22 @@ X-GNOME-Autostart-enabled=true"""
         except Exception as e:
             self.output_text.append(f"Error toggling autostart: {e}")
             QMessageBox.critical(self, "Error", f"Failed to toggle autostart: {str(e)}")
+
+    def terminate_all_kmonads(self):
+        """Terminate all running KMonad processes"""
+        try:
+            # Use 'pkill' to terminate all KMonad processes
+            # 'pkill' may require sudo privileges; ensure the application has the needed permissions
+            subprocess.run(['pkill', '-f', 'kmonad'], check=True)
+            self.output_text.append("All running KMonad processes have been terminated.")
+            self.is_kmonad_running = False
+            self.update_status()
+        except subprocess.CalledProcessError as e:
+            self.output_text.append(f"Error terminating KMonads: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to terminate KMonads: {e}")
+        except Exception as e:
+            self.output_text.append(f"Unexpected error: {e}")
+            QMessageBox.critical(self, "Error", f"An unexpected error occurred: {e}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -21,8 +21,10 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QFileDialog, QTabWidget, 
 from PyQt6.QtGui import QAction, QDesktopServices
 from PyQt6.QtWidgets import QMenu
 from PyQt6.QtCore import QSettings, QByteArray,QProcess,  QUrl, QTimer, Qt, pyqtSignal
-
+from DEV.websocket_client import WebSocketClient
+from riskkit.client import RiskkitClient
 import subprocess
+
 from HMC.cccore import CCCore
 from HMC.sticky_note_manager import StickyNoteManager
 # Create AuraText directory if it doesn't exist
@@ -133,6 +135,20 @@ class MainApplication(QMainWindow):
     def __init__(self, settings_manager, cccore):
         logging.info("Initializing MainApplication")
         super().__init__()
+        
+        # Initialize managers
+        self.event_manager = EventManager()
+        
+        # Initialize WebSocket clients
+        self.setup_websocket_clients()
+        
+        # Connect signals
+        self.setup_connections()
+        
+        # Start connections
+        self.ws_client.connect_to_server()
+        asyncio.create_task(self.risk_client.connect())
+
         self.setWindowTitle("Computinator Code")
         self.cccore = cccore
         self.cccore.set_main_window(self)
@@ -201,12 +217,98 @@ class MainApplication(QMainWindow):
         self.cccore.set_main_window(self)
         self.setup_many_projects_manager()
 
+        # Initialize WebSocket client if enabled in settings
+        if self.settings_manager.get_setting("websocket_enabled", False):
+            self.setup_websocket()
+
+    def setup_websocket_clients(self):
+        """Initialize both WebSocket clients"""
+        # General application WebSocket
+        if self.settings_manager.get_setting("websocket_enabled", False):
+            self.ws_client = WebSocketClient(
+                base_url=self.settings_manager.get_setting("websocket_url"),
+                token=self.settings_manager.get_setting("websocket_token"),
+                event_manager=self.event_manager
+            )
+            self.ws_client.connect_to_server()
+
+        # Risk management WebSocket
+        if self.settings_manager.get_setting("riskkit_enabled", False):
+            self.risk_client = RiskkitClient(ApiConfig(
+                base_url=self.settings_manager.get_setting("riskkit_url"),
+                api_key=self.settings_manager.get_setting("riskkit_api_key"),
+                org_id=self.settings_manager.get_setting("org_id"),
+                socket_url=self.settings_manager.get_setting("riskkit_socket_url")
+            ))
+            asyncio.create_task(self.risk_client.connect())
+
+    def setup_websocket(self):
+        """Initialize and setup WebSocket client"""
+        self.ws_client = WebSocketClient(
+            base_url=self.settings_manager.get_setting("websocket_url", "ws://localhost:4000"),
+            token=self.settings_manager.get_setting("websocket_token", "")
+        )
+        
+        # Connect all signals
+        self.setup_websocket_connections()
+        
+        # Subscribe to all channels if enabled in settings
+        if self.settings_manager.get_setting("subscribe_to_all_channels", True):
+            self.ws_client.subscribe_to_all_channels()
+        
+        self.ws_client.connect_to_server()
+
+    def setup_websocket_connections(self):
+        """Setup all WebSocket event handlers"""
+        if not hasattr(self, 'ws_client'):
+            return
+
+        # Project-related connections
+        self.ws_client.risk_created.connect(self.on_risk_created)
+        self.ws_client.risk_updated.connect(self.on_risk_updated)
+        self.ws_client.risk_deleted.connect(self.on_risk_deleted)
+
+        # News and events connections
+        self.ws_client.news_received.connect(self.on_news_received)
+        self.ws_client.event_received.connect(self.on_event_received)
+        self.ws_client.notification_received.connect(self.on_notification_received)
+        self.ws_client.system_status_updated.connect(self.on_system_status_updated)
+
+    def on_news_received(self, news_data: dict):
+        """Handle incoming news updates"""
+        if hasattr(self.widget_manager, 'news_widget'):
+            self.widget_manager.news_widget.add_news_item(news_data)
+        # Optionally show notification
+        self.show_notification("News Update", news_data.get("title", ""))
+
+    def on_event_received(self, event_data: dict):
+        """Handle incoming events"""
+        if hasattr(self.widget_manager, 'event_widget'):
+            self.widget_manager.event_widget.add_event(event_data)
+        # Optionally show notification
+        self.show_notification("New Event", event_data.get("title", ""))
+
+    def on_system_status_updated(self, status_data: dict):
+        """Handle system status updates"""
+        if hasattr(self.widget_manager, 'status_widget'):
+            self.widget_manager.status_widget.update_status(status_data)
+        
+        # Update status bar if critical
+        if status_data.get("priority") == "critical":
+            self.statusBar().showMessage(status_data.get("message", ""))
+
+    def show_notification(self, title: str, message: str):
+        """Show system notification"""
+        if self.settings_manager.get_setting("show_notifications", True):
+            # You can implement this using your preferred notification system
+            pass
+
     def init_ui(self):
         # ... (other initializations)
         
 
         # Add this line to create the toolbar
-        self.toolbar = self.addToolBar("Main Toolbar")
+        self.toolbar = self.addToolBar("Main TTTToolbar")
 
     def setup_ui(self):
         # Create a central widget
@@ -279,6 +381,7 @@ class MainApplication(QMainWindow):
         except Exception as e:
             logging.error(f"Error setting up menu: {str(e)}")
             logging.error(traceback.format_exc())
+
     def load_settings(self):
         self.load_layout()
 

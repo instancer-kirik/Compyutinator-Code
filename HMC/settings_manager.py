@@ -12,6 +12,24 @@ class SettingsManager:
         self.ensure_vault_path()
         self.ensure_typing_effect_settings()
 
+        # Add default WebSocket settings
+        self.default_settings.update({
+            "websocket_enabled": False,
+            "websocket_url": "ws://localhost:4000",
+            "websocket_token": "",
+            "websocket_reconnect_attempts": 5,
+            "websocket_reconnect_interval": 5000,
+            "riskkit_enabled": False,
+            "riskkit_url": "http://localhost:4000",
+            "riskkit_api_key": "",
+            "riskkit_socket_url": "ws://localhost:4000/socket",
+            "org_id": "",
+            "offline_mode": False,
+            "show_notifications": True,
+            "max_reconnect_attempts": 5,
+            "reconnect_interval": 5000
+        })
+
     def get_value(self, key, default=None):
         return self.settings.value(key, default)  # Changed from getValue to value
 

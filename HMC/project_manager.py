@@ -9,6 +9,8 @@ from PyQt6.QtWidgets import QListWidget, QListWidgetItem
 import sys
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QDialogButtonBox
+from .project_config import ProjectConfig
+
 class ProjectConfigDialog(QDialog):
     def __init__(self, project_name, project_data, parent=None):
         super().__init__(parent)
@@ -128,13 +130,38 @@ class ProjectManager:
         self.env_manager = EnvironmentManager(self.settings_manager.get_value("environments_path", "./environments"))
         self.vaults = {}  # New attribute to store vaults
         self.project_selector = QComboBox()
+        self.ws_client = None
+        self.project_types = {
+            "local": self.create_local_project,
+            "resolvinator": self.create_resolvinator_project
+        }
        # self.load_projects()
         self.update_project_selector()
         logging.warning(f"Loaded projects: {self.projects}")
         self.project_config_filename = "project_config.json"
         self.load_current_project()  # Add this line to load the current project on initialization
 
-    def create_project(self, project_name, project_path):
+    def create_project(self, vault_name, project_name, project_path, language=None, version=None, project_type="local"):
+        """Existing create_project method with added project_type parameter"""
+        try:
+            # Validate project doesn't already exist
+            if self.project_exists(vault_name, project_name):
+                return False
+
+            # Call appropriate project creation method
+            creator = self.project_types.get(project_type, self.create_local_project)
+            success = creator(vault_name, project_name, project_path, language, version)
+
+            if success:
+                self.update_project_selector()
+                return True
+            return False
+
+        except Exception as e:
+            logging.error(f"Error creating project: {e}")
+            return False
+
+    def create_local_project(self, vault_name, project_name, project_path, language=None, version=None):
         full_path = os.path.join(project_path, project_name)
         os.makedirs(full_path, exist_ok=True)
         config_path = os.path.join(full_path, self.project_config_filename)
@@ -149,6 +176,45 @@ class ProjectManager:
             json.dump(config, f, indent=4)
         
         return full_path
+
+    def create_resolvinator_project(self, vault_name, project_name, project_path, language=None, version=None):
+        """Create a Resolvinator-type project"""
+        try:
+            # Create basic project structure
+            success = self.create_local_project(vault_name, project_name, project_path, language, version)
+            if not success:
+                return False
+
+            # Add Resolvinator-specific configuration
+            project_config = {
+                "type": "resolvinator",
+                "attributes": {
+                    "name": project_name,
+                    "description": "",
+                    "status": "Planning",
+                    "risk_appetite": 0.5,
+                    "start_date": datetime.now().isoformat(),
+                },
+                "relationships": {}
+            }
+
+            # Save Resolvinator config
+            config_path = os.path.join(project_path, 'resolvinator_config.json')
+            with open(config_path, 'w') as f:
+                json.dump(project_config, f, indent=2)
+
+            # Notify WebSocket if connected
+            if self.ws_client:
+                self.ws_client.send_message({
+                    "type": "create_project",
+                    "data": project_config
+                })
+
+            return True
+
+        except Exception as e:
+            logging.error(f"Error creating Resolvinator project: {e}")
+            return False
 
     def load_project(self, project_path):
         config_path = os.path.join(project_path, self.project_config_filename)
@@ -176,6 +242,7 @@ class ProjectManager:
                     files.append(os.path.join(root, filename))
         
         return files
+
     def save_projects(self):
         if isinstance(self.projects, dict):
             self.settings_manager.set_value("projects", self.projects)
@@ -191,7 +258,77 @@ class ProjectManager:
         
         open_files = self.cccore.editor_manager.get_open_files()
         self.cccore.settings_manager.set_value(f"open_files_{current_project}", open_files)
+    def add_project(self):
+        """Enhanced add_project dialog with project type selection"""
+        vault_name = self.cccore.vault_manager.get_current_vault().name
+        if not vault_name:
+            QMessageBox.warning(self, "Error", "Please select a vault first.")
+            return
 
+        # Create dialog
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Add Project")
+        layout = QVBoxLayout(dialog)
+
+        # Project type selection
+        type_layout = QHBoxLayout()
+        type_label = QLabel("Project Type:")
+        type_combo = QComboBox()
+        type_combo.addItems(["Local Project", "Resolvinator Project"])
+        type_layout.addWidget(type_label)
+        type_layout.addWidget(type_combo)
+        layout.addLayout(type_layout)
+
+        # Existing fields
+        name_layout = QHBoxLayout()
+        name_label = QLabel("Project Name:")
+        name_input = QLineEdit()
+        name_layout.addWidget(name_label)
+        name_layout.addWidget(name_input)
+        layout.addLayout(name_layout)
+
+        path_layout = QHBoxLayout()
+        path_label = QLabel("Project Path:")
+        path_input = QLineEdit()
+        browse_button = QPushButton("Browse")
+        path_layout.addWidget(path_label)
+        path_layout.addWidget(path_input)
+        path_layout.addWidget(browse_button)
+        layout.addLayout(path_layout)
+
+        # ... rest of existing fields ...
+
+        def browse_path():
+            path = QFileDialog.getExistingDirectory(dialog, "Select Project Directory")
+            if path:
+                path_input.setText(path)
+
+        browse_button.clicked.connect(browse_path)
+
+        # Dialog buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | 
+            QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            project_type = "resolvinator" if type_combo.currentText() == "Resolvinator Project" else "local"
+            
+            if self.cccore.vault_manager.add_project(
+                vault_name=vault_name,
+                project_name=name_input.text(),
+                project_path=path_input.text(),
+                language=language_combo.currentText(),
+                version=version_input.text(),
+                project_type=project_type
+            ):
+                self.update_project_list()
+                QMessageBox.information(self, "Success", f"Project '{name_input.text()}' added successfully.")
+            else:
+                QMessageBox.warning(self, "Error", f"Failed to add project '{name_input.text()}'.")
     def add_project(self, vault_name, project_name, project_path):
         vault = self.cccore.vault_manager.get_vault(vault_name)
         if vault:
@@ -210,6 +347,33 @@ class ProjectManager:
             many_projects.extend(vault.get_project_names())
         return many_projects
 
+    def get_project_type(self, project_name):
+        """Get the type of a project"""
+        project_path = self.get_project_path(project_name)
+        if not project_path:
+            return None
+
+        config_path = os.path.join(project_path, 'resolvinator_config.json')
+        if os.path.exists(config_path):
+            return "resolvinator"
+        return "local"
+
+    def load_project_data(self, project_name):
+        """Enhanced project data loading to handle both types"""
+        project_type = self.get_project_type(project_name)
+        project_path = self.get_project_path(project_name)
+        
+        if project_type == "resolvinator":
+            config_path = os.path.join(project_path, 'resolvinator_config.json')
+            try:
+                with open(config_path, 'r') as f:
+                    resolvinator_data = json.load(f)
+                return {**self.get_project_data(project_name), **resolvinator_data}
+            except Exception as e:
+                logging.error(f"Error loading Resolvinator project data: {e}")
+                return self.get_project_data(project_name)
+        
+        return self.get_project_data(project_name)
     
     def set_current_project(self, vault_name=None, project_name=None, project_path=None):
         if project_name is None:
@@ -303,28 +467,32 @@ class ProjectManager:
         return False
 
     def switch_project(self, project_name):
-        logging.warning(f"Attempting to switch to project: {project_name}")
-        if not project_name:
-            logging.warning("Attempted to switch to an empty project name")
-            return False, "Empty project name"
-
-        if project_name not in self.projects:
-            logging.error(f"Project '{project_name}' does not exist")
-            return False, "Project does not exist"
-
         project_path = self.get_project_path(project_name)
-        if project_path is None:
-            logging.error(f"Failed to get path for project: {project_name}")
-            return False, "Failed to get project path"
+        if not project_path:
+            return False
 
-        if self.set_current_project(project_name):
-            self.add_recent_project(project_name)
-            self.settings_manager.set_value("last_project", project_name)
-            logging.warning(f"Successfully switched to project: {project_name}")
-            return True, project_path
-        else:
-            logging.error(f"Failed to set current project to: {project_name}")
-            return False, "Failed to set current project"
+        try:
+            # Load project configuration
+            config = ProjectConfig.load(project_path)
+            if not config:
+                logging.error(f"No configuration found for project: {project_name}")
+                return False
+
+            # Handle WebSocket subscription
+            if self.current_project and self.current_project.websocket_enabled:
+                self.ws_client.unsubscribe_from_project(self.current_project.name)
+
+            self.current_project = config
+
+            if config.websocket_enabled and self.ws_client:
+                self.ws_client.subscribe_to_project(config.name)
+
+            self.project_changed.emit(project_name)
+            return True
+
+        except Exception as e:
+            logging.error(f"Error switching project: {e}")
+            return False
 
     def update_project_config(self, project_name, updated_data):
         project_path = self.get_project_path(project_name)

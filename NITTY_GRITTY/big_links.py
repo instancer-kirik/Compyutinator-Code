@@ -2,9 +2,14 @@ import os
 import shutil
 import logging
 import stat
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QInputDialog, QProgressBar, QFileDialog, QMessageBox, QTreeView, QStyle, QStyledItemDelegate
-from PyQt6.QtCore import pyqtSignal, Qt, QDir, QModelIndex
-from PyQt6.QtGui import QFileSystemModel, QIcon, QPainter
+import json
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
+    QInputDialog, QProgressBar, QFileDialog, QMessageBox, 
+    QTreeView, QStyle, QStyledItemDelegate, QTextEdit, QScrollArea
+)
+from PyQt6.QtCore import pyqtSignal, Qt, QDir, QModelIndex, QObject, QThread
+from PyQt6.QtGui import QFileSystemModel, QIcon, QPainter, QColor, QBrush, QFont
 from NITTY_GRITTY.ThreadTrackers import SafeQThread
 
 def is_admin():
@@ -50,17 +55,22 @@ class WorkerThread(SafeQThread):
             return
 
         try:
-            total_files = len(os.listdir(self.source_path))
+            total_files = len([f for f in os.listdir(self.source_path) if os.path.isfile(os.path.join(self.source_path, f))])
+            if total_files == 0:
+                self.finalize_operation.emit("No files to move.", False)
+                return
             moved_files_count = 0
 
             for item in os.listdir(self.source_path):
                 source_item_path = os.path.join(self.source_path, item)
                 target_item_path = os.path.join(self.target_path, item)
-                shutil.move(source_item_path, target_item_path)
-                self.moved_files.append(item)
-                moved_files_count += 1
-                progress = int((moved_files_count / total_files) * 100)
-                self.update_progress.emit(progress)
+                if os.path.isfile(source_item_path):
+                    shutil.move(source_item_path, target_item_path)
+                    self.moved_files.append(item)
+                    moved_files_count += 1
+                    progress = int((moved_files_count / total_files) * 100)
+                    self.update_progress.emit(progress)
+                    logging.debug(f"Moved {item}: {moved_files_count}/{total_files}")
 
             try:
                 os.rmdir(self.source_path)
@@ -72,8 +82,8 @@ class WorkerThread(SafeQThread):
                     os.symlink(self.target_path, self.source_path)
                     # Make symlink readable by all users
                     os.chmod(self.source_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR |
-                                                    stat.S_IRGRP | stat.S_IXGRP |
-                                                    stat.S_IROTH | stat.S_IXOTH)
+                                            stat.S_IRGRP | stat.S_IXGRP |
+                                            stat.S_IROTH | stat.S_IXOTH)
                 else:
                     # Windows might need admin rights
                     os.symlink(self.target_path, self.source_path, target_is_directory=True)
@@ -89,6 +99,118 @@ class WorkerThread(SafeQThread):
             logging.error(f"Operation failed: {e}")
             self.finalize_operation.emit(f"Operation failed: {e}", False)
 
+    def undo_move(self):
+        """Helper method to undo the move operation if symlink creation fails"""
+        try:
+            if not os.path.exists(self.source_path):
+                os.makedirs(self.source_path)
+            for item in self.moved_files:
+                target_item_path = os.path.join(self.target_path, item)
+                source_item_path = os.path.join(self.source_path, item)
+                if os.path.exists(target_item_path):
+                    shutil.move(target_item_path, source_item_path)
+            logging.info("Move operation undone successfully")
+            self.finalize_operation.emit("Move operation undone successfully.", False)
+        except Exception as e:
+            logging.error(f"Failed to undo move operation: {e}")
+            self.finalize_operation.emit(f"Failed to undo move operation: {e}", False)
+
+class SerializeWorker(QObject):
+    serialization_done = pyqtSignal(str)
+    progress = pyqtSignal(int)
+    error = pyqtSignal(str)
+
+    def __init__(self, path):
+        super().__init__()
+        self.path = path
+
+    def serialize(self):
+        try:
+            logging.info(f"Starting serialization for path: {self.path}")
+            context = {}
+            total_dirs = 0
+            total_files = 0
+            for root, dirs, files in os.walk(self.path):
+                total_dirs += len(dirs)
+                total_files += len(files)
+
+            processed_dirs = 0
+            processed_files = 0
+
+            for root, dirs, files in os.walk(self.path):
+                rel_path = os.path.relpath(root, self.path)
+                context[rel_path] = {
+                    'directories': dirs,
+                    'files': {file: os.path.getsize(os.path.join(root, file)) for file in files}
+                }
+                processed_dirs += len(dirs)
+                processed_files += len(files)
+                progress_percent = int(((processed_dirs + processed_files) / (total_dirs + total_files)) * 100) if (total_dirs + total_files) > 0 else 100
+                self.progress.emit(progress_percent)
+                logging.debug(f"Serialized {rel_path}: {progress_percent}% done")
+
+            serialized_context = json.dumps(context, indent=4)
+            logging.info(f"Serialization successful for path: {self.path}")
+            self.serialization_done.emit(serialized_context)
+        except Exception as e:
+            logging.error(f"Failed to serialize directory context: {e}")
+            self.error.emit(str(e))
+
+class SnapshotWorker(QObject):
+    snapshot_done = pyqtSignal(str)
+    progress = pyqtSignal(int)
+    error = pyqtSignal(str)
+
+    def __init__(self, directories):
+        super().__init__()
+        self.directories = directories
+
+    def snapshot(self):
+        try:
+            logging.info("Starting filesystem snapshot.")
+            snapshot = {}
+            total_dirs = len(self.directories)
+            processed_dirs = 0
+
+            for dir_info in self.directories:
+                name = dir_info['name']
+                path = dir_info['path']
+                if os.path.exists(path):
+                    serializer = SerializeWorker(path)
+                    # Run serialization in a separate thread
+                    serialization_thread = QThread()
+                    serializer.moveToThread(serialization_thread)
+                    serialization_thread.started.connect(serializer.serialize)
+                    serializer.serialization_done.connect(lambda data, n=name: self.collect_snapshot(n, data))
+                    serializer.progress.connect(self.update_progress)
+                    serializer.error.connect(self.handle_error)
+                    serializer.serialization_done.connect(serialization_thread.quit)
+                    serializer.serialization_done.connect(serializer.deleteLater)
+                    serialization_thread.finished.connect(serialization_thread.deleteLater)
+                    serialization_thread.start()
+                    serialization_thread.wait()  # Wait for serialization to finish
+                processed_dirs += 1
+                progress_percent = int((processed_dirs / total_dirs) * 100) if total_dirs > 0 else 100
+                self.progress.emit(progress_percent)
+
+            serialized_snapshot = json.dumps(snapshot, indent=4)
+            logging.info("Filesystem snapshot created successfully.")
+            self.snapshot_done.emit(serialized_snapshot)
+        except Exception as e:
+            logging.error(f"Failed to create filesystem snapshot: {e}")
+            self.error.emit(str(e))
+
+    def collect_snapshot(self, name, data):
+        if 'snapshot' not in self.__dict__:
+            self.snapshot = {}
+        self.snapshot[name] = json.loads(data)
+
+    def update_progress(self, progress_percent):
+        self.progress.emit(progress_percent)
+
+    def handle_error(self, error_message):
+        self.error.emit(error_message)
+
 class PermissionDelegate(QStyledItemDelegate):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -102,7 +224,7 @@ class PermissionDelegate(QStyledItemDelegate):
         
         file_path = self.parent().model().filePath(index)
         icon_size = 16
-        x = option.rect.right() - icon_size * 3
+        x = option.rect.right() - icon_size * 4
         y = option.rect.center().y() - icon_size // 2
 
         # Draw read permission icon
@@ -119,6 +241,26 @@ class PermissionDelegate(QStyledItemDelegate):
         if os.path.islink(file_path):
             self.symlink_icon.paint(painter, x + icon_size * 2, y, icon_size, icon_size)
 
+        # Optional: Change text color based on permissions or symlink status
+        if os.path.islink(file_path):
+            color = QColor('blue')  # Symlinks in blue
+        elif not os.access(file_path, os.W_OK):
+            color = QColor('gray')  # Read-only files in gray
+        else:
+            color = QColor('black')  # Regular files in black
+
+        # Set painter font color
+        painter.setPen(QPen(color))
+        # Optionally, you can adjust the font style (e.g., italic for symlinks)
+        font = QFont()
+        if os.path.islink(file_path):
+            font.setItalic(True)
+        painter.setFont(font)
+
+        # Draw the file name with the new color
+        file_name = self.parent().model().fileName(index)
+        painter.drawText(option.rect.left(), option.rect.top(), option.rect.width() - icon_size * 4, option.rect.height(), Qt.AlignmentFlag.AlignVCenter, file_name)
+
 class FileExplorerWidget(QTreeView):
     path_selected = pyqtSignal(str)
 
@@ -130,13 +272,14 @@ class FileExplorerWidget(QTreeView):
         self.model = QFileSystemModel()
         self.model.setRootPath(QDir.rootPath())
         self.setModel(self.model)
+        self.setRootIndex(self.model.index(QDir.rootPath()))
         
         # Hide unnecessary columns and set proper width
         self.setColumnWidth(0, 250)
         for col in range(1, self.model.columnCount()):
             self.hideColumn(col)
 
-        # Set item delegate for permission icons
+        # Set item delegate for permission icons and colored text
         self.setItemDelegate(PermissionDelegate(self))
         
         # Enable selection and drag-drop
@@ -144,6 +287,9 @@ class FileExplorerWidget(QTreeView):
         self.setDragEnabled(True)
         self.setAcceptDrops(True)
         self.setDropIndicatorShown(True)
+
+        # Enable alternating row colors for better readability
+        self.setAlternatingRowColors(True)
 
     def mouseDoubleClickEvent(self, event):
         super().mouseDoubleClickEvent(event)
@@ -224,6 +370,12 @@ class SymbolicLinkerWidget(QWidget):
         self.rollback_button.setEnabled(False)
         button_layout.addWidget(self.rollback_button)
 
+        # Add a new button for snapshotting filesystem
+        self.snapshot_button = QPushButton('Snapshot Filesystem')
+        self.snapshot_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogListView))
+        self.snapshot_button.clicked.connect(self.snapshot_filesystem)
+        button_layout.addWidget(self.snapshot_button)
+
         main_layout.addLayout(button_layout)
 
         # Add progress bar
@@ -249,6 +401,15 @@ class SymbolicLinkerWidget(QWidget):
         legend_layout.addWidget(QLabel("🔗 Symlink"))
         legend_layout.addStretch()
         main_layout.addLayout(legend_layout)
+
+        # Add context display area
+        context_label = QLabel("Filesystem Context:")
+        main_layout.addWidget(context_label)
+
+        self.context_display = QTextEdit()
+        self.context_display.setReadOnly(True)
+        self.context_display.setFixedHeight(200)
+        main_layout.addWidget(self.context_display)
 
         self.setLayout(main_layout)
 
@@ -278,11 +439,15 @@ class SymbolicLinkerWidget(QWidget):
         if not self.source_path or not self.target_path:
             logging.error("Source or target path is not specified.")
             self.show_error_popup("Source or target path is missing.")
+            self.enable_buttons()
             return
 
         if os.listdir(self.target_path):
-            new_folder_name, ok = QInputDialog.getText(self, "Non-Empty Target Directory",
-                                                    "The target directory is not empty. Enter a new folder name to create within the target directory, or cancel to abort the operation:")
+            new_folder_name, ok = QInputDialog.getText(
+                self, 
+                "Non-Empty Target Directory",
+                "The target directory is not empty. Enter a new folder name to create within the target directory, or cancel to abort the operation:"
+            )
             if ok and new_folder_name:
                 new_target_path = os.path.join(self.target_path, new_folder_name)
                 try:
@@ -292,14 +457,18 @@ class SymbolicLinkerWidget(QWidget):
                 except Exception as e:
                     logging.error(f"Failed to create new target directory: {e}")
                     self.show_error_popup(f"Failed to create new target directory: {e}")
+                    self.enable_buttons()
                     return
             else:
                 logging.info("Operation aborted by the user.")
+                self.message_container.setText("Operation aborted by the user.")
+                self.enable_buttons()
                 return
 
         if not is_admin():
             logging.error("Admin privileges required to create symlinks.")
             self.show_error_popup("Admin privileges are required for this operation.")
+            self.enable_buttons()
             return
 
         try:
@@ -311,6 +480,7 @@ class SymbolicLinkerWidget(QWidget):
         except Exception as e:
             logging.error(f"Failed to start the operation: {e}")
             self.show_error_popup(f"Operation failed to start: {e}")
+            self.enable_buttons()
 
     def show_error_popup(self, message):
         QMessageBox.critical(self, "Operation Error", message)
@@ -368,8 +538,110 @@ class SymbolicLinkerWidget(QWidget):
         self.start_move_button.setEnabled(False)
         self.remove_symlink_button.setEnabled(False)
         self.rollback_button.setEnabled(False)
+        self.snapshot_button.setEnabled(False)
 
     def enable_buttons(self):
         self.update_button_states()
         self.remove_symlink_button.setEnabled(True)
         self.rollback_button.setEnabled(True)
+        self.snapshot_button.setEnabled(True)
+
+    # --- New Functions ---
+
+    def serialize_directory_context(self, path):
+        """
+        Serializes the directory context including file names and sizes.
+        Returns a JSON string.
+        """
+        logging.info(f"Serializing context for path: {path}")
+        context = {}
+        try:
+            for root, dirs, files in os.walk(path):
+                rel_path = os.path.relpath(root, path)
+                context[rel_path] = {
+                    'directories': dirs,
+                    'files': {file: os.path.getsize(os.path.join(root, file)) for file in files}
+                }
+            serialized_context = json.dumps(context, indent=4)
+            logging.info(f"Serialization successful for path: {path}")
+            return serialized_context
+        except Exception as e:
+            logging.error(f"Failed to serialize directory context: {e}")
+            return json.dumps({"error": str(e)})
+
+    def list_standard_directories(self):
+        """
+        Returns a list of standard directories based on the operating system.
+        """
+        logging.info("Listing standard directories.")
+        standard_dirs = []
+        try:
+            home = os.path.expanduser("~")
+            if os.name == 'nt':
+                # Windows standard directories
+                dirs = {
+                    "Desktop": os.path.join(home, "Desktop"),
+                    "Documents": os.path.join(home, "Documents"),
+                    "Downloads": os.path.join(home, "Downloads"),
+                    "Music": os.path.join(home, "Music"),
+                    "Pictures": os.path.join(home, "Pictures"),
+                    "Videos": os.path.join(home, "Videos"),
+                }
+            else:
+                # Linux standard directories
+                dirs = {
+                    "Desktop": os.path.join(home, "Desktop"),
+                    "Documents": os.path.join(home, "Documents"),
+                    "Downloads": os.path.join(home, "Downloads"),
+                    "Music": os.path.join(home, "Music"),
+                    "Pictures": os.path.join(home, "Pictures"),
+                    "Videos": os.path.join(home, "Videos"),
+                }
+            for name, path in dirs.items():
+                if os.path.exists(path):
+                    standard_dirs.append({"name": name, "path": path})
+            logging.info("Standard directories listed successfully.")
+            return standard_dirs
+        except Exception as e:
+            logging.error(f"Failed to list standard directories: {e}")
+            return []
+
+    def snapshot_filesystem(self):
+        """
+        Creates a snapshot of the standard directories' filesystem context and displays it.
+        """
+        logging.info("Creating filesystem snapshot.")
+        
+        self.context_display.setPlainText("Creating snapshot, please wait...")
+        self.progress_bar.setValue(0)
+        self.disable_all_buttons()
+
+        standard_dirs = self.list_standard_directories()
+
+        self.thread = QThread()
+        self.snapshot_worker = SnapshotWorker(standard_dirs)
+        self.snapshot_worker.moveToThread(self.thread)
+
+        self.thread.started.connect(self.snapshot_worker.snapshot)
+        self.snapshot_worker.snapshot_done.connect(self.on_snapshot_done)
+        self.snapshot_worker.progress.connect(self.update_progress)
+        self.snapshot_worker.error.connect(self.on_snapshot_error)
+        self.snapshot_worker.snapshot_done.connect(self.thread.quit)
+        self.snapshot_worker.snapshot_done.connect(self.snapshot_worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+
+        self.thread.start()
+
+    def on_snapshot_done(self, snapshot_json):
+        self.context_display.setPlainText(snapshot_json)
+        self.message_container.setText("Filesystem snapshot created successfully.")
+        logging.info("Filesystem snapshot created and displayed.")
+        self.enable_buttons()
+
+    def on_snapshot_error(self, error_message):
+        self.context_display.setPlainText(f"Error: {error_message}")
+        self.message_container.setText("Failed to create filesystem snapshot.")
+        logging.error(f"Filesystem snapshot error: {error_message}")
+        self.enable_buttons()
+
+    # --- End of New Functions ---
