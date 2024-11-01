@@ -10,6 +10,149 @@ import sys
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QDialogButtonBox
 from .project_config import ProjectConfig
+from datetime import datetime
+from enum import Enum
+from dataclasses import dataclass
+from typing import Optional, List, Dict, Any
+
+class ProjectType(Enum):
+    LOCAL = "local"
+    RESOLVINATOR = "resolvinator"
+
+@dataclass
+class BaseProjectAttributes:
+    name: str
+    description: Optional[str] = None
+    status: Optional[str] = None
+    inserted_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+@dataclass
+class LocalProjectAttributes(BaseProjectAttributes):
+    build_command: Optional[str] = None
+    run_command: Optional[str] = None
+    registered_scripts: List[str] = None
+    file_extensions: List[str] = None
+    excluded_dirs: List[str] = None
+    workspace_path: Optional[str] = None
+    
+    def __post_init__(self):
+        self.registered_scripts = self.registered_scripts or []
+        self.file_extensions = self.file_extensions or [".py", ".json", ".yml"]
+        self.excluded_dirs = self.excluded_dirs or ["__pycache__", ".git", "venv"]
+
+@dataclass
+class ResolvinatorProjectAttributes(BaseProjectAttributes):
+    risk_appetite: Optional[float] = None
+    start_date: Optional[datetime] = None
+    target_date: Optional[datetime] = None
+    completion_date: Optional[datetime] = None
+    settings: Dict[str, Any] = None
+    
+    def __post_init__(self):
+        self.settings = self.settings or {
+            "risk_matrix_config": {
+                "probability_weights": {
+                    "rare": 1,
+                    "unlikely": 2,
+                    "possible": 3,
+                    "likely": 4,
+                    "certain": 5
+                },
+                "impact_weights": {
+                    "negligible": 1,
+                    "minor": 2,
+                    "moderate": 3
+                }
+            },
+            "notification_preferences": {
+                "high_risk_threshold": 12,
+                "review_period_days": 30
+            }
+        }
+
+class Project:
+    def __init__(self, project_type: ProjectType, **kwargs):
+        self.project_type = project_type
+        self.id = kwargs.get('id')
+        self.path = kwargs.get('path')
+        
+        # Initialize appropriate attributes based on project type
+        if project_type == ProjectType.LOCAL:
+            self.attributes = LocalProjectAttributes(
+                name=kwargs.get('name', ''),
+                description=kwargs.get('description'),
+                status=kwargs.get('status'),
+                build_command=kwargs.get('build_command'),
+                run_command=kwargs.get('run_command'),
+                registered_scripts=kwargs.get('registered_scripts', []),
+                file_extensions=kwargs.get('file_extensions', [".py", ".json", ".yml"]),
+                excluded_dirs=kwargs.get('excluded_dirs', ["__pycache__", ".git", "venv"]),
+                workspace_path=kwargs.get('workspace_path'),
+                inserted_at=datetime.now(),
+                updated_at=datetime.now()
+            )
+        else:
+            self.attributes = ResolvinatorProjectAttributes(
+                name=kwargs.get('name', ''),
+                description=kwargs.get('description'),
+                status=kwargs.get('status'),
+                risk_appetite=kwargs.get('risk_appetite', 0.5),
+                start_date=kwargs.get('start_date', datetime.now()),
+                target_date=kwargs.get('target_date', datetime.now()),
+                completion_date=kwargs.get('completion_date', datetime.now()),
+                settings=kwargs.get('settings', {
+                    "risk_matrix_config": {
+                        "probability_weights": {
+                            "rare": 1,
+                            "unlikely": 2,
+                            "possible": 3,
+                            "likely": 4,
+                            "certain": 5
+                        },
+                        "impact_weights": {
+                            "negligible": 1,
+                            "minor": 2,
+                            "moderate": 3,
+                            "major": 4,
+                            "severe": 5
+                        }
+                    },
+                    "notification_preferences": {
+                        "high_risk_threshold": 12,
+                        "review_period_days": 30
+                    }
+                }),
+                inserted_at=datetime.now(),
+                updated_at=datetime.now()
+            )
+        self.relationships = kwargs.get('relationships', {})
+        
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert project to dictionary format"""
+        if self.project_type == ProjectType.RESOLVINATOR:
+            return {
+                "id": self.id,
+                "type": "project",
+                "attributes": {
+                    "name": self.attributes.name,
+                    "description": self.attributes.description,
+                    "status": self.attributes.status,
+                    "risk_appetite": self.attributes.risk_appetite,
+                    "start_date": self.attributes.start_date.isoformat() if self.attributes.start_date else None,
+                    "target_date": self.attributes.target_date.isoformat() if self.attributes.target_date else None,
+                    "completion_date": self.attributes.completion_date.isoformat() if self.attributes.completion_date else None,
+                    "inserted_at": self.attributes.inserted_at.isoformat() if self.attributes.inserted_at else None,
+                    "updated_at": self.attributes.updated_at.isoformat() if self.attributes.updated_at else None
+                },
+                "relationships": self.relationships
+            }
+        else:
+            return {
+                "name": self.attributes.name,
+                "path": self.path,
+                "type": "local"
+            }
 
 class ProjectConfigDialog(QDialog):
     def __init__(self, project_name, project_data, parent=None):
@@ -77,45 +220,6 @@ class ProjectConfigDialog(QDialog):
             'registered_scripts': [self.scripts_list.item(i).text() for i in range(self.scripts_list.count())]
         }
 
-class Project:
-    def __init__(self, name, path, language, version):
-        self.name = name
-        self.path = path
-        self.language = language
-        self.version = version
-        self.config_file = os.path.join(path, '.project_config.json')
-        self.build_command = ""
-        self.run_command = ""
-        self.load_config()
-        
-    def load_config(self):
-        if os.path.exists(self.config_file):
-            with open(self.config_file, 'r') as f:
-                config = json.load(f)
-                self.build_command = config.get('build_command', "")
-                self.run_command = config.get('run_command', "")
-        else:
-            self.save_config()
-
-    def save_config(self):
-        config = {
-            'name': self.name,
-            'language': self.language,
-            'version': self.version,
-            'build_command': self.build_command,
-            'run_command': self.run_command
-        }
-        with open(self.config_file, 'w') as f:
-            json.dump(config, f, indent=4)
-
-    def set_build_command(self, command):
-        self.build_command = command
-        self.save_config()
-
-    def set_run_command(self, command):
-        self.run_command = command
-        self.save_config()
-
 class ProjectManager:
     project_changed = pyqtSignal(str)
     def __init__(self, settings_manager, cccore):
@@ -141,62 +245,147 @@ class ProjectManager:
         self.project_config_filename = "project_config.json"
         self.load_current_project()  # Add this line to load the current project on initialization
 
-    def create_project(self, vault_name, project_name, project_path, language=None, version=None, project_type="local"):
-        """Existing create_project method with added project_type parameter"""
+    def create_project(self, vault_name: str, project_name: str, project_path: str, project_type: ProjectType, **kwargs) -> bool:
+        """Create a new project of specified type"""
         try:
-            # Validate project doesn't already exist
-            if self.project_exists(vault_name, project_name):
-                return False
-
-            # Call appropriate project creation method
-            creator = self.project_types.get(project_type, self.create_local_project)
-            success = creator(vault_name, project_name, project_path, language, version)
-
-            if success:
-                self.update_project_selector()
-                return True
-            return False
-
+            if project_type == ProjectType.LOCAL:
+                return self.create_local_project(
+                    Project(
+                        project_type=ProjectType.LOCAL,
+                        name=project_name,
+                        path=project_path,
+                        description=kwargs.get('description', ''),
+                        build_command=kwargs.get('build_command'),
+                        run_command=kwargs.get('run_command'),
+                        registered_scripts=kwargs.get('registered_scripts', []),
+                        file_extensions=kwargs.get('file_extensions'),
+                        excluded_dirs=kwargs.get('excluded_dirs'),
+                        workspace_path=kwargs.get('workspace_path'),
+                        inserted_at=datetime.now(),
+                        updated_at=datetime.now()
+                    )
+                )
+            else:
+                return self.create_resolvinator_project(
+                    Project(
+                        project_type=ProjectType.RESOLVINATOR,
+                        name=project_name,
+                        path=project_path,
+                        description=kwargs.get('description', ''),
+                        status='planning',
+                        risk_appetite=kwargs.get('risk_appetite', 0.5),
+                        start_date=datetime.now(),
+                        settings=kwargs.get('settings'),
+                        inserted_at=datetime.now(),
+                        updated_at=datetime.now()
+                    )
+                )
         except Exception as e:
             logging.error(f"Error creating project: {e}")
             return False
+    
+    def set_current_project(self, project: Project):
+        """Set the current active project"""
+        self.active_project = project
+        
+        # Subscribe to WebSocket updates if it's a Resolvinator project
+        if (project.project_type == ProjectType.RESOLVINATOR and 
+            self.ws_client and project.id):
+            self.ws_client.subscribe_to_project(project.id)
+            
+        self.project_changed.emit(project.attributes.name)
+        
+    def handle_project_update(self, project_data: dict):
+        """Handle project updates from WebSocket"""
+        if not self.active_project:
+            return
+            
+        if project_data.get('id') == self.active_project.id:
+            # Update project attributes
+            for key, value in project_data.get('attributes', {}).items():
+                setattr(self.active_project.attributes, key, value)
+            
+            # Update relationships if included
+            if 'relationships' in project_data:
+                self.active_project.relationships = project_data['relationships']
+                
+            self.project_updated.emit(self.active_project)
+            
+    def get_project_risks(self, project_id: int) -> List[Dict]:
+        """Get risks for a Resolvinator project"""
+        if self.ws_client:
+            return self.ws_client.get_project_risks(project_id)
+        return []
+        
+    def create_local_project(self, project: Project) -> bool:
+        """Create a local project with directory structure"""
+        try:
+            full_path = os.path.join(project.path, project.attributes.name)
+            os.makedirs(full_path, exist_ok=True)
+            
+            # Save basic project config
+            config_path = os.path.join(full_path, self.project_config_filename)
+            config = project.to_dict()
+            
+            with open(config_path, 'w') as f:
+                json.dump(config, f, indent=4)
+            
+            project.path = full_path  # Update project path with full path
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error creating local project structure: {e}")
+            return False
 
-    def create_local_project(self, vault_name, project_name, project_path, language=None, version=None):
-        full_path = os.path.join(project_path, project_name)
-        os.makedirs(full_path, exist_ok=True)
-        config_path = os.path.join(full_path, self.project_config_filename)
-        
-        config = {
-            "name": project_name,
-            "path": full_path,
-            "files": []
-        }
-        
-        with open(config_path, 'w') as f:
-            json.dump(config, f, indent=4)
-        
-        return full_path
-
-    def create_resolvinator_project(self, vault_name, project_name, project_path, language=None, version=None):
+    def create_resolvinator_project(self, vault_name: str, project_name: str, project_path: str, language: Optional[str] = None, version: Optional[str] = None) -> bool:
         """Create a Resolvinator-type project"""
         try:
+            # Create project instance first
+            project = Project(
+                project_type=ProjectType.RESOLVINATOR,
+                name=project_name,
+                path=project_path,
+                description="",
+                status="planning",
+                risk_appetite=0.5,
+                start_date=datetime.now(),
+                inserted_at=datetime.now(),
+                updated_at=datetime.now()
+            )
+
             # Create basic project structure
-            success = self.create_local_project(vault_name, project_name, project_path, language, version)
+            success = self.create_local_project(project)
             if not success:
                 return False
 
             # Add Resolvinator-specific configuration
-            project_config = {
-                "type": "resolvinator",
-                "attributes": {
-                    "name": project_name,
-                    "description": "",
-                    "status": "Planning",
-                    "risk_appetite": 0.5,
-                    "start_date": datetime.now().isoformat(),
+            project_config = project.to_dict()
+            project_config.update({
+                "settings": {
+                    "risk_matrix_config": {
+                        "probability_weights": {
+                            "rare": 1,
+                            "unlikely": 2,
+                            "possible": 3,
+                            "likely": 4,
+                            "certain": 5
+                        },
+                        "impact_weights": {
+                            "negligible": 1,
+                            "minor": 2,
+                            "moderate": 3,
+                            "major": 4,
+                            "severe": 5
+                        }
+                    },
+                    "notification_preferences": {
+                        "high_risk_threshold": 12,
+                        "review_period_days": 30
+                    }
                 },
-                "relationships": {}
-            }
+                "language": language,
+                "version": version
+            })
 
             # Save Resolvinator config
             config_path = os.path.join(project_path, 'resolvinator_config.json')
@@ -204,10 +393,11 @@ class ProjectManager:
                 json.dump(project_config, f, indent=2)
 
             # Notify WebSocket if connected
-            if self.ws_client:
+            if self.ws_client and self.ws_client.auth_state.get("authenticated"):
                 self.ws_client.send_message({
-                    "type": "create_project",
-                    "data": project_config
+                    "topic": "project",
+                    "event": "project:create",
+                    "payload": project_config
                 })
 
             return True
@@ -274,29 +464,37 @@ class ProjectManager:
         type_layout = QHBoxLayout()
         type_label = QLabel("Project Type:")
         type_combo = QComboBox()
-        type_combo.addItems(["Local Project", "Resolvinator Project"])
+        type_combo.addItems([t.value for t in ProjectType])
         type_layout.addWidget(type_label)
         type_layout.addWidget(type_combo)
         layout.addLayout(type_layout)
 
-        # Existing fields
-        name_layout = QHBoxLayout()
-        name_label = QLabel("Project Name:")
+        # Project details
+        form_layout = QFormLayout()
+        
+        # Name input
         name_input = QLineEdit()
-        name_layout.addWidget(name_label)
-        name_layout.addWidget(name_input)
-        layout.addLayout(name_layout)
-
+        form_layout.addRow("Project Name:", name_input)
+        
+        # Path input with browse button
         path_layout = QHBoxLayout()
-        path_label = QLabel("Project Path:")
         path_input = QLineEdit()
         browse_button = QPushButton("Browse")
-        path_layout.addWidget(path_label)
         path_layout.addWidget(path_input)
         path_layout.addWidget(browse_button)
-        layout.addLayout(path_layout)
-
-        # ... rest of existing fields ...
+        form_layout.addRow("Project Path:", path_layout)
+        
+        # Language selection
+        language_combo = QComboBox()
+        language_combo.addItems(["Python", "JavaScript", "Java", "C++", "Other"])
+        form_layout.addRow("Language:", language_combo)
+        
+        # Version input
+        version_input = QLineEdit()
+        version_input.setPlaceholderText("e.g., 1.0.0")
+        form_layout.addRow("Version:", version_input)
+        
+        layout.addLayout(form_layout)
 
         def browse_path():
             path = QFileDialog.getExistingDirectory(dialog, "Select Project Directory")
@@ -315,25 +513,29 @@ class ProjectManager:
         layout.addWidget(buttons)
 
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            project_type = "resolvinator" if type_combo.currentText() == "Resolvinator Project" else "local"
+            project_type = ProjectType(type_combo.currentText())
+            project_data = {
+                "name": name_input.text(),
+                "path": path_input.text(),
+                "type": project_type.value,
+                "language": language_combo.currentText(),
+                "version": version_input.text()
+            }
             
-            if self.cccore.vault_manager.add_project(
+            success = self.create_project(
                 vault_name=vault_name,
-                project_name=name_input.text(),
-                project_path=path_input.text(),
-                language=language_combo.currentText(),
-                version=version_input.text(),
-                project_type=project_type
-            ):
-                self.update_project_list()
-                QMessageBox.information(self, "Success", f"Project '{name_input.text()}' added successfully.")
+                project_name=project_data["name"],
+                project_path=project_data["path"],
+                project_type=project_type,
+                **project_data
+            )
+            
+            if success:
+                QMessageBox.information(self, "Success", f"Project '{project_data['name']}' created successfully.")
+                return True
             else:
-                QMessageBox.warning(self, "Error", f"Failed to add project '{name_input.text()}'.")
-    def add_project(self, vault_name, project_name, project_path):
-        vault = self.cccore.vault_manager.get_vault(vault_name)
-        if vault:
-            return vault.add_project(project_name=project_name, project_path=project_path)
-        return False
+                QMessageBox.warning(self, "Error", f"Failed to create project '{project_data['name']}'.")
+                return False
 
     def get_projects(self, vault_name):
         vault = self.cccore.vault_manager.get_vault(vault_name)

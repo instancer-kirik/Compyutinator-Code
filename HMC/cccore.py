@@ -8,7 +8,7 @@ from .settings_manager import SettingsManager
 from .workspace_manager import WorkspaceManager
 from NITTY_GRITTY.database import DatabaseManager, setup_local_database
 from .editor_manager import EditorManager
-from .cursor_manager import CursorManager
+from .cursor_text_manager import CursorManager
 import logging
 import os
 import tempfile

@@ -24,7 +24,7 @@ from PyQt6.QtCore import QSettings, QByteArray,QProcess,  QUrl, QTimer, Qt, pyqt
 from DEV.websocket_client import WebSocketClient
 from riskkit.client import RiskkitClient
 import subprocess
-
+import asyncio
 from HMC.cccore import CCCore
 from HMC.sticky_note_manager import StickyNoteManager
 # Create AuraText directory if it doesn't exist
@@ -130,6 +130,11 @@ from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel
 from PyQt6.QtWidgets import QTabWidget
 
 import traceback  # Add this import at the top of the file
+from HMC.event_manager import AppEventManager, AppEvent
+from typing import Optional
+from HMC.notification_manager import NotificationManager, NotificationType, NotificationPriority
+from GUX.dialogs.login_dialog import LoginDialog
+from HMC.api_config import ApiConfig
 
 class MainApplication(QMainWindow):
     def __init__(self, settings_manager, cccore):
@@ -137,7 +142,7 @@ class MainApplication(QMainWindow):
         super().__init__()
         
         # Initialize managers
-        self.event_manager = EventManager()
+        self.event_manager = AppEventManager()
         
         # Initialize WebSocket clients
         self.setup_websocket_clients()
@@ -221,26 +226,93 @@ class MainApplication(QMainWindow):
         if self.settings_manager.get_setting("websocket_enabled", False):
             self.setup_websocket()
 
+        # Initialize notification manager
+        self.notification_manager = NotificationManager()
+        self.notification_center = None  # Will be initialized in setup_ui
+        
+        # Connect notification signals
+        self.notification_manager.notification_added.connect(self.on_notification_added)
+        self.notification_manager.notification_removed.connect(self.on_notification_removed)
+
     def setup_websocket_clients(self):
-        """Initialize both WebSocket clients"""
-        # General application WebSocket
+        """Initialize WebSocket clients with auth"""
         if self.settings_manager.get_setting("websocket_enabled", False):
+            token = self.get_auth_token()
+            if not token:
+                logging.error("No authentication token available")
+                return
+
+            # Initialize WebSocket client
             self.ws_client = WebSocketClient(
                 base_url=self.settings_manager.get_setting("websocket_url"),
-                token=self.settings_manager.get_setting("websocket_token"),
+                token=token,
                 event_manager=self.event_manager
             )
+            
+            # Connect signals
+            self.ws_client.risk_created.connect(self.on_risk_created)
+            self.ws_client.risk_updated.connect(self.on_risk_updated)
+            self.ws_client.risk_deleted.connect(self.on_risk_deleted)
+            self.ws_client.system_status_updated.connect(self.on_system_status_updated)
+            
+            # Connect auth signals
+            self.ws_client.auth_failed.connect(self.handle_auth_failure)
+            
+            # Connect to server and join channels
             self.ws_client.connect_to_server()
+            
+            # Subscribe to system channel
+            self.ws_client.join_channel("system")
+            
+            # Subscribe to project channels if needed
+            if project_id := self.settings_manager.get_setting("current_project_id"):
+                self.ws_client.subscribe_to_project(project_id)
 
-        # Risk management WebSocket
-        if self.settings_manager.get_setting("riskkit_enabled", False):
-            self.risk_client = RiskkitClient(ApiConfig(
-                base_url=self.settings_manager.get_setting("riskkit_url"),
-                api_key=self.settings_manager.get_setting("riskkit_api_key"),
-                org_id=self.settings_manager.get_setting("org_id"),
-                socket_url=self.settings_manager.get_setting("riskkit_socket_url")
-            ))
-            asyncio.create_task(self.risk_client.connect())
+            # Setup RiskKit client with same token
+            if self.settings_manager.get_setting("riskkit_enabled", False):
+                self.risk_client = RiskkitClient(ApiConfig(
+                    base_url=self.settings_manager.get_setting("riskkit_url"),
+                    api_key=token,  # Use same token
+                    org_id=self.settings_manager.get_setting("org_id"),
+                    socket_url=self.settings_manager.get_setting("riskkit_socket_url")
+                ))
+                # Start RiskKit client connection in background
+                asyncio.create_task(self.risk_client.connect())
+
+    def get_auth_token(self) -> Optional[str]:
+        """Get authentication token from settings or login"""
+        token = self.settings_manager.get_setting("auth_token")
+        if not token:
+            # Show login dialog
+            success = self.show_login_dialog()
+            if not success:
+                return None
+            token = self.settings_manager.get_setting("auth_token")
+        return token
+
+    def handle_auth_failure(self, error_msg: str):
+        """Handle authentication failures"""
+        self.notification_manager.add_notification(
+            type=NotificationType.SECURITY,
+            priority=NotificationPriority.HIGH,
+            title="Authentication Failed",
+            message=error_msg,
+            action="Login Again"
+        )
+        # Clear stored token
+        self.settings_manager.set_setting("auth_token", "")
+        
+        # Show login dialog
+        self.show_login_dialog()
+
+    def show_login_dialog(self) -> bool:
+        """Show login dialog and handle authentication"""
+        dialog = LoginDialog(self)
+        if dialog.exec():
+            # Store new token
+            self.settings_manager.set_setting("auth_token", dialog.token)
+            return True
+        return False
 
     def setup_websocket(self):
         """Initialize and setup WebSocket client"""

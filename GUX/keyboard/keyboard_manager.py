@@ -1328,15 +1328,20 @@ class KeyboardManager(QMainWindow):
         """Toggle automatic startup of KMonad"""
         try:
             autostart_dir = os.path.expanduser("~/.config/autostart")
-            desktop_file = os.path.join(autostart_dir, "kmonad.desktop")
+            desktop_file = os.path.join(autostart_dir, "compyutinator-keyboard.desktop")
             
             if state:  # Enable autostart
                 os.makedirs(autostart_dir, exist_ok=True)
+                
+                # Get the absolute path to Compyutinator-Code directory
+                compyutinator_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+                
                 desktop_content = f"""[Desktop Entry]
 Type=Application
-Name=KMonad
-Comment=Keyboard remapping utility
-Exec=kmonad {self.kmonad_config_path}
+Name=Compyutinator Keyboard Manager
+Comment=Keyboard configuration and KMonad management
+Exec=bash -c "cd {compyutinator_dir} && poetry run python main.py"
+Path={compyutinator_dir}
 Terminal=false
 Categories=Utility;
 X-GNOME-Autostart-enabled=true"""
@@ -1344,13 +1349,16 @@ X-GNOME-Autostart-enabled=true"""
                 with open(desktop_file, 'w') as f:
                     f.write(desktop_content)
                     
-                self.output_text.append("Enabled KMonad autostart")
+                # Make the desktop file executable
+                os.chmod(desktop_file, 0o755)
+                    
+                self.output_text.append("Enabled Keyboard Manager autostart")
                 self.autostart_enabled = True
                 
             else:  # Disable autostart
                 if os.path.exists(desktop_file):
                     os.remove(desktop_file)
-                self.output_text.append("Disabled KMonad autostart")
+                self.output_text.append("Disabled Keyboard Manager autostart")
                 self.autostart_enabled = False
                 
             # Save setting

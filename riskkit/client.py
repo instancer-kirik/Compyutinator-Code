@@ -1,14 +1,14 @@
 from typing import Dict, List, Optional, Callable, Any
 import httpx
 import asyncio
-from phoenix_channel import PhoenixChannel
-from dataclasses import dataclass
-from datetime import datetime
+import websockets
 import json
 import sqlite3
 import backoff
 import logging
 from pathlib import Path
+from dataclasses import dataclass
+from datetime import datetime
 from .schemas import RiskCreate, RiskUpdate, ResourceBase
 from .conflict import ConflictResolver
 from pydantic import ValidationError
@@ -98,6 +98,55 @@ class OfflineQueue:
         self.queue = []
         self._save_queue()
 
+class WebSocketClient:
+    def __init__(self, url: str):
+        self.url = url
+        self.ws = None
+        self.callbacks = {}
+        self._connected = False
+        
+    async def connect(self):
+        try:
+            self.ws = await websockets.connect(self.url)
+            self._connected = True
+            asyncio.create_task(self._listen())
+        except Exception as e:
+            logger.error(f"WebSocket connection failed: {e}")
+            self._connected = False
+    
+    async def _listen(self):
+        while self._connected and self.ws:
+            try:
+                message = await self.ws.recv()
+                data = json.loads(message)
+                event = data.get('event')
+                if event in self.callbacks:
+                    for callback in self.callbacks[event]:
+                        await callback(data.get('payload', {}))
+            except websockets.ConnectionClosed:
+                self._connected = False
+                break
+            except Exception as e:
+                logger.error(f"WebSocket error: {e}")
+    
+    def on(self, event: str, callback: Callable):
+        if event not in self.callbacks:
+            self.callbacks[event] = []
+        self.callbacks[event].append(callback)
+    
+    async def send(self, event: str, payload: Dict):
+        if self.ws and self._connected:
+            message = json.dumps({
+                'event': event,
+                'payload': payload
+            })
+            await self.ws.send(message)
+    
+    async def disconnect(self):
+        self._connected = False
+        if self.ws:
+            await self.ws.close()
+
 class RiskkitClient:
     def __init__(self, config: ApiConfig):
         self.config = config
@@ -106,7 +155,7 @@ class RiskkitClient:
             "Content-Type": "application/json"
         }
         self.client = httpx.AsyncClient()
-        self.socket = PhoenixChannel(config.socket_url)
+        self.socket = WebSocketClient(config.socket_url)  # Use our new WebSocket client
         self._subscribers: Dict[str, List[Callable]] = {}
         self.cache = Cache(config.cache_dir)
         self.offline_queue = OfflineQueue(config.cache_dir)
@@ -131,14 +180,13 @@ class RiskkitClient:
             raise
 
     async def connect(self):
-        """Connect to Phoenix channels with retry logic"""
+        """Connect to WebSocket with retry logic"""
         if self.config.offline_mode:
             logger.info("Running in offline mode")
             return
 
         try:
             await self.socket.connect()
-            await self._setup_channels()
             self._connected = True
             
             # Process offline queue if any

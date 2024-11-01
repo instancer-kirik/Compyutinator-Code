@@ -6,7 +6,7 @@ from PyQt6.QtCore import Qt, QTimer, QEvent, QPointF
 from PyQt6.QtGui import QPainter, QCursor, QRadialGradient, QBrush, QColor, QGuiApplication, QImage, QColorSpace, QPixmap
 import serial
 import serial.tools.list_ports
-from HMC.cursor_manager import CursorManager
+from HMC.cursor_pointer_manager import CursorPointerManager
 
 class Overlay(QWidget):
     def __init__(self):
@@ -110,7 +110,7 @@ class CustomchorderOverlay(Overlay):
 class CompositeOverlay(Overlay):
     def __init__(self, cccore, flashlight_size=200, flashlight_power=0.5, serial_port=None, baud_rate=115200):
         super().__init__()
-        self.cursor_manager = CursorManager(cccore)
+        self.cursor_manager = CursorPointerManager(cccore)
         
         self.flashlight_overlay = Flashlight(cccore, size=flashlight_size, power=flashlight_power)
         self.flashlight_overlay.setParent(self)

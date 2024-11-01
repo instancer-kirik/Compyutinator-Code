@@ -267,3 +267,4 @@ class EditorCursorManager:
                 new_line = bottom_cursor.line + 1
                 new_index = min(bottom_cursor.index, len(self.editor.text(new_line)))
                 self.add_cursor(new_line, new_index)
+

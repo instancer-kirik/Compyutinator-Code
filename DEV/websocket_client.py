@@ -5,6 +5,9 @@ import json
 import logging
 from typing import Optional, Dict, Any
 from enum import Enum
+from riskkit.client import RiskkitClient
+from riskkit.enums import EventPriority
+from riskkit.events import EventManager, SystemEvent
 
 class WebSocketState(Enum):
     CONNECTING = "connecting"
@@ -18,6 +21,7 @@ class WebSocketClient(QObject):
     disconnected = pyqtSignal()
     error = pyqtSignal(str)
     state_changed = pyqtSignal(WebSocketState)
+    auth_failed = pyqtSignal(str)
 
     # Signals for different resource types
     risk_created = pyqtSignal(dict)
@@ -37,19 +41,30 @@ class WebSocketClient(QObject):
     event_received = pyqtSignal(dict)
     notification_received = pyqtSignal(dict)
     system_status_updated = pyqtSignal(dict)
+    user_presence_changed = pyqtSignal(int, bool)  # user_id, is_online
 
     def __init__(self, base_url: str, token: str, event_manager: EventManager = None):
         super().__init__()
+        # Enforce WSS for non-localhost
+        if not base_url.startswith(('wss://', 'ws://')):
+            base_url = f"wss://{base_url}"
+        elif base_url.startswith('ws://') and not base_url.startswith('ws://localhost'):
+            base_url = f"wss://{base_url[5:]}"
+            
         self.base_url = base_url
         self.token = token
         self.event_manager = event_manager
         
-        # Initialize WebSocket
+        # Initialize WebSocket with security headers
         self.socket = QWebSocket()
-        self.socket.connected.connect(self._on_connected)
-        self.socket.disconnected.connect(self._on_disconnected)
-        self.socket.textMessageReceived.connect(self._on_message)
-        self.socket.error.connect(self._on_error)
+        self.socket.setProperty("Authorization", f"Bearer {self.token}")
+        self.socket.setProperty("X-Client-Version", "1.0.0")
+        
+        # Add message validation tracking
+        self.last_message_time = 0
+        self.message_count = 0
+        self.rate_limit_window = 60  # 60 seconds
+        self.rate_limit_max = 100    # max 100 messages per minute
         
         # Connection state
         self.current_state = WebSocketState.DISCONNECTED
@@ -71,12 +86,29 @@ class WebSocketClient(QObject):
         
         # Operation tracking
         self.operation_counter = 0
+        self.ref_counter = 0
+        self.channels = {}
+
+        # Connect socket signals
+        self.socket.connected.connect(self._on_connected)
+        self.socket.disconnected.connect(self._on_disconnected)
+        self.socket.textMessageReceived.connect(self._on_message)
+        self.socket.error.connect(self._on_error)
 
     def connect_to_server(self):
-        """Initiate connection to WebSocket server"""
+        """Connect to Phoenix WebSocket server with security checks"""
         if self.current_state != WebSocketState.CONNECTED:
             self._set_state(WebSocketState.CONNECTING)
-            url = f"{self.base_url}/socket/websocket?token={self.token}"
+            
+            # Add security parameters
+            params = {
+                "token": self.token,
+                "vsn": "2.0.0",
+                "client_version": "1.0.0"
+            }
+            param_string = "&".join(f"{k}={v}" for k, v in params.items())
+            url = f"{self.base_url}/socket/websocket?{param_string}"
+            
             self.socket.open(url)
 
     def disconnect(self):
@@ -86,23 +118,9 @@ class WebSocketClient(QObject):
             self.socket.close()
 
     def subscribe_to_project(self, project_id: int):
-        """Enhanced project subscription with operation tracking"""
-        if self.current_state == WebSocketState.CONNECTED:
-            op_id = self._get_operation_id()
-            if self.event_manager:
-                self.event_manager.register_operation(op_id)
-            
-            message = {
-                "topic": f"project:{project_id}",
-                "event": "phx_join",
-                "payload": {},
-                "ref": op_id
-            }
-            self.socket.sendTextMessage(json.dumps(message))
-            self.subscribed_channels["projects"].add(str(project_id))
-            
-            # Cleanup operation after timeout
-            QTimer.singleShot(5000, lambda: self._cleanup_operation(op_id))
+        """Subscribe to project-specific channels"""
+        self.join_channel(f"risks:{project_id}")
+        self.join_channel(f"project:{project_id}")
 
     def subscribe_to_channel(self, channel: str, **kwargs):
         """Subscribe to a specific channel type"""
@@ -199,66 +217,98 @@ class WebSocketClient(QObject):
             self.reconnect_timer.stop()
             self.error.emit("Max reconnection attempts reached")
 
+    def _validate_message(self, data: dict) -> bool:
+        """Validate incoming messages for rate limiting and structure"""
+        current_time = time.time()
+        
+        # Rate limiting
+        if current_time - self.last_message_time > self.rate_limit_window:
+            self.message_count = 0
+            self.last_message_time = current_time
+        
+        self.message_count += 1
+        if self.message_count > self.rate_limit_max:
+            logging.warning("Rate limit exceeded")
+            return False
+
+        # Message structure validation
+        required_fields = ["topic", "event", "payload"]
+        if not all(field in data for field in required_fields):
+            logging.warning("Invalid message structure")
+            return False
+
+        # Payload size validation (prevent memory attacks)
+        payload_size = len(json.dumps(data.get("payload", {})))
+        if payload_size > 1024 * 1024:  # 1MB limit
+            logging.warning("Message payload too large")
+            return False
+
+        return True
+
     def _on_message(self, message: str):
-        """Handle incoming WebSocket messages"""
+        """Handle Phoenix channel messages with security validation"""
         try:
             data = json.loads(message)
+            
+            # Validate message before processing
+            if not self._validate_message(data):
+                logging.warning("Message validation failed")
+                return
+                
+            # Handle authentication errors
+            if data.get("event") == "phx_error":
+                if "unauthorized" in str(data.get("payload")):
+                    self.auth_failed.emit("Authentication failed")
+                    return
+
             topic = data.get("topic", "")
             event = data.get("event")
             payload = data.get("payload", {})
 
-            if event == "phx_reply" and payload.get("status") == "ok":
-                # Handle successful channel join
+            # Add security audit logging for sensitive operations
+            if event in ["user:join", "user:leave", "system:update"]:
+                logging.info(f"Security audit: {event} from {topic}")
+
+            # Handle join responses
+            if event == "phx_reply":
+                if payload.get("status") == "ok":
+                    logging.info(f"Successfully joined channel: {topic}")
                 return
 
-            # Handle different channel types
-            if topic.startswith("project:"):
-                self._handle_project_message(event, payload)
-            elif topic == "news":
-                self._handle_news_message(event, payload)
-            elif topic == "events":
-                self._handle_event_message(event, payload)
+            # Handle different types of messages
+            if topic.startswith("risks:"):
+                self._handle_risk_event(event, payload)
+            elif topic.startswith("project:"):
+                self._handle_project_event(event, payload)
+            elif topic.startswith("user:"):
+                self._handle_user_message(event, payload)
             elif topic == "system":
-                self._handle_system_message(event, payload)
+                self._handle_system_event(event, payload)
 
         except json.JSONDecodeError:
-            logging.error(f"Invalid JSON message received: {message}")
+            logging.error(f"Invalid JSON message received")
         except Exception as e:
             logging.error(f"Error processing message: {str(e)}")
 
-    def _handle_project_message(self, event: str, payload: dict):
-        """Handle project-specific messages"""
+    def _handle_risk_event(self, event: str, payload: dict):
+        """Handle risk-related events"""
         if event == "risk:created":
             self.risk_created.emit(payload)
         elif event == "risk:updated":
             self.risk_updated.emit(payload)
         elif event == "risk:deleted":
             self.risk_deleted.emit(payload.get("id"))
-        elif event == "mitigation:created":
+
+    def _handle_project_event(self, event: str, payload: dict):
+        """Handle project-specific events"""
+        if event == "mitigation:created":
             self.mitigation_created.emit(payload)
         elif event == "mitigation:updated":
             self.mitigation_updated.emit(payload)
         elif event == "task:completed":
             self.task_completed.emit(payload)
 
-    def _handle_news_message(self, event: str, payload: dict):
-        """Enhanced news handler with event manager integration"""
-        if event == "news:broadcast" and self.event_manager:
-            priority = EventPriority[payload.get("priority", "NORMAL").upper()]
-            self.event_manager.broadcast_news(
-                payload.get("title", ""),
-                payload.get("message", ""),
-                priority
-            )
-        
-        self.news_received.emit(payload)
-
-    def _handle_event_message(self, event: str, payload: dict):
-        """Handle event channel messages"""
-        if event == "event:new":
-            self.event_received.emit(payload)
-
-    def _handle_system_message(self, event: str, payload: dict):
+    def _handle_system_event(self, event: str, payload: dict):
         """Enhanced system message handler with event manager integration"""
         if not self.event_manager:
             return
@@ -286,6 +336,27 @@ class WebSocketClient(QObject):
         
         self.system_status_updated.emit(payload)
 
+    def _handle_user_message(self, event: str, payload: dict):
+        """Handle user-related messages with security checks"""
+        # Validate user IDs
+        if "from_user_id" in payload and not isinstance(payload["from_user_id"], int):
+            logging.warning("Invalid user ID in message")
+            return
+            
+        if event == "presence_diff":
+            for user_id in payload.get("joins", {}):
+                self.user_presence_changed.emit(int(user_id), True)
+            for user_id in payload.get("leaves", {}):
+                self.user_presence_changed.emit(int(user_id), False)
+
+    @staticmethod
+    def _sanitize_content(content: str) -> str:
+        """Basic content sanitization"""
+        # Add basic sanitization - extend as needed
+        import html
+        content = html.escape(content)
+        return content
+
     def _get_operation_id(self) -> str:
         """Generate unique operation ID"""
         self.operation_counter += 1
@@ -295,3 +366,35 @@ class WebSocketClient(QObject):
         """Cleanup registered operations"""
         if self.event_manager:
             self.event_manager.unregister_operation(op_id)
+
+    def _get_ref(self) -> str:
+        """Get unique Phoenix message reference"""
+        self.ref_counter += 1
+        return str(self.ref_counter)
+
+    def join_channel(self, topic: str, params: dict = None):
+        """Join a Phoenix channel"""
+        if self.current_state == WebSocketState.CONNECTED:
+            ref = self._get_ref()
+            message = {
+                "topic": topic,
+                "event": "phx_join",
+                "payload": params or {},
+                "ref": ref
+            }
+            self.socket.sendTextMessage(json.dumps(message))
+            self.channels[topic] = ref
+            logging.info(f"Joining channel: {topic}")
+
+    def leave_channel(self, topic: str):
+        """Leave a Phoenix channel"""
+        if topic in self.channels:
+            message = {
+                "topic": topic,
+                "event": "phx_leave",
+                "payload": {},
+                "ref": self._get_ref()
+            }
+            self.socket.sendTextMessage(json.dumps(message))
+            del self.channels[topic]
+            logging.info(f"Left channel: {topic}")
