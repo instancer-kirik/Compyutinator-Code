@@ -10,6 +10,12 @@ from typing import Dict, List, Optional
 from riskkit.client import RiskkitClient, ApiConfig
 import asyncio
 import os
+from datetime import timedelta
+from riskkit.config import ConfigManager
+from riskkit.schemas import (
+    RiskBase, RiskCreate, RiskUpdate, RiskStatus, 
+    RiskPriority, ValidationResult
+)
 
 class ConflictResolutionDialog(QDialog):
     def __init__(self, conflicts: Dict, parent=None):
@@ -81,10 +87,10 @@ class RiskManager(QMainWindow):
         {
             "id": 1,
             "description": "Server Infrastructure Upgrade",
-            "probability": "Medium",
-            "impact": "High",
-            "priority": "High",
-            "status": "Open",
+            "probability": RiskPriority.MEDIUM,
+            "impact": RiskPriority.HIGH,
+            "priority": RiskPriority.HIGH,
+            "status": RiskStatus.OPEN,
             "mitigation": "Planned phased rollout with fallback options",
             "reward_type": "Cost Saving",
             "estimated_value": 50000,
@@ -95,10 +101,10 @@ class RiskManager(QMainWindow):
         {
             "id": 2,
             "description": "New Market Entry",
-            "probability": "High",
-            "impact": "Critical",
-            "priority": "Critical",
-            "status": "Open",
+            "probability": RiskPriority.HIGH,
+            "impact": RiskPriority.CRITICAL,
+            "priority": RiskPriority.CRITICAL,
+            "status": RiskStatus.OPEN,
             "mitigation": "Detailed market research and phased entry strategy",
             "reward_type": "Revenue",
             "estimated_value": 200000,
@@ -109,10 +115,10 @@ class RiskManager(QMainWindow):
         {
             "id": 3,
             "description": "Legacy System Migration",
-            "probability": "Medium",
-            "impact": "Medium",
-            "priority": "Medium",
-            "status": "Mitigated",
+            "probability": RiskPriority.MEDIUM,
+            "impact": RiskPriority.MEDIUM,
+            "priority": RiskPriority.MEDIUM,
+            "status": RiskStatus.MITIGATED,
             "mitigation": "Comprehensive testing and backup procedures",
             "reward_type": "Cost Saving",
             "estimated_value": 30000,
@@ -758,64 +764,70 @@ class RiskManager(QMainWindow):
         current_row = self.risk_table.currentRow()
         if current_row >= 0:
             risk = self.risks[current_row]
-            new_status = self.status_combo.currentText()
+            new_status = RiskStatus(self.status_combo.currentText())
             
-            # Prepare context for state transition
-            context = {
-                "owner": risk.get("owner", ""),
-                "mitigation": self.mitigation_text.toPlainText(),
-                "resources": risk.get("resources", []),
-                "approved_by": risk.get("approved_by", ""),
-                "start_date": datetime.now().strftime("%Y-%m-%d"),
-                "completion_date": datetime.now().strftime("%Y-%m-%d"),
-                "acceptance_rationale": risk.get("acceptance_rationale", ""),
-                "closure_notes": risk.get("closure_notes", "")
-            }
+            try:
+                # Create update data with validation
+                update_data = RiskUpdate(
+                    id=risk["id"],
+                    version=risk.get("version", 1),
+                    description=self.risk_description.toPlainText(),
+                    probability=RiskPriority(self.probability_combo.currentText()),
+                    impact=RiskPriority(self.impact_combo.currentText()),
+                    status=new_status,
+                    previous_status=RiskStatus(risk["status"]),
+                    mitigation=self.mitigation_text.toPlainText(),
+                    change_reason="Updated via UI",  # You might want to prompt for this
+                    project_id=self.project_id,
+                    last_updated=datetime.now(),
+                    reward_type=self.reward_type_combo.currentText(),
+                    estimated_value=self.reward_value.value(),
+                    reward_probability=self.reward_probability.currentText()
+                )
 
-            # Check if state transition is valid
-            risk_obj = Risk.from_dict(risk)
-            if new_status != risk["status"]:
-                if not risk_obj.can_transition_to(new_status, context):
-                    QMessageBox.warning(
-                        self, 
-                        "Invalid Transition",
-                        f"Cannot transition from {risk['status']} to {new_status}"
-                    )
-                    self.status_combo.setCurrentText(risk["status"])
-                    return
+                # Update local UI first
+                risk.update(update_data.model_dump())
+                self.update_table()
+                self.update_analysis()
+                self.update_combo_colors()
                 
-                if not risk_obj.transition_to(new_status, context):
-                    QMessageBox.warning(
-                        self, 
-                        "Transition Failed",
-                        "Failed to transition risk status"
-                    )
-                    return
+                # Trigger async update
+                asyncio.run_coroutine_threadsafe(
+                    self._edit_risk_async(update_data.model_dump()), 
+                    self.loop
+                )
+                
+            except ValueError as e:
+                self.show_error("Validation Error", str(e))
+                # Revert UI changes
+                self.load_risk_details(self.risk_table.item(current_row, 0))
 
-            # Update other risk fields
-            risk.update({
-                "description": self.risk_description.toPlainText(),
-                "probability": self.probability_combo.currentText(),
-                "impact": self.impact_combo.currentText(),
-                "priority": self.calculate_priority(
-                    self.probability_combo.currentText(),
-                    self.impact_combo.currentText()
-                ),
-                "status": new_status,
-                "mitigation": self.mitigation_text.toPlainText(),
-                "last_updated": datetime.now().strftime("%Y-%m-%d"),
-                "reward_type": self.reward_type_combo.currentText(),
-                "estimated_value": self.reward_value.value(),
-                "reward_probability": self.reward_probability.currentText(),
-                "risk_reward_ratio": self.calculate_risk_reward_ratio(risk)
-            })
-
-            self.update_table()
-            self.update_analysis()
-            self.save_risks()
-            self.update_combo_colors()
-            self.add_to_history(risk["id"], f"Updated status to {new_status}")
-            QMessageBox.information(self, "Success", "Risk updated successfully!")
+    def validate_status_transition(self, new_status: str):
+        """Validate status transition when combo box changes"""
+        current_row = self.risk_table.currentRow()
+        if current_row >= 0:
+            risk = self.risks[current_row]
+            try:
+                # Use schema validation
+                RiskUpdate(
+                    id=risk["id"],
+                    version=risk.get("version", 1),
+                    status=RiskStatus(new_status),
+                    previous_status=RiskStatus(risk["status"]),
+                    description=risk["description"],
+                    probability=risk["probability"],
+                    impact=risk["impact"],
+                    project_id=self.project_id,
+                    last_updated=datetime.now(),
+                    change_reason="Status change validation"
+                )
+            except ValueError as e:
+                self.status_combo.setCurrentText(risk["status"])
+                QMessageBox.warning(
+                    self,
+                    "Invalid Transition",
+                    str(e)
+                )
 
     def update_combo_colors(self):
         """Update the background colors of combo boxes based on selection"""
@@ -841,8 +853,10 @@ class RiskManager(QMainWindow):
         self.reward_probability.setStyleSheet(f"background-color: {reward_prob_color.name()}")
 
     def delete_risk(self):
+        """Sync UI method that triggers async delete"""
         current_row = self.risk_table.currentRow()
         if current_row >= 0:
+            risk = self.risks[current_row]
             reply = QMessageBox.question(
                 self, "Confirm Deletion",
                 "Are you sure you want to delete this risk?",
@@ -850,9 +864,15 @@ class RiskManager(QMainWindow):
             )
             
             if reply == QMessageBox.StandardButton.Yes:
+                # Update UI first
                 self.risks.pop(current_row)
                 self.update_table()
-                self.save_risks()
+                
+                # Trigger async delete
+                asyncio.run_coroutine_threadsafe(
+                    self._delete_risk_async(risk["id"]), 
+                    self.loop
+                )
 
     def load_risk_details(self, item):
         row = item.row()
@@ -1227,22 +1247,18 @@ class RiskManager(QMainWindow):
             )
 
     def setup_client(self):
-        # Load config from environment or file
-        config = ApiConfig(
-            base_url=os.getenv("RISKKIT_API_URL", "http://localhost:4000"),
-            api_key=os.getenv("RISKKIT_API_KEY"),
-            org_id=os.getenv("RISKKIT_ORG_ID")
-        )
+        """Initialize API client and WebSocket connections"""
+        config_manager = ConfigManager()
+        api_config = config_manager.get_api_config()
+        self.client = RiskkitClient(api_config)
         
-        self.client = RiskkitClient(config)
+        # Subscribe to events
+        self.client.subscribe("risks:created", lambda data: self.risk_created.emit(data))
+        self.client.subscribe("risks:updated", lambda data: self.risk_updated.emit(data))
+        self.client.subscribe("risks:deleted", lambda data: self.risk_deleted.emit(data))
+        self.client.subscribe("news:created", lambda data: self.news_received.emit(data))
         
-        # Setup event subscriptions
-        self.client.subscribe("risks:created", lambda p: self.risk_created.emit(p))
-        self.client.subscribe("risks:updated", lambda p: self.risk_updated.emit(p))
-        self.client.subscribe("resources:updated", lambda p: self.resource_updated.emit(p))
-        self.client.subscribe("news:created", lambda p: self.news_received.emit(p))
-
-        # Connect to API
+        # Connect client
         asyncio.create_task(self.client.connect())
 
     # Signals for async events
@@ -1308,83 +1324,133 @@ class RiskManager(QMainWindow):
 
     
     async def add_risk(self):
-        """Add risk with offline support"""
+        """Create new risk via API"""
         try:
-            risk_data = self.get_risk_form_data()
-            response = await self.client.create_risk(risk_data)
+            risk_data = {
+                "description": self.risk_description.toPlainText(),
+                "probability": self.probability_combo.currentText(),
+                "impact": self.impact_combo.currentText(),
+                "status": self.status_combo.currentText(),
+                "mitigation": self.mitigation_text.toPlainText(),
+                "reward_type": self.reward_type_combo.currentText(),
+                "estimated_value": self.reward_value.value(),
+                "reward_probability": self.reward_probability.currentText(),
+            }
             
+            response = await self.client.create_risk(self.project_id, risk_data)
             if response.get("status") == "queued":
-                self.sync_status_changed.emit("Pending sync")
-                self.statusBar().showMessage("Risk queued for sync")
-            else:
-                self.sync_status_changed.emit("Synced")
-                self.statusBar().showMessage("Risk created successfully")
-                
-            self.update_ui()
+                self.show_notification("Risk queued", "Risk will be created when connection is restored")
+            self.add_to_history(response["data"]["id"], "Risk Added")
+            
         except Exception as e:
-            QMessageBox.warning(self, "Error", f"Failed to create risk: {str(e)}")
+            self.show_error("Failed to create risk", str(e))
 
-    def toggle_offline_mode(self):
-        """Toggle offline mode"""
-        self.client.config.offline_mode = not self.client.config.offline_mode
-        self.connection_status_changed.emit(not self.client.config.offline_mode)
-        self.sync_status_changed.emit(
-            "Offline mode" if self.client.config.offline_mode else "Online"
-        )
+    def edit_risk(self):
+        """Sync UI method that triggers async update"""
+        current_row = self.risk_table.currentRow()
+        if current_row >= 0:
+            risk = self.risks[current_row]
+            new_status = RiskStatus(self.status_combo.currentText())
+            
+            try:
+                # Create update data with validation
+                update_data = RiskUpdate(
+                    id=risk["id"],
+                    version=risk.get("version", 1),
+                    description=self.risk_description.toPlainText(),
+                    probability=RiskPriority(self.probability_combo.currentText()),
+                    impact=RiskPriority(self.impact_combo.currentText()),
+                    status=new_status,
+                    previous_status=RiskStatus(risk["status"]),
+                    mitigation=self.mitigation_text.toPlainText(),
+                    change_reason="Updated via UI",  # You might want to prompt for this
+                    project_id=self.project_id,
+                    last_updated=datetime.now(),
+                    reward_type=self.reward_type_combo.currentText(),
+                    estimated_value=self.reward_value.value(),
+                    reward_probability=self.reward_probability.currentText()
+                )
 
-    async def update_risk(self, risk_id: int, risk_data: Dict):
+                # Update local UI first
+                risk.update(update_data.model_dump())
+                self.update_table()
+                self.update_analysis()
+                self.update_combo_colors()
+                
+                # Trigger async update
+                asyncio.run_coroutine_threadsafe(
+                    self._edit_risk_async(update_data.model_dump()), 
+                    self.loop
+                )
+                
+            except ValueError as e:
+                self.show_error("Validation Error", str(e))
+                # Revert UI changes
+                self.load_risk_details(self.risk_table.item(current_row, 0))
+
+    async def _edit_risk_async(self, risk: Dict):
+        """Async method to update risk via API"""
         try:
-            response = await self.client.update_risk(risk_id, risk_data)
+            response = await self.client.update_risk(
+                self.project_id, 
+                risk["id"], 
+                risk
+            )
             
             if response.get("status") == "conflict":
-                dialog = ConflictResolutionDialog(
-                    response["data"]["_conflicts"],
-                    self
+                self.handle_conflict(response["data"])
+            elif response.get("status") == "queued":
+                self.show_notification(
+                    "Update queued", 
+                    "Changes will be synced when connection is restored"
                 )
-                if dialog.exec() == QDialog.DialogCode.Accepted:
-                    # Get resolved data from dialog
-                    resolved_data = dialog.get_resolved_data()
-                    # Retry update with resolved data
-                    response = await self.client.update_risk(risk_id, resolved_data)
             
-            self.update_ui()
-            self.statusBar().showMessage("Risk updated successfully")
+            self.add_to_history(risk["id"], f"Updated status to {risk['status']}")
             
-        except ValueError as e:
-            QMessageBox.warning(self, "Validation Error", str(e))
         except Exception as e:
-            QMessageBox.warning(self, "Error", f"Failed to update risk: {str(e)}")
+            self.show_error("Failed to update risk", str(e))
+
+    def handle_conflict(self, conflict_data: Dict):
+        """Handle merge conflicts"""
+        dialog = ConflictResolutionDialog(conflict_data, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            resolved_data = dialog.get_resolved_data()
+            asyncio.create_task(self.edit_risk(resolved_data))
+
+    # Event handlers for WebSocket updates
+    def on_risk_created(self, risk_data: Dict):
+        """Handle new risk creation from WebSocket"""
+        self.risks.append(risk_data)
+        self.update_table()
+        self.update_dashboard()
+        self.show_notification("New Risk", f"Risk '{risk_data['description'][:50]}...' created")
+
+    def on_risk_updated(self, risk_data: Dict):
+        """Handle risk updates from WebSocket"""
+        for i, risk in enumerate(self.risks):
+            if risk["id"] == risk_data["id"]:
+                self.risks[i] = risk_data
+                break
+        self.update_table()
+        self.update_dashboard()
+
+    def on_risk_deleted(self, risk_id: int):
+        """Handle risk deletion from WebSocket"""
+        self.risks = [r for r in self.risks if r["id"] != risk_id]
+        self.update_table()
+        self.update_dashboard()
 
     def show_state_machine_editor(self):
         editor = StateMachineEditor(self.risk_state_machine, self)
         editor.exec()
 
 
-    def validate_status_transition(self, new_status: str):
-        """Validate status transition when combo box changes"""
-        current_row = self.risk_table.currentRow()
-        if current_row >= 0:
-            risk = self.risks[current_row]
-            risk_obj = Risk.from_dict(risk)
-            
-            # Basic context for validation
-            context = {
-                "owner": risk.get("owner", ""),
-                "mitigation": self.mitigation_text.toPlainText(),
-                "resources": risk.get("resources", [])
-            }
-            
-            if not risk_obj.can_transition_to(new_status, context):
-                self.status_combo.setCurrentText(risk["status"])
-                QMessageBox.warning(
-                    self,
-                    "Invalid Transition",
-                    f"Cannot transition from {risk['status']} to {new_status}\n"
-                    "Make sure all required fields are filled."
-                )
-
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    
+    # Create and show window
     window = RiskManager()
     window.show()
+    
+    # Run application
     sys.exit(app.exec())

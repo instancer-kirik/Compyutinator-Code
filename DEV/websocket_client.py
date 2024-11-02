@@ -8,6 +8,7 @@ from enum import Enum
 from riskkit.client import RiskkitClient
 from riskkit.enums import EventPriority
 from riskkit.events import EventManager, SystemEvent
+import time
 
 class WebSocketState(Enum):
     CONNECTING = "connecting"

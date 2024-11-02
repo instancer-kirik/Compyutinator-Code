@@ -1,0 +1,67 @@
+{
+    "risks": [
+        {
+            "id": 1,
+            "description": "Server Infrastructure Upgrade",
+            "probability": "Medium",
+            "impact": "High",
+            "priority": "High",
+            "status": "Open",
+            "mitigation": "Planned phased rollout with fallback options",
+            "reward_type": "Cost Saving",
+            "estimated_value": 50000,
+            "reward_probability": "High",
+            "date_created": "2024-10-02",
+            "last_updated": "2024-11-01"
+        },
+        {
+            "id": 2,
+            "description": "New Market Entry",
+            "probability": "High",
+            "impact": "Critical",
+            "priority": "Critical",
+            "status": "Open",
+            "mitigation": "Detailed market research and phased entry strategy",
+            "reward_type": "Revenue",
+            "estimated_value": 200000,
+            "reward_probability": "Medium",
+            "date_created": "2024-10-17",
+            "last_updated": "2024-11-01"
+        },
+        {
+            "id": 3,
+            "description": "Legacy System Migration",
+            "probability": "Medium",
+            "impact": "Medium",
+            "priority": "Medium",
+            "status": "Mitigated",
+            "mitigation": "Comprehensive testing and backup procedures",
+            "reward_type": "Cost Saving",
+            "estimated_value": 30000,
+            "reward_probability": "High",
+            "date_created": "2024-09-02",
+            "last_updated": "2024-11-01"
+        }
+    ],
+    "history": [
+        {
+            "date": "2024-11-01T23:37:31.625922",
+            "risk_id": 1,
+            "action": "Imported from default portfolio",
+            "user": "system"
+        },
+        {
+            "date": "2024-11-01T23:37:31.625934",
+            "risk_id": 2,
+            "action": "Imported from default portfolio",
+            "user": "system"
+        },
+        {
+            "date": "2024-11-01T23:37:31.625937",
+            "risk_id": 3,
+            "action": "Imported from default portfolio",
+            "user": "system"
+        }
+    ],
+    "last_updated": "2024-11-01T23:37:31.625941"
+}

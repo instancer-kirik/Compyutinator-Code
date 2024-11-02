@@ -99,11 +99,12 @@ class OfflineQueue:
         self._save_queue()
 
 class WebSocketClient:
-    def __init__(self, url: str):
+    def __init__(self, url: str, api_key: str):
         self.url = url
         self.ws = None
         self.callbacks = {}
         self._connected = False
+        self.api_key = api_key
         
     async def connect(self):
         try:
@@ -147,6 +148,26 @@ class WebSocketClient:
         if self.ws:
             await self.ws.close()
 
+    def subscribe(self, event: str, callback: Callable):
+        """Subscribe to WebSocket events"""
+        if event not in self.callbacks:
+            self.callbacks[event] = []
+        self.callbacks[event].append(callback)
+        
+        # If it's a WebSocket event, forward to WebSocket client
+        if event.startswith(('risk:', 'mitigation:', 'task:', 'system:')):
+            self.subscribe(event, callback)
+
+    def unsubscribe(self, event: str, callback: Callable):
+        """Unsubscribe from events"""
+        if event in self.callbacks:
+            self.callbacks[event] = [
+                cb for cb in self.callbacks[event] if cb != callback
+            ]
+        # Forward to WebSocket client
+        # if event.startswith(('risk:', 'mitigation:', 'task:', 'system:')):
+        #     self.unsubscribe(event, callback)
+
 class RiskkitClient:
     def __init__(self, config: ApiConfig):
         self.config = config
@@ -155,7 +176,7 @@ class RiskkitClient:
             "Content-Type": "application/json"
         }
         self.client = httpx.AsyncClient()
-        self.socket = WebSocketClient(config.socket_url)  # Use our new WebSocket client
+        self.socket = WebSocketClient(config.socket_url, config.api_key)
         self._subscribers: Dict[str, List[Callable]] = {}
         self.cache = Cache(config.cache_dir)
         self.offline_queue = OfflineQueue(config.cache_dir)
@@ -224,9 +245,11 @@ class RiskkitClient:
                 return
         self.offline_queue.clear()
 
-    async def get_risks(self, filters: Optional[Dict] = None) -> List[Dict]:
-        """Fetch risks with offline support"""
-        cache_key = f"risks:{json.dumps(filters or {})}"
+    async def get_risks(self, project_id: int, filters: Optional[Dict] = None) -> List[Dict]:
+        """Fetch risks for a specific project with offline support"""
+        filters = filters or {}
+        filters['project_id'] = project_id
+        cache_key = f"risks:{project_id}:{json.dumps(filters)}"
         
         # Try to get from cache first
         cached = self.cache.get(cache_key)
@@ -236,7 +259,7 @@ class RiskkitClient:
         try:
             data = await self._make_request(
                 "GET",
-                f"{self.config.base_url}/api/risks",
+                f"{self.config.base_url}/api/projects/{project_id}/risks",
                 params=filters
             )
             self.cache.set(cache_key, data)
@@ -247,16 +270,19 @@ class RiskkitClient:
                 return cached
             raise
 
-    async def create_risk(self, risk_data: Dict) -> Dict:
+    async def create_risk(self, project_id: int, risk_data: Dict) -> Dict:
         """Create risk with validation"""
         try:
+            # Ensure project_id is set
+            risk_data['project_id'] = project_id
+            
             # Validate data against schema
-            validated_data = RiskCreate(**risk_data).dict()
+            validated_data = RiskCreate(**risk_data).model_dump()
             
             if not self._connected or self.config.offline_mode:
                 operation = {
                     "method": "POST",
-                    "url": f"{self.config.base_url}/api/risks",
+                    "url": f"{self.config.base_url}/api/projects/{project_id}/risks",
                     "data": {"risk": validated_data},
                     "timestamp": datetime.now().isoformat()
                 }
@@ -265,26 +291,26 @@ class RiskkitClient:
 
             return await self._make_request(
                 "POST",
-                f"{self.config.base_url}/api/risks",
+                f"{self.config.base_url}/api/projects/{project_id}/risks",
                 json={"risk": validated_data}
             )
         except ValidationError as e:
             raise ValueError(f"Invalid risk data: {e.errors()}")
 
-    async def update_risk(self, risk_id: int, risk_data: Dict) -> Dict:
+    async def update_risk(self, project_id: int, risk_id: int, risk_data: Dict) -> Dict:
         """Update risk with conflict resolution"""
         try:
             # Validate update data
-            validated_data = RiskUpdate(**risk_data).dict()
+            validated_data = RiskUpdate(**risk_data).model_dump()
             
             if not self._connected or self.config.offline_mode:
                 # Store local version
-                cache_key = f"risk:{risk_id}"
+                cache_key = f"risk:{project_id}:{risk_id}"
                 self.cache.set(f"{cache_key}:local", validated_data)
                 
                 operation = {
                     "method": "PUT",
-                    "url": f"{self.config.base_url}/api/risks/{risk_id}",
+                    "url": f"{self.config.base_url}/api/projects/{project_id}/risks/{risk_id}",
                     "data": {"risk": validated_data},
                     "timestamp": datetime.now().isoformat()
                 }
@@ -294,7 +320,7 @@ class RiskkitClient:
             # Get current server version for comparison
             current = await self._make_request(
                 "GET",
-                f"{self.config.base_url}/api/risks/{risk_id}"
+                f"{self.config.base_url}/api/projects/{project_id}/risks/{risk_id}"
             )
 
             # Check for conflicts
@@ -316,7 +342,7 @@ class RiskkitClient:
 
             return await self._make_request(
                 "PUT",
-                f"{self.config.base_url}/api/risks/{risk_id}",
+                f"{self.config.base_url}/api/projects/{project_id}/risks/{risk_id}",
                 json={"risk": validated_data}
             )
             
@@ -331,4 +357,23 @@ class RiskkitClient:
             self._retry_task.cancel()
         await self.socket.disconnect()
         await self.client.aclose()
+        
+    def subscribe(self, event: str, callback: Callable):
+        """Subscribe to events"""
+        if event not in self._subscribers:
+            self._subscribers[event] = []
+        self._subscribers[event].append(callback)
+        
+        # Forward WebSocket events
+        if event.startswith(('risks:', 'mitigation:', 'task:', 'system:')):
+            self.socket.subscribe(event, callback)
+
+    def unsubscribe(self, event: str, callback: Callable):
+        """Unsubscribe from events"""
+        if event in self._subscribers:
+            self._subscribers[event] = [
+                cb for cb in self._subscribers[event] if cb != callback
+            ]
+        if event.startswith(('risks:', 'mitigation:', 'task:', 'system:')):
+            self.socket.unsubscribe(event, callback)
         

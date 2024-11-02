@@ -61,6 +61,7 @@ pyqt6-qscintilla = "^2.14.1"
 websockets = "^13.1"
 cryptography = "^43.0.3"
 anthropic = "^0.38.0"
+backoff = "^2.2.1"
 
 
 [build-system]

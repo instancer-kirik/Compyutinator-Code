@@ -134,7 +134,8 @@ from HMC.event_manager import AppEventManager, AppEvent
 from typing import Optional
 from HMC.notification_manager import NotificationManager, NotificationType, NotificationPriority
 from GUX.dialogs.login_dialog import LoginDialog
-from HMC.api_config import ApiConfig
+
+from riskkit.config import ConfigManager
 
 class MainApplication(QMainWindow):
     def __init__(self, settings_manager, cccore):
@@ -144,26 +145,17 @@ class MainApplication(QMainWindow):
         # Initialize managers
         self.event_manager = AppEventManager()
         
-        # Initialize WebSocket clients
-        self.setup_websocket_clients()
-        
-        # Connect signals
+        # Setup client and connections
+        self.setup_client()
         self.setup_connections()
         
-        # Start connections
-        self.ws_client.connect_to_server()
-        asyncio.create_task(self.risk_client.connect())
-
         self.setWindowTitle("Computinator Code")
         self.cccore = cccore
         self.cccore.set_main_window(self)
        
-        
         # Show the main window
         self.show()
         
-        # Schedule the rest of the initialization for after the event loop starts
-#        QTimer.singleShot(0, self.post_show_init)
         self.vm_manager_widget = VMManagerWidget()
         self.settings_manager = settings_manager
         self.menu_manager = MenuManager(self.cccore.main_window, cccore=self.cccore)
@@ -216,15 +208,10 @@ class MainApplication(QMainWindow):
         saved_theme = self.cccore.theme_manager.get_current_theme()
         self.cccore.theme_manager.apply_theme(saved_theme)
        
-        
         self.create_docks()
         self.auratext_windows = []
         self.cccore.set_main_window(self)
         self.setup_many_projects_manager()
-
-        # Initialize WebSocket client if enabled in settings
-        if self.settings_manager.get_setting("websocket_enabled", False):
-            self.setup_websocket()
 
         # Initialize notification manager
         self.notification_manager = NotificationManager()
@@ -234,50 +221,42 @@ class MainApplication(QMainWindow):
         self.notification_manager.notification_added.connect(self.on_notification_added)
         self.notification_manager.notification_removed.connect(self.on_notification_removed)
 
-    def setup_websocket_clients(self):
-        """Initialize WebSocket clients with auth"""
-        if self.settings_manager.get_setting("websocket_enabled", False):
-            token = self.get_auth_token()
-            if not token:
-                logging.error("No authentication token available")
-                return
+        self.config_manager = ConfigManager()
 
-            # Initialize WebSocket client
-            self.ws_client = WebSocketClient(
-                base_url=self.settings_manager.get_setting("websocket_url"),
-                token=token,
-                event_manager=self.event_manager
-            )
-            
-            # Connect signals
-            self.ws_client.risk_created.connect(self.on_risk_created)
-            self.ws_client.risk_updated.connect(self.on_risk_updated)
-            self.ws_client.risk_deleted.connect(self.on_risk_deleted)
-            self.ws_client.system_status_updated.connect(self.on_system_status_updated)
-            
-            # Connect auth signals
-            self.ws_client.auth_failed.connect(self.handle_auth_failure)
-            
-            # Connect to server and join channels
-            self.ws_client.connect_to_server()
-            
-            # Subscribe to system channel
-            self.ws_client.join_channel("system")
-            
-            # Subscribe to project channels if needed
-            if project_id := self.settings_manager.get_setting("current_project_id"):
-                self.ws_client.subscribe_to_project(project_id)
+        # Get config values
+        splash_enabled = self.config_manager.get("splash")
+        theme_color = self.config_manager.get_theme("theme_color")
 
-            # Setup RiskKit client with same token
-            if self.settings_manager.get_setting("riskkit_enabled", False):
-                self.risk_client = RiskkitClient(ApiConfig(
-                    base_url=self.settings_manager.get_setting("riskkit_url"),
-                    api_key=token,  # Use same token
-                    org_id=self.settings_manager.get_setting("org_id"),
-                    socket_url=self.settings_manager.get_setting("riskkit_socket_url")
-                ))
-                # Start RiskKit client connection in background
-                asyncio.create_task(self.risk_client.connect())
+        # Save config values
+        self.config_manager.set("open_last_file", True)
+        self.config_manager.set_theme("accent_color", "#FF0000")
+
+        # Save workspace state
+        self.config_manager.save_workspace_state("workspace1", {
+            "open_files": ["file1.txt", "file2.py"],
+            "active_file": "file1.txt"
+        })
+
+        # Initialize client before UI
+        self.setup_client()
+
+    def setup_client(self):
+        """Setup API client and WebSocket connections"""
+        config_manager = ConfigManager()
+        api_config = config_manager.get_api_config()
+        self.client = RiskkitClient(api_config)
+        
+        # Subscribe to events
+        self.client.subscribe("risks:created", self.on_risk_created)
+        self.client.subscribe("risks:updated", self.on_risk_updated)
+        self.client.subscribe("risks:deleted", self.on_risk_deleted)
+        self.client.subscribe("news:received", self.on_news_received)
+        self.client.subscribe("event:received", self.on_event_received)
+        self.client.subscribe("notification:received", self.on_notification_received)
+        self.client.subscribe("system:status_updated", self.on_system_status_updated)
+        
+        # Connect client
+        asyncio.create_task(self.client.connect())
 
     def get_auth_token(self) -> Optional[str]:
         """Get authentication token from settings or login"""
@@ -795,6 +774,10 @@ class MainApplication(QMainWindow):
             ps.print_stats()
             print(s.getvalue())
         logging.info("Starting application cleanup")
+        
+        # Clean up client if it exists
+        if hasattr(self, 'client'):
+            asyncio.create_task(self.client.close())
         
         # Set a timeout for cleanup operations
         cleanup_timeout = 5  # seconds
