@@ -1,34 +1,64 @@
 # settings_manager.py
 from PyQt6.QtCore import QSettings
 import os
-
+from riskkit.config import ApiConfig
 from PyQt6.QtCore import QSettings
 import os
 
 class SettingsManager:
     def __init__(self):
-        self.settings =  QSettings("instance.select", "Computinator Code")
-        self.ensure_app_data_dir()
-        self.ensure_vault_path()
-        self.ensure_typing_effect_settings()
-
-        # Add default WebSocket settings
-        self.default_settings.update({
+        self.settings = QSettings("instance.select", "Computinator Code")
+        
+        # Initialize default settings
+        self.default_settings = {
+            # Basic app settings
+            "app_data_dir": os.path.join(os.path.expanduser("~"), ".computinator_code"),
+            "vault_path": os.path.join(os.path.expanduser("~"), "ComputinatorVault"),
+            
+            # Typing effect settings
+            "typing_effect_enabled": True,
+            "typing_effect_speed": 100,
+            "typing_effect_particle_count": 10,
+            
+            # WebSocket settings
             "websocket_enabled": False,
             "websocket_url": "ws://localhost:4000",
             "websocket_token": "",
             "websocket_reconnect_attempts": 5,
             "websocket_reconnect_interval": 5000,
+            
+            # Riskkit settings
             "riskkit_enabled": False,
             "riskkit_url": "http://localhost:4000",
             "riskkit_api_key": "",
             "riskkit_socket_url": "ws://localhost:4000/socket",
             "org_id": "",
+            
+            # General settings
             "offline_mode": False,
             "show_notifications": True,
             "max_reconnect_attempts": 5,
-            "reconnect_interval": 5000
-        })
+            "reconnect_interval": 5000,
+            
+            # Window management settings
+            "enable_window_snap": True,
+            "snap_threshold": 20,
+            "enable_window_fade": True,
+            "window_fade_opacity": 0.85,
+            "save_window_state": True,
+            "animation_duration": 200,
+            "default_opacity": 1.0
+        }
+
+        # Ensure all default settings are set
+        for key, value in self.default_settings.items():
+            if self.get_value(key) is None:
+                self.set_value(key, value)
+
+        # Initialize directories
+        self.ensure_app_data_dir()
+        self.ensure_vault_path()
+        self.ensure_typing_effect_settings()
 
     def get_value(self, key, default=None):
         return self.settings.value(key, default)  # Changed from getValue to value
@@ -101,3 +131,27 @@ class SettingsManager:
             self.set_value("app_data_dir", default_app_data_dir)
         if not os.path.exists(self.get_value("app_data_dir")):
             os.makedirs(self.get_value("app_data_dir"))
+
+    def get_riskkit_config(self) -> ApiConfig:
+        """Get riskkit API configuration from settings"""
+        from riskkit.config import ApiConfig
+        
+        return ApiConfig(
+            base_url=self.get_value("riskkit_url", "http://localhost:4000"),
+            api_key=self.get_value("riskkit_api_key"),
+            org_id=self.get_value("org_id"),
+            socket_url=self.get_value("riskkit_socket_url"),
+            offline_mode=self.get_value("offline_mode", False),
+            max_retries=self.get_value("max_reconnect_attempts", 3)
+        )
+
+    def get_default_window_settings(self):
+        return {
+            "enable_window_snap": True,
+            "snap_threshold": 20,
+            "enable_window_fade": True,
+            "window_fade_opacity": 0.85,
+            "save_window_state": True,
+            "animation_duration": 200,
+            "default_opacity": 1.0
+        }

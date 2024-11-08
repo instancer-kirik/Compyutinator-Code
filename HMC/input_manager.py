@@ -13,7 +13,7 @@ class InputManager(QObject):
     audio_level_update = pyqtSignal(int)
     typing_speed_update = pyqtSignal(float)
     ##
-    def __init__(self, model_path=None, device_index=None, parent=None):
+    def __init__(self, parent=None, model_path=None, device_index=None):
         
         super(InputManager, self).__init__(parent)
         self.model_path = model_path if model_path else 'X:/_Work/Python/Qt/BigLinks/NITTY_GRITTY/vosk-model-small-en-us-0.15'

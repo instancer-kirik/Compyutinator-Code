@@ -38,6 +38,10 @@ class LSPManager(QObject):
         self.process_id = None
         self.import_index = {}
         self.initialized = False
+        self.server_configurations = {}
+        # Add to your LSP manager's supported languages
+        self.server_configurations['kotlin'] = KOTLIN_LSP_CONFIG
+
 
     def initialize(self):
         logging.warning("Starting LSPManager initialization")
@@ -213,3 +217,14 @@ class LSPManager(QObject):
                     }
                 }
             })
+
+# In your LSP configuration
+KOTLIN_LSP_CONFIG = {
+    'command': ['kotlin-language-server'],  # Make sure kotlin-language-server is installed
+    'filetypes': ['kt', 'kts'],
+    'root_markers': ['build.gradle', 'build.gradle.kts', 'settings.gradle', 'settings.gradle.kts'],
+    'initialization_options': {
+        'storagePath': '/tmp/kotlin-language-server'
+    }
+}
+

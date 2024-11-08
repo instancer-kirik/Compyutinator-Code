@@ -1,4 +1,3 @@
-
 from PyQt6.QtCore import QObject, pyqtSignal, QPoint, QTimer, Qt
 from PyQt6.QtGui import QCursor, QPixmap
 from PyQt6.QtWidgets import QApplication
@@ -134,3 +133,11 @@ class CursorPointerManager(QObject):
     def get_current_type(self) -> str:
         """Get current cursor type."""
         return self.current_cursor
+    
+    def get_current_cursor_pos(self) -> QPoint:
+        """Alias for get_position() for backward compatibility."""
+        return self.get_position()
+    
+    def get_current_pos(self) -> QPoint:
+        """Another alias for get_position() for backward compatibility."""
+        return self.get_position()

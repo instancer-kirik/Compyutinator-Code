@@ -5,7 +5,8 @@ from PyQt6.QtWidgets import QDialog
 from GUX.settings_dialog import SettingsDialog
 from GUX.vault_graph_view import VaultGraphView
 class ActionHandlers:
-    def __init__(self, cccore = None):
+    def __init__(self, window, cccore):
+        self.window = window
         self.cccore = cccore
         self.settings_manager = cccore.settings_manager
         self.macro_recording = False

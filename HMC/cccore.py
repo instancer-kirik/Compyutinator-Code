@@ -20,6 +20,7 @@ from GUX.fileset_manager_widget import FilesetManagerWidget
 from .project_manager import ProjectManager
 from .build_manager import BuildManager
 from GUX.radial_menu import RadialMenu
+from riskkit.config import ConfigManager
 from .context_manager import ContextManager
 from .environment_manager import EnvironmentManager
 from .secrets_manager import SecretsManager
@@ -38,6 +39,8 @@ import time
 import logging
 from PyQt6.QtCore import QTimer, pyqtSignal, QObject
 from .macro_manager import MacroManager
+from .menu_manager import MenuManager
+from .notification_manager import NotificationManager
 
 class CCCore(QObject):  # referred to as mm in other files (auratext)
     lsp_manager_initialized = pyqtSignal()
@@ -47,9 +50,8 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         logging.info("Initializing CCCore")
         self.settings_manager = settings_manager
         self.main_window = main_window
-        self.action_handlers = ActionHandlers(self)
+        self.action_handlers = ActionHandlers(window=main_window, cccore=self)
         self.main_window_set = False
-        self.menu_setup_done = False
         self.menu_manager = None
         self.widget_manager = None
         self.auratext_windows = []
@@ -79,13 +81,14 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         self.build_manager = None
         self.file_manager = None
         self.font_manager = None
-        self.input_manager = InputManager(model_path=None)  # Defaults to small en-us 0.15 model
+        self.input_manager = InputManager(self, model_path=None)  # Defaults to small en-us 0.15 model
         self.radial_menu = RadialMenu()
         self.radial_menu.optionSelected.connect(self.handle_radial_menu_selection)
         self.late_init_done = False
         self.vault_windows = {}  # Dictionary to store vault paths and their corresponding windows
         self.main_vault = None
-       
+        self.config_manager = None
+        self.notification_manager = NotificationManager()
         self.init_managers()
         logging.info("CCCore initialization complete")
         
@@ -106,8 +109,11 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         self.download_manager = DownloadManager(self)
         self.theme_manager = ThemeManager(self)
         self.lexer_manager = LexerManager(self)
-        
         self.cursor_manager = CursorManager(self)
+        # Initialize notification manager if not already done
+        if not hasattr(self, 'notification_manager'):
+            from .notification_manager import NotificationManager
+            self.notification_manager = NotificationManager()
         
         logging.info(f"Current vault: {self.vault_manager.current_vault.name if self.vault_manager.current_vault else 'None'}")
        
@@ -120,7 +126,7 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         self.workspace_manager = WorkspaceManager(self)
         # Initialize FontManagerWidget
         self.font_manager = FontManager()
-      
+        self.config_manager = ConfigManager()
     def late_init(self):
         if not self.late_init_done:
             self.file_manager = FileManager(self)
@@ -259,6 +265,7 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         main_window.setWindowOpacity(0)
         self.main_window = main_window
         self.theme_manager.main_window = main_window
+        # Don't create menu manager here anymore - let MainApplication handle it
         self.widget_manager.set_main_window_and_create_docks(main_window)
         self.main_window_set = True
 
@@ -333,3 +340,24 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
 
     def delete_macro(self, name):
         self.macro_manager.delete_macro(name)
+
+    def get_workspaces(self):
+        """Get list of workspaces for current vault"""
+        current_vault = self.vault_manager.get_current_vault()
+        if current_vault and self.workspace_manager:
+            return self.workspace_manager.get_workspace_names(current_vault.path)
+        return []
+
+    def get_current_workspace(self):
+        """Get current workspace name"""
+        current_vault = self.vault_manager.get_current_vault()
+        if current_vault and self.workspace_manager:
+            return self.workspace_manager.active_workspaces.get(current_vault.path)
+        return None
+
+    def set_current_workspace(self, workspace_name):
+        """Set current workspace"""
+        current_vault = self.vault_manager.get_current_vault()
+        if current_vault and self.workspace_manager:
+            return self.workspace_manager.set_active_workspace(current_vault.path, workspace_name)
+        return False

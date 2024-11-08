@@ -3,12 +3,20 @@ from PyQt6.QtWebSockets import QWebSocket
 from PyQt6.QtNetwork import QAbstractSocket
 import json
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Callable
 from enum import Enum
-from riskkit.client import RiskkitClient
+from riskkit.config import ApiConfig
+from riskkit.cache import Cache
+from riskkit.offline import OfflineQueue
+from riskkit.conflict import ConflictResolver
 from riskkit.enums import EventPriority
-from riskkit.events import EventManager, SystemEvent
+from riskkit.event_manager import EventManager, SystemEvent
 import time
+import httpx
+import asyncio
+from asyncio import Future
+
+logger = logging.getLogger(__name__)
 
 class WebSocketState(Enum):
     CONNECTING = "connecting"
@@ -96,8 +104,33 @@ class WebSocketClient(QObject):
         self.socket.textMessageReceived.connect(self._on_message)
         self.socket.error.connect(self._on_error)
 
+        self._disconnect_future = None
+
+        # Add service check
+        self._service_available = False
+        self._check_service_timer = QTimer()
+        self._check_service_timer.timeout.connect(self._check_service_available)
+        self._check_service_timer.start(5000)  # Check every 5 seconds
+
+    async def _check_service_available(self):
+        """Check if the WebSocket service is available"""
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{self.base_url}/health")
+                self._service_available = response.status_code == 200
+                if not self._service_available:
+                    logger.warning("WebSocket service is not available")
+        except Exception as e:
+            logger.error(f"Error checking service availability: {e}")
+            self._service_available = False
+
     def connect_to_server(self):
-        """Connect to Phoenix WebSocket server with security checks"""
+        """Connect to Phoenix WebSocket server with availability check"""
+        if not self._service_available:
+            logger.warning("Cannot connect: WebSocket service is not available")
+            self._set_state(WebSocketState.ERROR)
+            return
+
         if self.current_state != WebSocketState.CONNECTED:
             self._set_state(WebSocketState.CONNECTING)
             
@@ -113,10 +146,25 @@ class WebSocketClient(QObject):
             self.socket.open(url)
 
     def disconnect(self):
-        """Cleanly disconnect from server"""
-        self.reconnect_timer.stop()
-        if self.socket.state() == QAbstractSocket.SocketState.ConnectedState:
-            self.socket.close()
+        """Synchronous disconnect"""
+        try:
+            if hasattr(self, 'socket') and self.socket:
+                self.socket.close()
+            for topic in list(self.channels.keys()):
+                self.leave_channel(topic)
+            self.channels.clear()
+            logging.info("WebSocket disconnected")
+        except Exception as e:
+            logging.error(f"Error disconnecting WebSocket: {e}")
+
+    async def wait_for_disconnected(self):
+        """Wait for WebSocket to disconnect"""
+        try:
+            if hasattr(self, 'socket') and self.socket:
+                while self.socket.state() != QAbstractSocket.SocketState.UnconnectedState:
+                    await asyncio.sleep(0.1)
+        except Exception as e:
+            logging.error(f"Error waiting for disconnect: {e}")
 
     def subscribe_to_project(self, project_id: int):
         """Subscribe to project-specific channels"""
@@ -187,9 +235,16 @@ class WebSocketClient(QObject):
             self.subscribe_to_channel("system")
 
     def _on_disconnected(self):
-        """Handle disconnection"""
+        """Handle socket disconnection"""
         self._set_state(WebSocketState.DISCONNECTED)
         self.disconnected.emit()
+        
+        # Resolve disconnect future if it exists
+        if self._disconnect_future and not self._disconnect_future.done():
+            self._disconnect_future.set_result(True)
+            self._disconnect_future = None
+        
+        # Only attempt reconnect if not explicitly disconnected
         if self.reconnect_attempts < self.max_reconnect_attempts:
             self.reconnect_timer.start()
 

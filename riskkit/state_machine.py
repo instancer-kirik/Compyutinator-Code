@@ -2,6 +2,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Set, Callable
 from dataclasses import dataclass
 from datetime import datetime
+from .enums import RiskStatus
 
 @dataclass
 class Transition:

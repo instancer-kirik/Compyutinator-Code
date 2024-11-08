@@ -6,7 +6,8 @@ import json
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QInputDialog, QProgressBar, QFileDialog, QMessageBox, 
-    QTreeView, QStyle, QStyledItemDelegate, QTextEdit, QScrollArea
+    QTreeView, QStyle, QStyledItemDelegate, QTextEdit, QScrollArea, 
+    QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox, QSlider, QMenu, QDialog
 )
 from PyQt6.QtCore import pyqtSignal, Qt, QDir, QModelIndex, QObject, QThread
 from PyQt6.QtGui import QFileSystemModel, QIcon, QPainter, QColor, QBrush, QFont
@@ -212,84 +213,111 @@ class SnapshotWorker(QObject):
         self.error.emit(error_message)
 
 class PermissionDelegate(QStyledItemDelegate):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.readable_icon = self.parent().style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton)
-        self.not_readable_icon = self.parent().style().standardIcon(QStyle.StandardPixmap.SP_DialogCancelButton)
-        self.writable_icon = self.parent().style().standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton)
-        self.symlink_icon = self.parent().style().standardIcon(QStyle.StandardPixmap.SP_DirLinkIcon)
-
-    def paint(self, painter: QPainter, option, index: QModelIndex):
-        super().paint(painter, option, index)
-        
-        file_path = self.parent().model().filePath(index)
-        icon_size = 16
-        x = option.rect.right() - icon_size * 4
-        y = option.rect.center().y() - icon_size // 2
-
-        # Draw read permission icon
-        if os.access(file_path, os.R_OK):
-            self.readable_icon.paint(painter, x, y, icon_size, icon_size)
-        else:
-            self.not_readable_icon.paint(painter, x, y, icon_size, icon_size)
-
-        # Draw write permission icon
-        if os.access(file_path, os.W_OK):
-            self.writable_icon.paint(painter, x + icon_size, y, icon_size, icon_size)
-
-        # Draw symlink icon
-        if os.path.islink(file_path):
-            self.symlink_icon.paint(painter, x + icon_size * 2, y, icon_size, icon_size)
-
-        # Optional: Change text color based on permissions or symlink status
-        if os.path.islink(file_path):
-            color = QColor('blue')  # Symlinks in blue
-        elif not os.access(file_path, os.W_OK):
-            color = QColor('gray')  # Read-only files in gray
-        else:
-            color = QColor('black')  # Regular files in black
-
-        # Set painter font color
-        painter.setPen(QPen(color))
-        # Optionally, you can adjust the font style (e.g., italic for symlinks)
-        font = QFont()
-        if os.path.islink(file_path):
-            font.setItalic(True)
-        painter.setFont(font)
-
-        # Draw the file name with the new color
-        file_name = self.parent().model().fileName(index)
-        painter.drawText(option.rect.left(), option.rect.top(), option.rect.width() - icon_size * 4, option.rect.height(), Qt.AlignmentFlag.AlignVCenter, file_name)
+    def paint(self, painter, option, index):
+        try:
+            model = index.model()
+            if not model or not isinstance(model, QFileSystemModel):
+                return super().paint(painter, option, index)
+                
+            # Get file path using proper method
+            file_path = model.filePath(index) if hasattr(model, 'filePath') else str(index.data())
+            
+            if not file_path:
+                return super().paint(painter, option, index)
+                
+            # Draw background
+            painter.save()
+            if option.state & QStyle.StateFlag.State_Selected:
+                painter.fillRect(option.rect, option.palette.highlight())
+            
+            # Get file permissions and type
+            is_readable = os.access(file_path, os.R_OK)
+            is_writable = os.access(file_path, os.W_OK)
+            is_symlink = os.path.islink(file_path)
+            
+            # Calculate text color and icons
+            text_color = QColor("#000000")
+            if is_symlink:
+                text_color = QColor("#0066CC")  # Blue for symlinks
+            
+            # Draw text with proper color
+            painter.setPen(text_color)
+            text_rect = option.rect.adjusted(24, 0, -4, 0)  # Leave space for icons
+            painter.drawText(text_rect, Qt.AlignmentFlag.AlignVCenter, index.data())
+            
+            # Draw permission icons
+            icon_rect = option.rect.adjusted(4, 4, -4, -4)
+            if is_readable:
+                painter.drawText(icon_rect, Qt.AlignmentFlag.AlignLeft, "✓")
+            if is_writable:
+                painter.drawText(icon_rect.adjusted(12, 0, 0, 0), Qt.AlignmentFlag.AlignLeft, "💾")
+            if is_symlink:
+                painter.drawText(icon_rect.adjusted(24, 0, 0, 0), Qt.AlignmentFlag.AlignLeft, "🔗")
+                
+            painter.restore()
+            
+        except Exception as e:
+            logging.error(f"Error in PermissionDelegate paint: {e}")
+            super().paint(painter, option, index)
 
 class FileExplorerWidget(QTreeView):
     path_selected = pyqtSignal(str)
-
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setup_ui()
-
+        
     def setup_ui(self):
-        self.model = QFileSystemModel()
-        self.model.setRootPath(QDir.rootPath())
-        self.setModel(self.model)
-        self.setRootIndex(self.model.index(QDir.rootPath()))
-        
-        # Hide unnecessary columns and set proper width
-        self.setColumnWidth(0, 250)
-        for col in range(1, self.model.columnCount()):
-            self.hideColumn(col)
-
-        # Set item delegate for permission icons and colored text
-        self.setItemDelegate(PermissionDelegate(self))
-        
-        # Enable selection and drag-drop
-        self.setSelectionMode(QTreeView.SelectionMode.SingleSelection)
-        self.setDragEnabled(True)
-        self.setAcceptDrops(True)
-        self.setDropIndicatorShown(True)
-
-        # Enable alternating row colors for better readability
-        self.setAlternatingRowColors(True)
+        try:
+            self.model = QFileSystemModel()
+            self.model.setRootPath(QDir.rootPath())
+            self.setModel(self.model)
+            self.setRootIndex(self.model.index(QDir.rootPath()))
+            
+            # Configure view
+            self.setColumnWidth(0, 250)
+            for col in range(1, self.model.columnCount()):
+                self.hideColumn(col)
+                
+            self.setItemDelegate(PermissionDelegate(self))
+            self.setSelectionMode(QTreeView.SelectionMode.SingleSelection)
+            self.setDragEnabled(True)
+            self.setAcceptDrops(True)
+            self.setDropIndicatorShown(True)
+            self.setAlternatingRowColors(True)
+            
+            # Set file filters
+            self.model.setFilter(QDir.Filter.AllDirs | QDir.Filter.NoDotAndDotDot)
+            
+            # Add dark theme styling
+            self.setStyleSheet("""
+                QTreeView {
+                    background-color: #2E3440;
+                    color: #D8DEE9;
+                    border: 1px solid #4C566A;
+                }
+                QTreeView::item {
+                    padding: 4px;
+                }
+                QTreeView::item:selected {
+                    background-color: #5E81AC;
+                }
+                QTreeView::item:hover {
+                    background-color: #434C5E;
+                }
+                QTreeView::branch {
+                    background-color: #2E3440;
+                }
+                QTreeView::branch:has-siblings:!adjoins-item {
+                    border-image: url(vline.png) 0;
+                }
+                QTreeView::branch:selected {
+                    background-color: #5E81AC;
+                }
+            """)
+            
+        except Exception as e:
+            logging.error(f"Error setting up FileExplorerWidget: {e}")
 
     def mouseDoubleClickEvent(self, event):
         super().mouseDoubleClickEvent(event)
@@ -301,19 +329,23 @@ class FileExplorerWidget(QTreeView):
 class SymbolicLinkerWidget(QWidget):
     def __init__(self, parent=None, cccore=None):
         super().__init__(parent)
-        self.source_path = None
-        self.target_path = None
-        self.moved_files = []
+        self.cccore = cccore
+        self.bookmarks = []
         self.initUI()
 
     def initUI(self):
-        logging.info("Initializing SymbolicLinkerWidget UI.")
-        main_layout = QVBoxLayout()
-
+        layout = QVBoxLayout(self)
+        
+        # View mode selector
+        self.view_mode_combo = QComboBox()
+        self.view_mode_combo.addItems(["List View", "Tree View"])
+        self.view_mode_combo.currentTextChanged.connect(self.on_view_mode_changed)
+        layout.addWidget(self.view_mode_combo)
+        
         # Add header with instructions
         header_label = QLabel("Select source and target directories to create a symbolic link")
         header_label.setStyleSheet("font-weight: bold; padding: 5px;")
-        main_layout.addWidget(header_label)
+        layout.addWidget(header_label)
 
         # Create horizontal layout for dual file explorers
         explorer_layout = QHBoxLayout()
@@ -336,17 +368,38 @@ class SymbolicLinkerWidget(QWidget):
         target_group.addWidget(self.target_explorer)
         explorer_layout.addLayout(target_group)
 
-        main_layout.addLayout(explorer_layout)
+        layout.addLayout(explorer_layout)
 
         # Add path display
         self.path_display = QLabel('Source: None\nTarget: None')
         self.path_display.setStyleSheet("background-color: #f0f0f0; padding: 5px; border-radius: 3px;")
-        main_layout.addWidget(self.path_display)
+        layout.addWidget(self.path_display)
 
         # Add message container
         self.message_container = QLabel('Select directories to begin')
         self.message_container.setStyleSheet("color: #666; padding: 5px;")
-        main_layout.addWidget(self.message_container)
+        layout.addWidget(self.message_container)
+
+        # Add new features
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Search files...")
+        self.search_bar.textChanged.connect(self.filter_view)
+        layout.addWidget(self.search_bar)
+        
+        self.bookmark_button = QPushButton("Bookmark")
+        self.bookmark_button.clicked.connect(self.add_bookmark)
+        layout.addWidget(self.bookmark_button)
+        
+        self.bookmarks_menu = QMenu()
+        self.load_bookmarks()
+
+        # Add new tools
+        tools_layout = QHBoxLayout()
+        tools_layout.addWidget(QLabel("Tools:"))
+        tools_layout.addWidget(self.create_tool_button("Compare Directories", self.compare_directories))
+        tools_layout.addWidget(self.create_tool_button("Batch Rename", self.batch_rename))
+        tools_layout.addWidget(self.create_tool_button("Size Analysis", self.analyze_sizes))
+        layout.addLayout(tools_layout)
 
         # Create button layout
         button_layout = QHBoxLayout()
@@ -376,7 +429,7 @@ class SymbolicLinkerWidget(QWidget):
         self.snapshot_button.clicked.connect(self.snapshot_filesystem)
         button_layout.addWidget(self.snapshot_button)
 
-        main_layout.addLayout(button_layout)
+        layout.addLayout(button_layout)
 
         # Add progress bar
         self.progress_bar = QProgressBar()
@@ -391,7 +444,7 @@ class SymbolicLinkerWidget(QWidget):
                 width: 20px;
             }
         """)
-        main_layout.addWidget(self.progress_bar)
+        layout.addWidget(self.progress_bar)
 
         # Add permission legend
         legend_layout = QHBoxLayout()
@@ -400,18 +453,69 @@ class SymbolicLinkerWidget(QWidget):
         legend_layout.addWidget(QLabel("💾 Writable"))
         legend_layout.addWidget(QLabel("🔗 Symlink"))
         legend_layout.addStretch()
-        main_layout.addLayout(legend_layout)
+        layout.addLayout(legend_layout)
 
         # Add context display area
         context_label = QLabel("Filesystem Context:")
-        main_layout.addWidget(context_label)
+        layout.addWidget(context_label)
 
         self.context_display = QTextEdit()
         self.context_display.setReadOnly(True)
         self.context_display.setFixedHeight(200)
-        main_layout.addWidget(self.context_display)
+        layout.addWidget(self.context_display)
 
-        self.setLayout(main_layout)
+        self.setLayout(layout)
+
+    def on_view_mode_changed(self, mode):
+        """Handle view mode changes"""
+        if mode == "List View":
+            # Switch to list view
+            pass
+        else:
+            # Switch to tree view
+            pass
+
+    def create_tool_button(self, text, slot):
+        btn = QPushButton(text)
+        btn.clicked.connect(slot)
+        return btn
+
+    def compare_directories(self):
+        """Compare source and target directories for differences"""
+        if self.source_path and self.target_path:
+            diff = self.get_directory_diff(self.source_path, self.target_path)
+            self.show_diff_dialog(diff)
+
+    def batch_rename(self):
+        """Open batch rename dialog"""
+        if self.source_path:
+            self.show_batch_rename_dialog(self.source_path)
+
+    def analyze_sizes(self):
+        """Show directory size analysis"""
+        if self.source_path:
+            self.show_size_analysis(self.source_path)
+
+    def filter_view(self, text):
+        """Filter file view based on search text"""
+        self.source_explorer.model().setNameFilters([f"*{text}*"])
+        self.target_explorer.model().setNameFilters([f"*{text}*"])
+
+    def add_bookmark(self):
+        """Add current directory to bookmarks"""
+        if self.source_path:
+            self.save_bookmark(self.source_path)
+            self.update_bookmarks_menu()
+
+    def show_diff_dialog(self, diff):
+        """Show directory differences in a dialog"""
+        dialog = QDialog(self)
+        layout = QVBoxLayout()
+        text_edit = QTextEdit()
+        text_edit.setPlainText(json.dumps(diff, indent=2))
+        layout.addWidget(text_edit)
+        dialog.setLayout(layout)
+        dialog.exec()
 
     def set_source_path(self, path):
         self.source_path = path
@@ -643,5 +747,17 @@ class SymbolicLinkerWidget(QWidget):
         self.message_container.setText("Failed to create filesystem snapshot.")
         logging.error(f"Filesystem snapshot error: {error_message}")
         self.enable_buttons()
+
+    def load_bookmarks(self):
+        """Load bookmarks from settings"""
+        if hasattr(self.cccore, 'settings_manager'):
+            self.bookmarks = self.cccore.settings_manager.get_value('symbolic_linker_bookmarks', [])
+        else:
+            self.bookmarks = []
+
+    def save_bookmarks(self):
+        """Save bookmarks to settings"""
+        if hasattr(self.cccore, 'settings_manager'):
+            self.cccore.settings_manager.set_value('symbolic_linker_bookmarks', self.bookmarks)
 
     # --- End of New Functions ---

@@ -72,6 +72,20 @@ class EditorManager:
         self.current_editor = None
         self.window_editors = {}  # Map of windows to their editors
         self.late_init_done = False
+        self._setup_delayed_connections()
+
+    def _setup_delayed_connections(self):
+        def try_connect():
+            if self.current_window and hasattr(self.current_window, 'tab_widget'):
+                try:
+                    self.current_window.tab_widget.currentChanged.connect(self.on_tab_changed)
+                except Exception as e:
+                    logging.error(f"Error connecting tab changed signal: {e}")
+                    QTimer.singleShot(100, try_connect)  # Retry after delay
+            else:
+                QTimer.singleShot(100, try_connect)  # Retry after delay
+        
+        QTimer.singleShot(100, try_connect)
     def add_window(self, window):
         
         self.windows.append(window)
@@ -79,16 +93,41 @@ class EditorManager:
         self.set_current_window(window)
    
     def late_init(self):
+        """Initialize late-binding connections"""
         if not self.late_init_done:
-            QTimer.singleShot(5, lambda: self.current_window.tab_widget.currentChanged.connect(self.on_tab_changed))
-            self.late_init_done = True
+            def try_connect():
+                if self.current_window is None:
+                    logging.debug("Current window not yet set, retrying later")
+                    QTimer.singleShot(100, try_connect)
+                    return
+                    
+                if not hasattr(self.current_window, 'tab_widget'):
+                    logging.debug("Tab widget not yet initialized, retrying later")
+                    QTimer.singleShot(100, try_connect)
+                    return
+                    
+                try:
+                    self.current_window.tab_widget.currentChanged.connect(self.on_tab_changed)
+                    self.late_init_done = True
+                    logging.debug("Successfully connected tab changed signal")
+                except Exception as e:
+                    logging.error(f"Error connecting tab changed signal: {e}")
+                    QTimer.singleShot(100, try_connect)
+                    
+            QTimer.singleShot(5, try_connect)
+            
     def set_current_window(self, window):
+        """Set current window with proper initialization"""
         if window in self.windows:
             self.current_window = window
+            if not self.late_init_done:
+                self.late_init()
             logging.info(f"Current AuraText window set in EditorManager: {window}")
         else:
             self.windows.append(window)
-            self.current_window=window
+            self.current_window = window
+            if not self.late_init_done:
+                self.late_init()
     def open_file(self, file_path, line=None):
         try:
             existing_editor = self.get_editor_by_file_path(file_path)

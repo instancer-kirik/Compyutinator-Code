@@ -1,7 +1,7 @@
 from typing import List, Dict
 from datetime import datetime
 from .risk import Risk
-from .reward import Reward
+from .reward import Reward, RiskReward, AchievementReward, IntegrationReward
 from .resource import Resource
 from .news_events import NewsItem
 

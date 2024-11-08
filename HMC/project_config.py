@@ -16,6 +16,11 @@ class ProjectConfig:
     start_date: Optional[datetime] = None
     target_date: Optional[datetime] = None
     websocket_enabled: bool = False
+    symbols: Dict[str, List[Dict]] = None  # Add symbol tracking
+    
+    def __post_init__(self):
+        if self.symbols is None:
+            self.symbols = {}
     
     @classmethod
     def load(cls, project_path: str) -> 'ProjectConfig':
@@ -28,5 +33,20 @@ class ProjectConfig:
 
     def save(self):
         config_path = os.path.join(self.path, 'project_config.json')
+        # Convert symbols to serializable format
+        serializable_symbols = {}
+        for file_path, symbols in self.symbols.items():
+            serializable_symbols[str(file_path)] = [
+                {
+                    'name': s.name,
+                    'type': s.type,
+                    'line': s.line,
+                    'column': s.column,
+                    'parent': s.parent.name if s.parent else None
+                }
+                for s in symbols
+            ]
+        
+        data = {**self.__dict__, 'symbols': serializable_symbols}
         with open(config_path, 'w') as f:
-            json.dump(self.__dict__, f, indent=2, default=str) 
+            json.dump(data, f, indent=2, default=str) 

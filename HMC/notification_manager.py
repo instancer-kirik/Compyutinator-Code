@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
 from datetime import datetime, timedelta
 import uuid
 from typing import Dict, List
-from ..riskkit.events import Notification, NotificationType, NotificationPriority
+from riskkit.events import Notification, NotificationType, NotificationPriority
 from typing import Optional
 
 class NotificationWidget(QFrame):
@@ -126,7 +126,6 @@ class NotificationCenter(QWidget):
         for widget in self.notifications.values():
             widget.deleteLater()
         self.notifications.clear()
-
     def handle_action(self, notification_id: str, action: str):
         # Handle notification actions here
         print(f"Action {action} triggered for notification {notification_id}")
@@ -135,12 +134,15 @@ class NotificationManager(QObject):
     notification_added = pyqtSignal(Notification)
     notification_removed = pyqtSignal(str)  # notification_id
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self.notifications: Dict[str, Notification] = {}
-        self.cleanup_timer = QTimer()
+        
+        # Create timer with parent to ensure it runs in Qt event loop
+        self.cleanup_timer = QTimer(self)
         self.cleanup_timer.timeout.connect(self.cleanup_expired)
-        self.cleanup_timer.start(60000)  # Check every minute
+        # Start timer after moving to thread
+        QTimer.singleShot(0, lambda: self.cleanup_timer.start(60000))
 
     def add_notification(
         self,

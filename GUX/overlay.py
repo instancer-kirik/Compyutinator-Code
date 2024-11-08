@@ -1,12 +1,21 @@
 import sys
 import threading
-from ctypes import windll, c_void_p
+from ctypes import c_void_p
 from PyQt6.QtWidgets import QWidget, QApplication, QVBoxLayout, QLabel
 from PyQt6.QtCore import Qt, QTimer, QEvent, QPointF
 from PyQt6.QtGui import QPainter, QCursor, QRadialGradient, QBrush, QColor, QGuiApplication, QImage, QColorSpace, QPixmap
 import serial
 import serial.tools.list_ports
 from HMC.cursor_pointer_manager import CursorPointerManager
+import os
+import logging
+
+# Platform-specific imports
+if sys.platform == 'win32':
+    from ctypes import windll
+else:
+    # For Linux/Mac, we'll use X11/Wayland specific methods if needed
+    windll = None
 
 class Overlay(QWidget):
     def __init__(self):
@@ -23,15 +32,40 @@ class Overlay(QWidget):
         screen_geometry = QGuiApplication.primaryScreen().geometry()
         self.resize(screen_geometry.width(), screen_geometry.height())
 
-        # Make the window truly click-through on Windows
-        hwnd = self.winId().__int__()
-        windll.user32.SetWindowLongPtrW(c_void_p(hwnd), -20, 
-            windll.user32.GetWindowLongPtrW(c_void_p(hwnd), -20) | 0x80000 | 0x20)
+        # Make the window truly click-through on Windows only
+        if sys.platform == 'win32':
+            hwnd = self.winId().__int__()
+            windll.user32.SetWindowLongPtrW(c_void_p(hwnd), -20, 
+                windll.user32.GetWindowLongPtrW(c_void_p(hwnd), -20) | 0x80000 | 0x20)
+        elif sys.platform.startswith('linux'):
+            # Check for Wayland vs X11
+            session_type = os.environ.get('XDG_SESSION_TYPE', '')
+            if session_type == 'wayland':
+                # Wayland-specific code
+                self.setWindowFlags(
+                    self.windowFlags() | 
+                    Qt.WindowType.WindowDoesNotAcceptFocus |
+                    Qt.WindowType.WindowTransparentForInput
+                )
+            else:
+                # X11-specific code
+                try:
+                    from Xlib import display, X
+                    d = display.Display()
+                    w = d.create_resource_object('window', self.winId().__int__())
+                    w.change_attributes(override_redirect=True)
+                    d.sync()
+                except ImportError:
+                    print("Warning: python-xlib not installed, some features may not work")
+        else:
+            # MacOS specific code if needed
+            pass
 
     def event(self, event):
         if event.type() in (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonRelease, QEvent.Type.MouseButtonDblClick, QEvent.Type.MouseMove):
             return False
         return super().event(event)
+
 class Flashlight(Overlay):
     def __init__(self, cccore, size=200, power=0.5):
         super().__init__()
@@ -111,6 +145,7 @@ class CompositeOverlay(Overlay):
     def __init__(self, cccore, flashlight_size=200, flashlight_power=0.5, serial_port=None, baud_rate=115200):
         super().__init__()
         self.cursor_manager = CursorPointerManager(cccore)
+        self.cursor_pos = self.cursor_manager.get_current_pos()
         
         self.flashlight_overlay = Flashlight(cccore, size=flashlight_size, power=flashlight_power)
         self.flashlight_overlay.setParent(self)
@@ -143,10 +178,15 @@ class CompositeOverlay(Overlay):
         super().leaveEvent(event)
 
     def update_cursor_effect(self):
-        self.cursor_pos = self.cursor_manager.get_current_cursor_pos()
-        self.flashlight_overlay.cursor_pos = self.cursor_pos
-        self.flashlight_overlay.update()
-        self.customchorder_overlay.update()
+        try:
+            self.cursor_pos = self.cursor_manager.get_current_pos()
+            if self.flashlight_overlay:
+                self.flashlight_overlay.cursor_pos = self.cursor_pos
+                self.flashlight_overlay.update()
+            if self.customchorder_overlay:
+                self.customchorder_overlay.update()
+        except Exception as e:
+            logging.error(f"Error updating cursor effect: {e}")
 
     def paintEvent(self, event):
         painter = QPainter(self)

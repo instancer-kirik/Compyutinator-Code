@@ -5,11 +5,67 @@ from GUX.merge_widget import MergeWidget
 import logging
 from PyQt6.QtWidgets import QInputDialog, QMessageBox
 from PyQt6.QtCore import QObject, Qt
+from PyQt6.QtCore import QTimer
+from HMC.project_dashboard import ProjectDashboard
+
 class MenuManager:
-    def __init__(self, main_window, cccore = None):
+    def __init__(self, main_window, cccore):
         self.main_window = main_window
         self.cccore = cccore
-        self.action_handlers = ActionHandlers(cccore=cccore)
+        self.action_handlers = cccore.action_handlers
+        self.device_manager_dock = None
+        self.menus = {}
+        self.setup_menus()
+        self.initialize_docks()
+        
+    def setup_menus(self):
+        """Set up all menus"""
+        # File Menu
+        file_menu = self.main_window.menuBar().addMenu('&File')
+        self.menus['file'] = file_menu
+        
+        # Add basic file actions
+        new_action = QAction('&New', self.main_window)
+        new_action.setShortcut('Ctrl+N')
+        new_action.triggered.connect(self.cccore.action_handlers.new_file)
+        file_menu.addAction(new_action)
+        
+        # Edit Menu
+        edit_menu = self.main_window.menuBar().addMenu('&Edit')
+        self.menus['edit'] = edit_menu
+        
+        # View Menu
+        view_menu = self.main_window.menuBar().addMenu('&View')
+        self.menus['view'] = view_menu
+        
+        # Tools Menu
+        tools_menu = self.main_window.menuBar().addMenu('&Tools')
+        self.menus['tools'] = tools_menu
+        
+        # Help Menu
+        help_menu = self.main_window.menuBar().addMenu('&Help')
+        self.menus['help'] = help_menu
+
+    def initialize_docks(self):
+        """Initialize dock widgets once window is ready"""
+        if not self.main_window or not self.main_window.isVisible():
+            # Retry after a short delay if window isn't ready
+            QTimer.singleShot(100, self.initialize_docks)
+            return
+        
+        try:
+            if not self.device_manager_dock:
+                from DEV.devices.device_manager import DeviceManagerView
+                device_manager = DeviceManagerView(self.main_window)
+                self.device_manager_dock = self.cccore.widget_manager.add_dock_widget(
+                    device_manager,
+                    "Device Manager",
+                    Qt.DockWidgetArea.RightDockWidgetArea
+                )
+                self.device_manager_dock.hide()  # Initially hidden
+                
+        except Exception as e:
+            logging.error(f"Error initializing device manager: {e}")
 
     def create_menu_bar(self):
         logging.warning("Creating menu bar")
@@ -43,7 +99,14 @@ class MenuManager:
         self.file_menu.addAction("Save", self.action_handlers.save_file)
         self.file_menu.addAction("Save As", self.action_handlers.save_file_as)
         self.file_menu.addSeparator()
-        self.file_menu.addAction(self.create_action("Exit", self.main_window.close, "Ctrl+Q"))
+        
+        # Add null check for main_window
+        if self.main_window:
+            self.file_menu.addAction(self.create_action("Exit", self.main_window.close, "Ctrl+Q"))
+        else:
+            logging.warning("Main window not set, skipping Exit action")
+            self.file_menu.addAction(self.create_action("Exit", lambda: None, "Ctrl+Q"))
+        
         return self.file_menu
 
     def create_edit_menu(self):
@@ -60,6 +123,15 @@ class MenuManager:
 
     def create_view_menu(self):
         self.view_menu = QMenu("View", self.main_window)
+        
+        # Add Device Manager to View menu for consistency
+        device_view = self.view_menu.addAction("Device Manager")
+        device_view.triggered.connect(self.show_device_manager)
+        if self.device_manager_dock:
+            device_view.setChecked(self.device_manager_dock.isVisible())
+            self.device_manager_dock.visibilityChanged.connect(device_view.setChecked)
+        
+        self.view_menu.addSeparator()
         
         # Add existing dock widget toggles
         for dock_name, dock_widget in self.cccore.widget_manager.dock_widgets.items():
@@ -122,6 +194,21 @@ class MenuManager:
             tools_menu.addAction(self.create_action("CodeToolWidget", self.cccore.widget_manager.show_cool_dock))
         except Exception as e:
             logging.error(f"Error adding CodeToolWidget action: {str(e)}")
+            
+        # Add Device Manager submenu
+        device_menu = tools_menu.addMenu("Device Manager")
+        
+        show_device_manager = device_menu.addAction("Show Device Manager")
+        show_device_manager.triggered.connect(self.show_device_manager)
+        
+        manage_flows = device_menu.addAction("Manage Device Flows")
+        manage_flows.triggered.connect(self.show_flow_manager)
+        
+        device_menu.addSeparator()
+        
+        refresh_devices = device_menu.addAction("Refresh Devices")
+        refresh_devices.triggered.connect(self.refresh_devices)
+        
         return tools_menu
 
     def create_vault_menu(self):
@@ -145,10 +232,36 @@ class MenuManager:
 
     def create_workspace_menu(self):
         self.workspace_menu = QMenu("&Workspace", self.main_window)
+        
+        # Project management actions
         self.workspace_menu.addAction(self.create_action("Create Workspace", self.main_window.create_workspace))
         self.workspace_menu.addAction(self.create_action("Switch Workspace", self.main_window.switch_workspace))
         self.workspace_menu.addAction(self.create_action("Manage Workspaces", self.action_handlers.manage_workspaces))
+        
+        # Add project dashboard actions
+        self.workspace_menu.addSeparator()
+        self.workspace_menu.addAction(self.create_action("Project Dashboard", self.show_project_dashboard))
+        self.workspace_menu.addAction(self.create_action("Project Settings", self.action_handlers.show_project_settings))
+        
         return self.workspace_menu
+
+    def show_project_dashboard(self):
+        """Show the project dashboard for the current project"""
+        try:
+            current_project = self.cccore.project_manager.get_current_project()
+            if current_project:
+                dashboard = ProjectDashboard(self.main_window, self.cccore)
+                dashboard.update_project_info(current_project)
+                
+                # Add to tab widget
+                tab_widget = self.main_window.tab_widget
+                tab_widget.addTab(dashboard, f"Dashboard - {current_project}")
+                tab_widget.setCurrentWidget(dashboard)
+            else:
+                QMessageBox.warning(self.main_window, "No Project", 
+                                  "Please select or create a project first.")
+        except Exception as e:
+            logging.error(f"Error showing project dashboard: {e}")
 
     def create_help_menu(self):
         self.help_menu = QMenu("&Help", self.main_window)
@@ -167,6 +280,7 @@ class MenuManager:
         action.triggered.connect(dock_widget.setVisible)
         dock_widget.visibilityChanged.connect(action.setChecked)
         menu.addAction(action)
+
     def create_action(self, text, slot, shortcut=None, icon=None):
         try:
             action = QAction(text, self.main_window)
@@ -187,6 +301,7 @@ class MenuManager:
             logging.warning(f"Failed to set visibility for a dock widget. It may have been deleted.")
         except Exception as e:
             logging.error(f"Unexpected error toggling dock visibility: {str(e)}")
+
     def spawn_prefilled_merger(self):
         # Sample data
         original_content = """def greet(name):
@@ -222,6 +337,7 @@ if __name__ == "__main__":
             Qt.DockWidgetArea.RightDockWidgetArea
         )
         dock.show()
+
     def create_macro_menu(self):
        
         # Add a Macros menu
@@ -236,6 +352,7 @@ if __name__ == "__main__":
         play_macro_action = self.macro_menu.addAction("Play Macro")
         play_macro_action.triggered.connect(self.play_macro)
         return self.macro_menu
+
     def start_macro_recording(self):
         name, ok = QInputDialog.getText(self.main_window, "Record Macro", "Enter macro name:")
         if ok and name:
@@ -252,3 +369,54 @@ if __name__ == "__main__":
         name, ok = QInputDialog.getItem(self.main_window, "Play Macro", "Select a macro:", macros, 0, False)
         if ok and name:
             self.cccore.macro_manager.play_macro(name)
+            
+    def show_device_manager(self):
+        """Show the device manager dock"""
+        try:
+            if not self.device_manager_dock:
+                self.initialize_docks()
+                
+            if self.device_manager_dock:
+                self.device_manager_dock.show()
+                self.device_manager_dock.raise_()
+            else:
+                raise RuntimeError("Device manager dock not initialized")
+                
+        except Exception as e:
+            logging.error(f"Error showing device manager: {e}")
+            QMessageBox.warning(self.main_window, "Error", 
+                              f"Could not show device manager: {str(e)}")
+            
+    def show_flow_manager(self):
+        """Show the device flow manager dialog"""
+        try:
+            if hasattr(self, 'device_manager_dock') and self.device_manager_dock:
+                widget = self.device_manager_dock.widget()
+                if widget:
+                    widget.manage_flows()
+                else:
+                    raise RuntimeError("Device manager widget not found")
+            else:
+                raise RuntimeError("Device manager not initialized")
+                
+        except Exception as e:
+            logging.error(f"Error showing flow manager: {e}")
+            QMessageBox.warning(self.main_window, "Error", 
+                              f"Could not show flow manager: {str(e)}")
+            
+    def refresh_devices(self):
+        """Refresh the device list"""
+        try:
+            if hasattr(self, 'device_manager_dock') and self.device_manager_dock:
+                widget = self.device_manager_dock.widget()
+                if widget:
+                    widget.refresh_devices()
+                else:
+                    raise RuntimeError("Device manager widget not found")
+            else:
+                raise RuntimeError("Device manager not initialized")
+                
+        except Exception as e:
+            logging.error(f"Error refreshing devices: {e}")
+            QMessageBox.warning(self.main_window, "Error", 
+                              f"Could not refresh devices: {str(e)}")

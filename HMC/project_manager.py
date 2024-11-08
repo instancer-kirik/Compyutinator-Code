@@ -3,8 +3,9 @@ import json
 import logging
 from .environment_manager import EnvironmentManager
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QPushButton, 
-                             QInputDialog, QMessageBox, QFileDialog, QDialog, QLabel, QLineEdit, QFormLayout)
+                             QInputDialog, QMessageBox, QFileDialog, QDialog, QLabel, QLineEdit, QFormLayout, QProgressBar, QStackedWidget)
 from PyQt6.QtCore import Qt
+import re
 from PyQt6.QtWidgets import QListWidget, QListWidgetItem
 import sys
 from PyQt6.QtCore import pyqtSignal
@@ -14,6 +15,9 @@ from datetime import datetime
 from enum import Enum
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
+from pathlib import Path
+from .project_dashboard import ProjectDashboard
+from GUX.dialogs.project_dialogs import ProjectCreationDialog
 
 class ProjectType(Enum):
     LOCAL = "local"
@@ -26,6 +30,25 @@ class BaseProjectAttributes:
     status: Optional[str] = None
     inserted_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    symbols: Dict[Path, List['CodeSymbol']] = None  # Path is now properly imported
+    
+    def __post_init__(self):
+        if self.symbols is None:
+            self.symbols = {}
+
+@dataclass
+class CodeSymbol:
+    name: str
+    type: str  # 'class', 'function', 'method', 'variable'
+    line: int
+    column: int
+    file_path: Path  # Path is now properly imported
+    parent: Optional['CodeSymbol'] = None
+    children: List['CodeSymbol'] = None
+    
+    def __post_init__(self):
+        if self.children is None:
+            self.children = []
 
 @dataclass
 class LocalProjectAttributes(BaseProjectAttributes):
@@ -222,7 +245,9 @@ class ProjectConfigDialog(QDialog):
 
 class ProjectManager:
     project_changed = pyqtSignal(str)
+    project_progress_updated = pyqtSignal(str, float)  # New signal for progress updates
     def __init__(self, settings_manager, cccore):
+        super().__init__()
         self.settings_manager = settings_manager
         self.cccore = cccore
         self.build_manager = cccore.build_manager
@@ -239,11 +264,106 @@ class ProjectManager:
             "local": self.create_local_project,
             "resolvinator": self.create_resolvinator_project
         }
+        self.lsp_manager = cccore.lsp_manager  # Use LSP for better symbol detection
        # self.load_projects()
         self.update_project_selector()
         logging.warning(f"Loaded projects: {self.projects}")
         self.project_config_filename = "project_config.json"
         self.load_current_project()  # Add this line to load the current project on initialization
+        self.integration_testing_manager = None
+
+        # Add new attributes for enhanced project tracking
+        self.active_projects = {}  # Dictionary to track multiple active projects
+        self.project_dashboards = {}  # Store dashboard instances
+        self.project_progress = {}  # Track project completion progress
+        
+    def update_project_symbols(self, project_name: str):
+        """Update symbols for all code files in a project"""
+        project = self.projects.get(project_name)
+        if not project:
+            return
+        
+        project_path = Path(project.get('path', ''))
+        if not project_path.exists():
+            return
+            
+        for root, _, files in os.walk(project_path):
+            for file in files:
+                file_path = Path(root) / file
+                if self._is_code_file(file_path):
+                    self._parse_file_symbols(file_path, project)
+    
+    def _is_code_file(self, file_path: Path) -> bool:
+        """Check if file is a code file based on project settings"""
+        project = self.get_current_project()
+        if not project:
+            return False
+            
+        extensions = project.get('file_extensions', ['.py', '.js', '.cpp'])
+        return file_path.suffix in extensions
+    
+    def _parse_file_symbols(self, file_path: Path, project: dict):
+        """Parse symbols from a file using LSP if available"""
+        try:
+            if self.lsp_manager and self.lsp_manager.initialized:
+                # Use LSP for better symbol detection
+                symbols = self.lsp_manager.get_document_symbols(str(file_path))
+                if symbols:
+                    project['symbols'][file_path] = symbols
+                    return
+            
+            # Fallback to basic parsing if LSP not available
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            symbols = []
+            current_class = None
+            
+            for line_num, line in enumerate(content.splitlines(), 1):
+                stripped = line.strip()
+                
+                if stripped.startswith('class '):
+                    class_match = re.match(r'class\s+(\w+)', stripped)
+                    if class_match:
+                        class_name = class_match.group(1)
+                        current_class = CodeSymbol(
+                            name=class_name,
+                            type='class',
+                            line=line_num,
+                            column=line.index('class'),
+                            file_path=file_path
+                        )
+                        symbols.append(current_class)
+                
+                elif stripped.startswith('def '):
+                    func_match = re.match(r'def\s+(\w+)', stripped)
+                    if func_match:
+                        func_name = func_match.group(1)
+                        func_symbol = CodeSymbol(
+                            name=func_name,
+                            type='method' if current_class else 'function',
+                            line=line_num,
+                            column=line.index('def'),
+                            file_path=file_path,
+                            parent=current_class
+                        )
+                        if current_class:
+                            current_class.children.append(func_symbol)
+                        else:
+                            symbols.append(func_symbol)
+            
+            project['symbols'][file_path] = symbols
+            
+        except Exception as e:
+            logging.error(f"Error parsing symbols from {file_path}: {str(e)}")
+    
+    def get_file_symbols(self, file_path: Path) -> List[CodeSymbol]:
+        """Get symbols for a specific file in the current project"""
+        project = self.get_current_project()
+        if not project:
+            return []
+        
+        return project.get('symbols', {}).get(file_path, [])
 
     def create_project(self, vault_name: str, project_name: str, project_path: str, project_type: ProjectType, **kwargs) -> bool:
         """Create a new project of specified type"""
@@ -891,8 +1011,35 @@ class ProjectManager:
             'path': project_path,
             'build_command': '',
             'run_command': '',
-            'registered_scripts': []
-        }  # Return an empty dict if no data is found
+            'registered_scripts': [],
+            'file_extensions': ['.py', '.json', '.yml'],
+            'excluded_dirs': ['__pycache__', '.git', 'venv'],
+            'symbols': {},
+            'status': None,
+            'description': None,
+            'inserted_at': datetime.now(),
+            'updated_at': datetime.now(),
+            'workspace_path': None,
+            'risk_appetite': None,
+            'settings': {
+                'risk_matrix_config': {
+                    'probability_weights': {
+                        'rare': 1,
+                        'unlikely': 2,
+                        'possible': 3,
+                        'likely': 4,
+                        'certain': 5
+                    },
+                    'impact_weights': {
+                        'negligible': 1,
+                        'minor': 2,
+                        'moderate': 3,
+                        'major': 4,
+                        'severe': 5
+                    }
+                }
+            }
+        }
 
     def load_current_project(self):
         current_project = self.settings_manager.get_value("current_project")
@@ -1079,7 +1226,17 @@ class ManyProjectsManagerWidget(QWidget):
     def __init__(self, cccore):
         super().__init__()
         self.cccore = cccore
+        self.project_list = QListWidget()
         self.setup_ui()
+
+    def refresh_projects(self):
+        """Refresh the projects list"""
+        self.project_list.clear()
+        if hasattr(self.cccore, 'project_manager'):
+            # Change get_all_projects to get_many_projects
+            projects = self.cccore.project_manager.get_many_projects()
+            for project in projects:
+                self.project_list.addItem(project)
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -1092,26 +1249,34 @@ class ManyProjectsManagerWidget(QWidget):
 
         # Project list
         self.project_list = QListWidget()
-        layout.addWidget(QLabel("Projects:"))
+        self.project_list.itemDoubleClicked.connect(self.open_selected_project)  # Fixed connection
         layout.addWidget(self.project_list)
-
-        # Buttons
+        
+        # Buttons layout
         button_layout = QHBoxLayout()
-        self.open_button = QPushButton("Open")
-        self.open_button.clicked.connect(self.open_selected_project)
-        button_layout.addWidget(self.open_button)
-        self.add_button = QPushButton("Add Project")
-        self.add_button.clicked.connect(self.add_project)
-        self.remove_button = QPushButton("Remove Project")
-        self.remove_button.clicked.connect(self.remove_project)
-        self.rename_button = QPushButton("Rename Project")
-        self.rename_button.clicked.connect(self.rename_project)
-        button_layout.addWidget(self.add_button)
-        button_layout.addWidget(self.remove_button)
-        button_layout.addWidget(self.rename_button)
+        
+        # Project management buttons
+        self.add_project_btn = QPushButton("Add Project")
+        self.remove_project_btn = QPushButton("Remove Project")
+        self.open_project_btn = QPushButton("Open Project")
+        self.dashboard_btn = QPushButton("Project Dashboard")  # Add dashboard button
+        
+        # Connect signals
+        self.add_project_btn.clicked.connect(self.show_project_dialog)
+        self.remove_project_btn.clicked.connect(self.remove_project)
+        self.open_project_btn.clicked.connect(self.open_selected_project)
+        self.dashboard_btn.clicked.connect(self.show_dashboard)  # Connect dashboard button
+        
+        # Add buttons to layout
+        button_layout.addWidget(self.add_project_btn)
+        button_layout.addWidget(self.remove_project_btn)
+        button_layout.addWidget(self.open_project_btn)
+        button_layout.addWidget(self.dashboard_btn)
+        
         layout.addLayout(button_layout)
-
-        self.update_vault_selector()
+        
+        # Refresh project list
+        self.refresh_projects()
 
     def update_vault_selector(self):
         self.vault_selector.clear()
@@ -1134,14 +1299,323 @@ class ManyProjectsManagerWidget(QWidget):
         else:
             QMessageBox.warning(self, "No Project Selected", "Please select a project to open.")
 
-    def add_project(self):
-        # Implementation similar to ProjectManagerWidget.add_project()
-        pass
+    def show_project_dialog(self):
+        """Show project creation dialog"""
+        dialog = ProjectCreationDialog(self.cccore, self)
+        if dialog.exec():
+            self.update_project_list()
 
     def remove_project(self):
-        # Implementation similar to ProjectManagerWidget.remove_project()
-        pass
+        """Remove the selected project"""
+        current_item = self.project_list.currentItem()
+        if current_item:
+            project_name = current_item.text()
+            self.cccore.project_manager.remove_project(project_name)
+            self.update_project_list()
 
     def rename_project(self):
         # Implementation similar to ProjectManagerWidget.rename_project()
         pass
+
+    def show_dashboard(self):
+        """Show dashboard for selected project"""
+        try:
+            current_item = self.project_list.currentItem()
+            if current_item:
+                project_name = current_item.text()
+                dashboard = ProjectDashboard(self.parent(), self.cccore)
+                dashboard.update_project_info(project_name)
+                
+                # Add to tab widget
+                if hasattr(self.cccore.widget_manager, 'tab_widget'):
+                    tab_widget = self.cccore.widget_manager.tab_widget
+                    tab_widget.addTab(dashboard, f"Dashboard - {project_name}")
+                    tab_widget.setCurrentWidget(dashboard)
+            else:
+                QMessageBox.warning(self, "No Project", 
+                                  "Please select a project first.")
+        except Exception as e:
+            logging.error(f"Error showing project dashboard: {e}")
+
+    def initialize_integration_testing(self):
+        """Initialize the integration testing manager for the current project"""
+        from GUX.widgets.integration_test_op import IntegrationTestingManager
+        self.integration_testing_manager = IntegrationTestingManager(self)
+        return self.integration_testing_manager
+
+    def get_integration_testing_manager(self):
+        """Get or create the integration testing manager"""
+        if not self.integration_testing_manager:
+            self.initialize_integration_testing()
+        return self.integration_testing_manager
+
+    def switch_project(self, vault_name, project_name):
+        # ... (existing code) ...
+        
+        # Update integration testing manager
+        if self.integration_testing_manager:
+            self.integration_testing_manager.load_project_checklist()
+
+    def setup_menu(self):
+        # Project Menu
+        project_menu = self.menuBar().addMenu("&Project")
+        
+        # ... (existing project menu items) ...
+        
+        project_menu.addSeparator()
+        
+        # Add Dashboard action to Project menu
+        dashboard_action = project_menu.addAction("&Dashboard")
+        dashboard_action.triggered.connect(self.show_project_dashboard)
+        
+        # Testing submenu
+        testing_menu = project_menu.addMenu("&Testing")
+        
+        integration_test_action = testing_menu.addAction("&Integration Testing")
+        integration_test_action.triggered.connect(self.show_integration_testing)
+        
+        unit_test_action = testing_menu.addAction("&Unit Testing")
+        unit_test_action.triggered.connect(self.show_unit_testing)
+        
+        testing_menu.addSeparator()
+        
+        test_report_action = testing_menu.addAction("Generate Test &Report")
+        test_report_action.triggered.connect(self.generate_test_report)
+
+    def show_integration_testing(self):
+        if not hasattr(self, '_integration_testing_window'):
+            self._integration_testing_window = self.get_integration_testing_manager()
+        self._integration_testing_window.show()
+        self._integration_testing_window.raise_()
+
+    def show_unit_testing(self):
+        # TODO: Implement unit testing window
+        pass
+
+    def generate_test_report(self):
+        if hasattr(self, '_integration_testing_window'):
+            self._integration_testing_window.generate_report()
+
+    def show_project_dashboard(self):
+        """Show the project dashboard for the current project"""
+        if not hasattr(self, '_dashboard'):
+            from .project_dashboard import ProjectDashboard
+            self._dashboard = ProjectDashboard(self.cccore)
+        
+        current_project = self.get_current_project()
+        if current_project:
+            self._dashboard.update_project_info(current_project)
+        
+        self._dashboard.show()
+        self._dashboard.raise_()
+
+    def update_dashboard(self):
+        """Update the dashboard if it's open"""
+        if hasattr(self, '_dashboard') and self._dashboard.isVisible():
+            current_project = self.get_current_project()
+            if current_project:
+                self._dashboard.update_project_info(current_project)
+
+    def create_project_structure(self, project_name: str, project_type: str) -> bool:
+        """Create a new project with enhanced structure"""
+        try:
+            project_path = self.get_project_path(project_name)
+            
+            # Create project directories
+            directories = [
+                'notes',          # Markdown notes
+                'tasks',          # Task tracking
+                'docs',           # Documentation
+                'assets',         # Project assets
+                'scripts',        # Project scripts
+                'config',         # Configuration files
+                'data'           # Project data
+            ]
+            
+            for dir_name in directories:
+                os.makedirs(os.path.join(project_path, dir_name), exist_ok=True)
+            
+            # Create initial project config
+            config = ProjectConfig(
+                name=project_name,
+                project_type=project_type,
+                path=project_path,
+                start_date=datetime.now(),
+                websocket_enabled=project_type == "resolvinator"
+            )
+            
+            # Create initial README.md
+            readme_template = f"""# {project_name}
+
+## Overview
+Project Type: {project_type}
+Created: {datetime.now().strftime('%Y-%m-%d')}
+
+## Quick Links
+- [Tasks](tasks/README.md)
+- [Documentation](docs/README.md)
+- [Project Notes](notes/README.md)
+
+## Project Structure
+{project_name}/
+├── notes/ # Project notes and documentation
+├── tasks/ # Task tracking and management
+├── docs/ # Project documentation
+├── assets/ # Project assets and resources
+├── scripts/ # Project scripts and tools
+├── config/ # Configuration files
+└── data/ # Project data files
+
+## Getting Started
+1. Check the tasks directory for current tasks
+2. Review project documentation in docs
+3. Add project notes in the notes directory
+
+## Recent Updates
+- Project created on {datetime.now().strftime('%Y-%m-%d')}
+"""
+            
+            with open(os.path.join(project_path, 'README.md'), 'w') as f:
+                f.write(readme_template)
+            
+            # Save project config
+            config.save()
+            
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error creating project structure: {e}")
+            return False
+
+    def activate_project(self, project_name: str) -> bool:
+        """Activate a project for tracking"""
+        try:
+            project_config = self.get_project_config(project_name)
+            if not project_config:
+                return False
+                
+            # Create or get dashboard
+            if project_name not in self.project_dashboards:
+                self.project_dashboards[project_name] = ProjectDashboard(self.cccore)
+            
+            # Update active projects tracking
+            self.active_projects[project_name] = {
+                'config': project_config,
+                'activated_at': datetime.now(),
+                'last_activity': datetime.now()
+            }
+            
+            # Calculate initial progress
+            self.update_project_progress(project_name)
+            
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error activating project: {e}")
+            return False
+
+    def update_project_progress(self, project_name: str):
+        """Update project progress based on various metrics"""
+        if project_name not in self.active_projects:
+            return
+            
+        try:
+            project = self.active_projects[project_name]
+            dashboard = self.project_dashboards[project_name]
+            
+            # Calculate progress based on:
+            # 1. Task completion
+            task_progress = dashboard.task_manager.get_completion_rate()
+            
+            # 2. Documentation coverage
+            doc_progress = self.calculate_documentation_coverage(project_name)
+            
+            # 3. Project milestones
+            milestone_progress = self.calculate_milestone_progress(project_name)
+            
+            # Weighted average of different progress metrics
+            total_progress = (
+                task_progress * 0.4 +
+                doc_progress * 0.3 +
+                milestone_progress * 0.3
+            )
+            
+            self.project_progress[project_name] = total_progress
+            self.project_progress_updated.emit(project_name, total_progress)
+            
+        except Exception as e:
+            logging.error(f"Error updating project progress: {e}")
+
+    def calculate_documentation_coverage(self, project_name: str) -> float:
+        """Calculate documentation coverage percentage"""
+        try:
+            project_path = self.get_project_path(project_name)
+            docs_path = os.path.join(project_path, 'docs')
+            notes_path = os.path.join(project_path, 'notes')
+            
+            # Count markdown files
+            doc_files = len([f for f in os.listdir(docs_path) if f.endswith('.md')])
+            note_files = len([f for f in os.listdir(notes_path) if f.endswith('.md')])
+            
+            # Simple metric: 1 doc per project feature (minimum 5)
+            target_docs = max(5, len(self.get_project_features(project_name)))
+            
+            return min(1.0, (doc_files + note_files) / target_docs)
+            
+        except Exception:
+            return 0.0
+
+    def calculate_milestone_progress(self, project_name: str) -> float:
+        """Calculate project milestone completion percentage"""
+        try:
+            project = self.active_projects[project_name]
+            if not project['config'].target_date:
+                return 0.0
+                
+            total_duration = (project['config'].target_date - project['config'].start_date).days
+            elapsed_duration = (datetime.now() - project['config'].start_date).days
+            
+            return min(1.0, elapsed_duration / total_duration)
+            
+        except Exception:
+            return 0.0
+
+    def show_command_manager(self):
+        """Show the command manager window"""
+        if not hasattr(self, '_command_manager'):
+            from GUX.widgets.command_manager import CommandManager
+            self._command_manager = CommandManager(self.cccore)
+        
+        self._command_manager.show()
+        self._command_manager.raise_()
+
+    def setup_menu(self):
+        # Project Menu
+        project_menu = self.menuBar().addMenu("&Project")
+        
+        # ... (existing project menu items) ...
+        
+        project_menu.addSeparator()
+        
+        # Add Dashboard action to Project menu
+        dashboard_action = project_menu.addAction("&Dashboard")
+        dashboard_action.triggered.connect(self.show_project_dashboard)
+        
+        # Testing submenu
+        testing_menu = project_menu.addMenu("&Testing")
+        
+        integration_test_action = testing_menu.addAction("&Integration Testing")
+        integration_test_action.triggered.connect(self.show_integration_testing)
+        
+        unit_test_action = testing_menu.addAction("&Unit Testing")
+        unit_test_action.triggered.connect(self.show_unit_testing)
+        
+        testing_menu.addSeparator()
+        
+        test_report_action = testing_menu.addAction("Generate Test &Report")
+        test_report_action.triggered.connect(self.generate_test_report)
+
+        # Add Command Manager to Tools menu
+        tools_menu = self.menuBar().addMenu("&Tools")
+        command_manager_action = tools_menu.addAction("&Command Manager")
+        command_manager_action.triggered.connect(self.show_command_manager)

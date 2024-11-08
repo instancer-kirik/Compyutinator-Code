@@ -55,9 +55,40 @@ class VoiceTypingWidget(QWidget):
         #self.input_manager.typing_speed_update.connect(self.update_typing_speed)
         #this might be for typing effects
     def setup_hotkeys(self):
-        keyboard.add_hotkey('ctrl+shift+p', self.play_audio)
-        keyboard.add_hotkey('ctrl+shift+s', self.stop_audio)
-        keyboard.add_hotkey('ctrl+shift+t', self.toggle_transcription)
+        try:
+            import keyboard
+            keyboard.add_hotkey('ctrl+shift+p', self.play_audio)
+            keyboard.add_hotkey('ctrl+shift+s', self.stop_audio)
+            keyboard.add_hotkey('ctrl+shift+r', self.start_recording)
+            keyboard.add_hotkey('ctrl+shift+t', self.stop_recording)
+        except ImportError as e:
+            logging.warning(f"Could not set up keyboard hotkeys: {e}")
+            logging.info("Setting up QShortcut alternatives for hotkeys")
+            # Use Qt shortcuts instead
+            from PyQt6.QtGui import QShortcut, QKeySequence
+            
+            self.play_shortcut = QShortcut(QKeySequence("Ctrl+Shift+P"), self)
+            self.play_shortcut.activated.connect(self.play_audio)
+            
+            self.stop_shortcut = QShortcut(QKeySequence("Ctrl+Shift+S"), self)
+            self.stop_shortcut.activated.connect(self.stop_audio)
+            
+            self.record_shortcut = QShortcut(QKeySequence("Ctrl+Shift+R"), self)
+            self.record_shortcut.activated.connect(self.start_transcription)
+            
+            self.stop_record_shortcut = QShortcut(QKeySequence("Ctrl+Shift+T"), self)
+            self.stop_record_shortcut.activated.connect(self.stop_transcription)
+            
+            # Add a label to inform users about the shortcuts
+            from PyQt6.QtWidgets import QLabel
+            shortcut_label = QLabel(
+                "Shortcuts:\n"
+                "Ctrl+Shift+P: Play\n"
+                "Ctrl+Shift+S: Stop\n"
+                "Ctrl+Shift+R: Record\n"
+                "Ctrl+Shift+T: Stop Recording"
+            )
+            self.layout().addWidget(shortcut_label)
 
     def list_audio_devices(self):
         devices = self.input_manager.get_audio_devices()

@@ -10,7 +10,7 @@ import cProfile
 import pstats
 from NITTY_GRITTY.ThreadTrackers import ThreadTracker, QThreadTracker, global_thread_tracker, global_qthread_tracker
 profiler = cProfile.Profile()
-
+ 
 # Now try to import from HMC
 from HMC.cccore import CCCore
 from HMC.sticky_note_manager import StickyNoteManager
@@ -19,8 +19,8 @@ import io
 import logging
 from PyQt6.QtWidgets import QApplication, QMainWindow, QFileDialog, QTabWidget, QListWidget, QVBoxLayout, QWidget, QLabel, QPushButton
 from PyQt6.QtGui import QAction, QDesktopServices
-from PyQt6.QtWidgets import QMenu
-from PyQt6.QtCore import QSettings, QByteArray,QProcess,  QUrl, QTimer, Qt, pyqtSignal
+from PyQt6.QtWidgets import QMenu, QSizePolicy, QToolBar
+from PyQt6.QtCore import QSettings, QByteArray, QRect, QProcess,  QUrl, QTimer, Qt, pyqtSignal
 from DEV.websocket_client import WebSocketClient
 from riskkit.client import RiskkitClient
 import subprocess
@@ -49,20 +49,30 @@ from NITTY_GRITTY.ThreadTrackers import SafeQThread
 from HMC.project_manager import ManyProjectsManagerWidget
 from PyQt6.QtWidgets import QDockWidget
 from HMC.vm_manager import VMManagerWidget
+from HMC.history_manager import HistoryManager
+
 log_directory = os.path.join(os.getcwd(), 'logs')
 if not os.path.exists(log_directory):
     os.makedirs(log_directory)
 
 log_file_path = os.path.join(log_directory, 'app.log')
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.FileHandler(log_file_path, 'a'), logging.StreamHandler()])
+# Remove duplicate logging configuration
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_file_path, 'a'),
+        logging.StreamHandler()
+    ],
+    force=True  # Force reconfiguration
+)
+
+# Remove the second logging.basicConfig call
+# logging.basicConfig(level=logging.DEBUG, ...)  # Remove this
+
 #this not showing any logs wtf
 logging.info("Application started")
-import logging
-
-logging.basicConfig(level=logging.DEBUG, 
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    handlers=[logging.FileHandler("debug.log"), logging.StreamHandler()])
 default_theme = {
     "main_window_color": "#2E3440",
     "window_color": "#3B4252",
@@ -125,138 +135,394 @@ def load_config(config_file):
 
 from HMC.menu_manager import MenuManager
 import tempfile
-from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel
-
-from PyQt6.QtWidgets import QTabWidget
 
 import traceback  # Add this import at the top of the file
 from HMC.event_manager import AppEventManager, AppEvent
 from typing import Optional
-from HMC.notification_manager import NotificationManager, NotificationType, NotificationPriority
+from HMC.notification_manager import NotificationManager,  NotificationPriority
 from GUX.dialogs.login_dialog import LoginDialog
-
+from riskkit.events import NotificationType
 from riskkit.config import ConfigManager
 
+from PyQt6.QtWidgets import (
+    QMainWindow, QToolBar, QDockWidget, 
+    QWidget, QVBoxLayout, QLabel, QTabWidget,
+    QComboBox, QApplication, QSizePolicy
+)
+from PyQt6.QtGui import QIcon, QPalette, QColor, QAction
+from PyQt6.QtCore import (
+    Qt, QSettings, QTimer, QRect, 
+    QPoint, QSize, QByteArray
+)
+
 class MainApplication(QMainWindow):
-    def __init__(self, settings_manager, cccore):
-        logging.info("Initializing MainApplication")
+    def __init__(self, cccore):
         super().__init__()
-        
-        # Initialize managers
-        self.event_manager = AppEventManager()
-        
-        # Setup client and connections
-        self.setup_client()
-        self.setup_connections()
-        
-        self.setWindowTitle("Computinator Code")
-        self.cccore = cccore
-        self.cccore.set_main_window(self)
-       
-        # Show the main window
-        self.show()
-        
-        self.vm_manager_widget = VMManagerWidget()
-        self.settings_manager = settings_manager
-        self.menu_manager = MenuManager(self.cccore.main_window, cccore=self.cccore)
-        self.cccore.set_menu_manager(self.menu_manager)
-        self.setup_ui()
-        self.widget_manager = self.cccore.widget_manager
-        # Add this line to initialize the config attribute
-        self.config = self.settings_manager.get_settings()
-        self.vault_manager = cccore.vault_manager
-        self.workspace_manager = cccore.workspace_manager
-        self.config = load_config('config.json')
-        self.history = []
-        self.max_history_length = 10
-        self.last_focused_widget = None
-        self.child_processes = {}
-        self.overlay = self.cccore.overlay
-        self.menu_setup_done = False
-        self.workspace_selector = None
-      
-        logging.warning("Setting main window for widget_manager")
         try:
-            self.cccore.widget_manager.set_main_window_and_create_docks(self.cccore.main_window)
+            self.cccore = cccore
+            self.settings = cccore.settings_manager.settings
+            self.settings_manager = cccore.settings_manager
+            
+            # Initialize managers first
+            self.init_managers()
+            
+            # Initialize UI components
+            self.init_ui()
+            self.setup_toolbar()
+            self.init_menu_bar()
+            self.setup_window_properties()
+            self.setup_animations()
+            
+            # Restore window state
+            self.restore_window_state()
+            
+            logging.info("MainApplication initialized successfully")
+            
         except Exception as e:
-            logging.error(f"Error setting main window: {e}")
-        logging.error(f"AAAAAAAAAAAA Main window set: {self.cccore.main_window}")
-        self.tab_widget = None  # Initialize it as None
-        self.workspace_selector = QComboBox(self)
-        # Create AuraText window
-        self.create_auratext_window()
+            logging.error(f"Error initializing MainApplication: {e}")
+            logging.error(traceback.format_exc())
+
+    def restore_window_state(self):
+        """Restore saved window state"""
+        try:
+            if hasattr(self, 'settings'):
+                state = self.settings.value('window_state')
+                if state:
+                    self.restoreState(state)
+                logging.info("Window state restored successfully")
+        except Exception as e:
+            logging.error(f"Error restoring window state: {e}")
+            logging.error(traceback.format_exc())
+
+    def save_window_state(self):
+        """Save current window state"""
+        try:
+            if hasattr(self, 'settings'):
+                self.settings.setValue('window_state', self.saveState())
+                self.settings.setValue('window_geometry', self.geometry().getRect())
+                logging.info("Window state saved successfully")
+        except Exception as e:
+            logging.error(f"Error saving window state: {e}")
+            logging.error(traceback.format_exc())
+
+    def closeEvent(self, event):
+        """Handle window close event"""
+        try:
+            self.save_window_state()
+            super().closeEvent(event)
+        except Exception as e:
+            logging.error(f"Error in closeEvent: {e}")
+            logging.error(traceback.format_exc())
+            event.accept()
+
+   
+    def init_menu_bar(self):
+        """Initialize the menu bar"""
+        try:
+            self.menuBar().clear()
+            
+            # Create main menus
+            self.file_menu = self.menuBar().addMenu("&File")
+            self.edit_menu = self.menuBar().addMenu("&Edit")
+            self.view_menu = self.menuBar().addMenu("&View")  # Store reference
+            self.tools_menu = self.menuBar().addMenu("&Tools")
+            self.vault_menu = self.menuBar().addMenu("&Vault")
+            self.graph_menu = self.menuBar().addMenu("&Graph")
+            self.workspace_menu = self.menuBar().addMenu("&Workspace")
+            self.help_menu = self.menuBar().addMenu("&Help")
+            
+            # Add risk manager to View menu if dock exists
+            if "Risk Manager" in self.widget_manager.dock_widgets:
+                risk_dock = self.widget_manager.dock_widgets["Risk Manager"]
+                self.view_menu.addAction(risk_dock.toggleViewAction())
+            
+            # Let menu manager handle the rest
+            if hasattr(self, 'menu_manager'):
+                self.menu_manager.setup_menus()
+            
+        except Exception as e:
+            logging.error(f"Error creating menu bar: {e}")
+
+    def init_managers(self):
+        """Initialize all managers"""
+        try:
+            self.widget_manager = self.cccore.widget_manager
+            self.widget_manager.set_main_window(self)
+            self.menu_manager = MenuManager(self, self.cccore)
+            self.cccore.set_menu_manager(self.menu_manager)
+            logging.info("Managers initialized successfully")
+        except Exception as e:
+            logging.error(f"Error initializing managers: {str(e)}")
+            logging.error(traceback.format_exc())
+
+    def setup_window(self):
+        """Setup basic window properties"""
+        self.setWindowTitle("Compyutinator Code")
+        self.setWindowFlags(
+            Qt.WindowType.Window |
+            Qt.WindowType.WindowMinMaxButtonsHint |
+            Qt.WindowType.WindowCloseButtonHint |
+            Qt.WindowType.WindowSystemMenuHint
+        )
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+    def setup_window_state(self):
+        """Setup window state tracking"""
+        self.is_maximized = False
+        self.previous_geometry = None
+        self.snap_threshold = 20
+        self.is_dragging = False
+        self.drag_position = None
+        self.title_bar_height = 32
         
-        self.setup_ui()
+        # Window opacity settings
+        self.setWindowOpacity(1.0)
+        self.opacity_animation = QPropertyAnimation(self, b"windowOpacity")
+        self.opacity_animation.setDuration(200)
         
-        logging.info("Loading settings")
-        self.load_settings()
-        logging.info("Setting up connections")
-        self.setup_connections()
-        logging.info("Loading splash input")
-        self.load_splash_input()
-        logging.info("MainApplication initialization complete")
+        # Restore previous state if exists, otherwise set defaults
+        if self.settings.value("geometry") is not None:
+            self.restore_window_state()
+        else:
+            self.set_default_window_state()
+
+    def set_default_window_state(self, screen_geometry=None):
+        """Set default window size and position"""
+        if screen_geometry is None:
+            screen = QApplication.primaryScreen()
+            if screen:
+                screen_geometry = screen.geometry()
+            else:
+                return
         
-        # Check for current vault path
-        current_vault_path = self.cccore.vault_manager.get_current_vault_path()
-        if not current_vault_path:
-            logging.warning("No default vault set. Some features may be unavailable.")
-            # You might want to prompt the user to set a vault here
+        # Set to 80% of screen size
+        width = int(screen_geometry.width() * 0.8)
+        height = int(screen_geometry.height() * 0.8)
         
-        self.setWindowOpacity(0.0)  # Start fully transparent
+        # Center on screen
+        x = screen_geometry.x() + (screen_geometry.width() - width) // 2
+        y = screen_geometry.y() + (screen_geometry.height() - height) // 2
         
-        # Apply the saved theme
-        saved_theme = self.cccore.theme_manager.get_current_theme()
-        self.cccore.theme_manager.apply_theme(saved_theme)
+        self.setGeometry(x, y, width, height)
+
+    def mousePressEvent(self, event):
+        """Handle mouse press events"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.is_dragging = True
+            self.drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        """Handle mouse release events"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.is_dragging = False
+        super().mouseReleaseEvent(event)
+
+    def mouseMoveEvent(self, event):
+        """Handle mouse move events"""
+        if not self.is_dragging:
+            return
+        
+        if event.buttons() & Qt.MouseButton.LeftButton:
+            new_pos = event.globalPosition().toPoint() - self.drag_position
+            self.move(new_pos)
+            
+            # Get current screen
+            current_screen = QApplication.screenAt(event.globalPosition().toPoint())
+            if not current_screen:
+                return
+                
+            # Check for snapping
+            screen_geometry = current_screen.availableGeometry()
+            window_geometry = self.geometry()
+            
+            # Right edge snap
+            if abs(screen_geometry.right() - window_geometry.right()) < self.snap_threshold:
+                self.snap_to_right_half()
+            # Left edge snap
+            elif abs(screen_geometry.left() - window_geometry.left()) < self.snap_threshold:
+                self.snap_to_left_half()
+            # Top edge snap
+            elif abs(screen_geometry.top() - window_geometry.top()) < self.snap_threshold:
+                self.snap_to_top()
+
+    def snap_to_right_half(self):
+        """Snap window to right half of screen"""
+        current_screen = self.screen()
+        if current_screen:
+            screen_geometry = current_screen.availableGeometry()
+            target_geometry = QRect(
+                screen_geometry.width() // 2,
+                screen_geometry.y(),
+                screen_geometry.width() // 2,
+                screen_geometry.height()
+            )
+            self._animate_snap(target_geometry)
+
+    def snap_to_left_half(self):
+        """Snap window to left half of screen"""
+        current_screen = self.screen()
+        if current_screen:
+            screen_geometry = current_screen.availableGeometry()
+            target_geometry = QRect(
+                screen_geometry.x(),
+                screen_geometry.y(),
+                screen_geometry.width() // 2,
+                screen_geometry.height()
+            )
+            self._animate_snap(target_geometry)
+
+    def snap_to_top(self):
+        """Snap window to top of screen"""
+        current_screen = self.screen()
+        if current_screen:
+            screen_geometry = current_screen.availableGeometry()
+            target_geometry = QRect(
+                screen_geometry.x(),
+                screen_geometry.y(),
+                screen_geometry.width(),
+                screen_geometry.height() // 2
+            )
+            self._animate_snap(target_geometry)
+
+    def _animate_snap(self, target_geometry):
+        """Animate window snapping"""
+        self.snap_animation.setStartValue(self.geometry())
+        self.snap_animation.setEndValue(target_geometry)
+        self.snap_animation.start()
+
+    def maximize(self):
+        """Maximize the window"""
+        current_screen = self.screen()
+        if current_screen:
+            screen_geometry = current_screen.availableGeometry()
+            self.setGeometry(screen_geometry)
+
+    def changeEvent(self, event):
+        """Handle window state changes"""
+        if event.type() == QEvent.Type.WindowStateChange:
+            if self.windowState() & Qt.WindowState.WindowMaximized:
+                self.is_maximized = True
+            else:
+                self.is_maximized = False
+        super().changeEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        """Handle double-click on title bar for maximize/restore"""
+        if event.position().y() <= self.title_bar_height:
+            if self.isMaximized():
+                self.showNormal()
+            else:
+                self.showMaximized()
+        super().mouseDoubleClickEvent(event)
+
+    def keyPressEvent(self, event):
+        """Handle keyboard shortcuts for window management"""
+        if event.key() == Qt.Key.Key_F11:
+            if self.isFullScreen():
+                if self.is_maximized:
+                    self.showMaximized()
+                else:
+                    self.showNormal()
+            else:
+                self.showFullScreen()
+        elif event.modifiers() & Qt.KeyboardModifier.MetaModifier:
+            if event.key() == Qt.Key.Key_Up:
+                if not self.isMaximized():
+                    self.showMaximized()
+            elif event.key() == Qt.Key.Key_Down:
+                if self.isMaximized():
+                    self.showNormal()
+            elif event.key() == Qt.Key.Key_Left:
+                self.snap_to_left_half()
+            elif event.key() == Qt.Key.Key_Right:
+                self.snap_to_right_half()
+        super().keyPressEvent(event)
+
+    def enterEvent(self, event):
+        """Handle mouse enter events"""
+        if self.windowOpacity() < 1.0:
+            self.opacity_animation.setStartValue(self.windowOpacity())
+            self.opacity_animation.setEndValue(1.0)
+            self.opacity_animation.start()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        """Handle mouse leave events"""
+        if not self.isActiveWindow() and self.settings_manager.get_value("enable_window_fade", False):
+            self.opacity_animation.setStartValue(self.windowOpacity())
+            self.opacity_animation.setEndValue(0.85)
+            self.opacity_animation.start()
+        super().leaveEvent(event)
+        
        
-        self.create_docks()
-        self.auratext_windows = []
-        self.cccore.set_main_window(self)
-        self.setup_many_projects_manager()
+    def update_history(self, path):
+        """Update history using the history manager"""
+        self.history_manager.update_history(path)
+        if self.widget_manager.ai_chat_widget:
+            self.widget_manager.ai_chat_widget.set_context(path)
 
-        # Initialize notification manager
-        self.notification_manager = NotificationManager()
-        self.notification_center = None  # Will be initialized in setup_ui
-        
-        # Connect notification signals
-        self.notification_manager.notification_added.connect(self.on_notification_added)
-        self.notification_manager.notification_removed.connect(self.on_notification_removed)
+    def show_status_message(self, message: str, error: bool = False):
+        """Show status message in status bar"""
+        if error:
+            self.statusBar().setStyleSheet("color: red")
+        else:
+            self.statusBar().setStyleSheet("")
+        self.statusBar().showMessage(message, 5000)  # Show for 5 seconds
 
-        self.config_manager = ConfigManager()
+    def _process_async_events(self):
+        """Process pending async events"""
+        self.loop.call_soon(self.loop.stop)
+        self.loop.run_forever()
 
-        # Get config values
-        splash_enabled = self.config_manager.get("splash")
-        theme_color = self.config_manager.get_theme("theme_color")
+    def cleanup(self):
+        """Cleanup application resources"""
+        try:
+            # Stop any active timers first
+            for child in self.findChildren(QTimer):
+                child.stop()
 
-        # Save config values
-        self.config_manager.set("open_last_file", True)
-        self.config_manager.set_theme("accent_color", "#FF0000")
-
-        # Save workspace state
-        self.config_manager.save_workspace_state("workspace1", {
-            "open_files": ["file1.txt", "file2.py"],
-            "active_file": "file1.txt"
-        })
-
-        # Initialize client before UI
-        self.setup_client()
+            # Use synchronous cleanup for client
+            if hasattr(self, 'client') and self.client:
+                self.client.sync_close()  # Use sync version instead of async
+                
+            # Cleanup processes
+            self.cleanup_processes()
+            
+            # Clean up any remaining threads
+            if hasattr(self, 'thread') and self.thread:
+                self.thread.quit()
+                self.thread.wait()
+                
+        except Exception as e:
+            logging.error(f"Error during cleanup: {e}")
+            
+  
+    def cleanup_processes(self):
+        """Cleanup child processes"""
+        for process in self.child_processes.values():
+            try:
+                process.terminate()
+                process.waitForFinished(1000)  # Wait up to 1 second
+                if process.state() == QProcess.ProcessState.Running:
+                    process.kill()  # Force kill if still running
+            except Exception as e:
+                logging.warning(f"Error cleaning up process: {e}")
 
     def setup_client(self):
-        """Setup API client and WebSocket connections"""
-        config_manager = ConfigManager()
-        api_config = config_manager.get_api_config()
+        """Setup RiskkitClient and related widgets"""
+        api_config = self.settings_manager.get_riskkit_config()
         self.client = RiskkitClient(api_config)
         
-        # Subscribe to events
-        self.client.subscribe("risks:created", self.on_risk_created)
-        self.client.subscribe("risks:updated", self.on_risk_updated)
-        self.client.subscribe("risks:deleted", self.on_risk_deleted)
-        self.client.subscribe("news:received", self.on_news_received)
-        self.client.subscribe("event:received", self.on_event_received)
-        self.client.subscribe("notification:received", self.on_notification_received)
-        self.client.subscribe("system:status_updated", self.on_system_status_updated)
-        
-        # Connect client
-        asyncio.create_task(self.client.connect())
+        # Create risk manager widget using widget manager
+        if hasattr(self.widget_manager, 'RiskManagerWidget'):
+            self.risk_manager = self.widget_manager.RiskManagerWidget(self.cccore)
+            # Create a dock widget for the risk manager
+            risk_dock = self.widget_manager.get_or_create_dock("Risk Manager")
+            if risk_dock:
+                self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, risk_dock)
+                # Add toggle action to View menu
+                self.cccore.menu_manager.view_menu.addAction(risk_dock.toggleViewAction())
 
     def get_auth_token(self) -> Optional[str]:
         """Get authentication token from settings or login"""
@@ -292,7 +558,8 @@ class MainApplication(QMainWindow):
             self.settings_manager.set_setting("auth_token", dialog.token)
             return True
         return False
-
+      
+       
     def setup_websocket(self):
         """Initialize and setup WebSocket client"""
         self.ws_client = WebSocketClient(
@@ -354,25 +621,10 @@ class MainApplication(QMainWindow):
             # You can implement this using your preferred notification system
             pass
 
-    def init_ui(self):
-        # ... (other initializations)
-        
-
-        # Add this line to create the toolbar
-        self.toolbar = self.addToolBar("Main TTTToolbar")
-
+   
+       
     def setup_ui(self):
-        # Create a central widget
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        
-        # Create a main layout for the central widget
-        main_layout = QVBoxLayout(central_widget)
-        
-        # Create and set up the tab widget
-        self.tab_widget = QTabWidget(self)
-        main_layout.addWidget(self.tab_widget)
-        
+        # Remove the setCentralWidget calls from here
         # Set dark background
         self.set_dark_background()
         
@@ -380,17 +632,12 @@ class MainApplication(QMainWindow):
         self.setWindowTitle(self.settings_manager.get_value('window_title', 'Computinator Code'))
         self.setGeometry(*self.settings_manager.get_value('window_geometry', (100, 100, 1280, 720)))
         
-        # Initialize menu bar
-        self.init_menu_bar()
-        
         # Initialize toolbar
         self.toolbar = self.addToolBar("Main Toolbar")
         
         # Add other widgets or tabs
-        self.create_central_tabs()
-        self.add_transcriptor_live_tab()
-        self.add_logs_viewer_tab()
-        
+       # self.create_central_tabs()
+         
         # Set up other UI components
         self.flashlight = Flashlight(self.cccore, size=200, power=0.036)
         self.setup_workspace_selector()
@@ -401,13 +648,37 @@ class MainApplication(QMainWindow):
         self.menuBar().addAction(self.create_auratext_window_action)
     
     def setup_connections(self):
-        if self.tab_widget:
-            self.tab_widget.currentChanged.connect(self.handle_tab_change)
-        self.workspace_selector.currentTextChanged.connect(self.on_workspace_changed)
-        self.cccore.theme_manager.theme_changed.connect(self.on_theme_changed)
-        if hasattr(self, 'many_projects_manager'):
-            self.many_projects_manager.project_list.itemClicked.connect(self.on_project_selected)
-    
+        """Set up signal connections"""
+        try:
+            # Connect tab widget signals if it exists
+            if hasattr(self, 'tab_widget') and self.tab_widget:
+                self.tab_widget.currentChanged.connect(self.handle_tab_change)
+                logging.debug("Successfully connected tab changed signal")
+            
+            # Connect workspace selector signals using widget manager
+            workspace_selector = self.cccore.widget_manager.get_workspace_selector()
+            if workspace_selector:
+                workspace_selector.currentTextChanged.connect(self.on_workspace_changed)
+                logging.info("Workspace selector signals connected")
+            else:
+                logging.warning("Workspace selector not initialized, skipping signal connection")
+                
+        except Exception as e:
+            logging.error(f"Error setting up connections: {str(e)}")
+            logging.error(traceback.format_exc())
+
+    def on_workspace_changed(self, workspace_name):
+        """Handle workspace change"""
+        try:
+            if workspace_name:
+                self.cccore.set_current_workspace(workspace_name)
+                logging.info(f"Workspace changed to: {workspace_name}")
+                # Update any UI elements that depend on workspace
+                self.update_workspace_dependent_ui()
+        except Exception as e:
+            logging.error(f"Error changing workspace: {str(e)}")
+            logging.error(traceback.format_exc())
+            
     def dump_thread_info():
         logging.critical("Active threads at exit:")
         for thread in global_thread_tracker.get_active_threads():
@@ -424,7 +695,7 @@ class MainApplication(QMainWindow):
             return
         try:
             logging.info("Setting up menu")
-            self.menu_manager = MenuManager(self, self.cccore)
+            self.menu_manager = MenuManager(main_window=self, cccore=self.cccore)
             self.menuBar = self.menu_manager.create_menu_bar()
             self.setMenuBar(self.menuBar)
             logging.info("Menu setup complete")
@@ -437,32 +708,39 @@ class MainApplication(QMainWindow):
         self.load_layout()
 
     def setup_workspace_selector(self):
-        self.workspace_selector = QComboBox()
-        current_vault = self.cccore.vault_manager.get_current_vault()
-        if current_vault:
-            workspaces = self.cccore.workspace_manager.get_workspace_names(current_vault.path)
-            self.workspace_selector.addItems(workspaces)
-            
-            default_workspace = self.cccore.workspace_manager.get_default_workspace(current_vault.path)
-            if default_workspace:
-                if isinstance(default_workspace, str):
-                    self.workspace_selector.setCurrentText(default_workspace)
-                else:
-                    self.workspace_selector.setCurrentText(default_workspace.name)
-        else:
-            logging.warning("No current vault set. Workspace selector will be empty.")
-        
-        self.workspace_selector.currentTextChanged.connect(self.on_workspace_changed)
-        
-        # Create a widget to hold the label and combobox
-        workspace_widget = QWidget()
-        workspace_layout = QHBoxLayout(workspace_widget)
-        workspace_layout.addWidget(QLabel("Workspace:"))
-        workspace_layout.addWidget(self.workspace_selector)
-        workspace_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # Add the widget to the toolbar
-        self.toolbar.addWidget(workspace_widget)
+        """Initialize the workspace selector"""
+        try:
+            if hasattr(self.cccore, 'widget_manager'):
+                self.workspace_selector = QComboBox()
+                self.workspace_selector.setMaximumWidth(200)
+                
+                # Get current vault
+                current_vault = self.cccore.vault_manager.get_current_vault()
+                if current_vault:
+                    # Get workspaces for current vault
+                    workspaces = self.cccore.workspace_manager.get_workspaces(current_vault.path)
+                    if workspaces:
+                        self.workspace_selector.addItems(workspaces)
+                        
+                        # Set current workspace if exists
+                        current_workspace = self.cccore.workspace_manager.get_active_workspace(
+                            vault_path=current_vault.path
+                        )
+                        if current_workspace:
+                            index = self.workspace_selector.findText(current_workspace)
+                            if index >= 0:
+                                self.workspace_selector.setCurrentIndex(index)
+                
+                # Add to toolbar if it exists
+                if hasattr(self, 'toolbar'):
+                    self.toolbar.addWidget(self.workspace_selector)
+                    
+                logging.info("Workspace selector initialized successfully")
+                
+        except Exception as e:
+            logging.error(f"Error setting up workspace selector: {str(e)}")
+            logging.error(traceback.format_exc())
+            self.workspace_selector = None
 
     def set_vault(self, vault_path):
         self.setWindowTitle(f"AuraText - Main Vault: {os.path.basename(vault_path)}")
@@ -485,29 +763,30 @@ class MainApplication(QMainWindow):
             self.cccore.open_vault(vault_path)
 
     def on_workspace_changed(self, workspace_name):
-        if workspace_name:
-            current_vault = self.cccore.vault_manager.get_current_vault()
-            if current_vault:
-                self.cccore.workspace_manager.set_active_workspace(current_vault.path, workspace_name)
-                # Update UI or perform any other necessary actions
-            else:
-                logging.warning("No current vault set. Cannot change workspace.")
-        else:
-            logging.warning("No workspace selected.")
-   
-    def update_history(self, path):
-        if path in self.history:
-            self.history.remove(path)
-        self.history.insert(0, path)
-        if len(self.history) > self.max_history_length:
-            self.history.pop()
+        """Handle workspace change"""
+        try:
+            if workspace_name:
+                self.cccore.set_current_workspace(workspace_name)
+                logging.info(f"Workspace changed to: {workspace_name}")
+                # Update any UI elements that depend on workspace
+                self.update_workspace_dependent_ui()
+        except Exception as e:
+            logging.error(f"Error changing workspace: {str(e)}")
+            logging.error(traceback.format_exc())
 
-        self.history_widget.clear()
-        for item in self.history:
-            self.history_widget.addItem(item)
-
-        if self.widget_manager.ai_chat_widget:
-            self.widget_manager.ai_chat_widget.set_context(path)
+    def update_workspace_dependent_ui(self):
+        """Update UI elements that depend on workspace"""
+        try:
+            # Update window title
+            self.setWindowTitle(f"Computinator Code - {self.cccore.get_current_workspace()}")
+            
+            # Update other workspace-dependent elements
+            if hasattr(self.cccore, 'widget_manager'):
+                self.cccore.widget_manager.apply_theme_to_all_widgets()
+                
+        except Exception as e:
+            logging.error(f"Error updating workspace UI: {str(e)}")
+            logging.error(traceback.format_exc())
 
     def handle_tab_change(self, index):
         self.last_focused_widget = self.tab_widget.widget(index)
@@ -540,13 +819,7 @@ class MainApplication(QMainWindow):
         self.tab_widget.setStyleSheet(stylesheet)
         self.cccore.theme_manager.set_last_focused_tab_color(color)
 
-    def add_history_tab(self):
-        self.history_widget = QListWidget()
-        self.tab_widget.addTab(self.history_widget, "Action History")
-
-    def init_menu_bar(self):
-        self.setMenuBar(self.menu_manager.create_menu_bar())
-
+    
     def set_dark_background(self):
         dark_palette = self.palette()
         dark_palette.setColor(QPalette.ColorRole.Window, QColor(46, 52, 64))  # Nord theme dark color
@@ -595,36 +868,11 @@ class MainApplication(QMainWindow):
         if self.serial_port:
             self.overlay.set_serial_port(port)
 
-    def create_central_tabs(self):
-        support_box = QWidget()
-        support_layout = QVBoxLayout()
-        support_label = QLabel("Support Me - links on github")
-        github_button = QPushButton("https://github.com/instancer-kirik/BigLinks")
-        github_button.clicked.connect(self.open_github)
-
-        support_layout.addWidget(support_label)
-        support_layout.addWidget(github_button)
-        support_box.setLayout(support_layout)
-        self.tab_widget.addTab(support_box, "Support Me")
-        
-        self.tab_widget.addTab(self.vm_manager_widget, "VM Manager")
-
 
     def open_github(self):
         QDesktopServices.openUrl(QUrl("https://github.com/instancer-kirik/BigLinks"))
 
-    def add_transcriptor_live_tab(self):
-        self.transcriptor_live_widget = VoiceTypingWidget(self.cccore.input_manager)
-        self.tab_widget.addTab(self.transcriptor_live_widget, "Voice Typing")
-
-    def add_logs_viewer_tab(self):
-        self.log_viewer_widget = LogViewerWidget(initial_log_file_path=self.get_log_file_path())
-        self.tab_widget.addTab(self.log_viewer_widget, "Logs")
-        # Don't wait for logs to load, the widget will handle it asynchronously
-    
-    def get_log_file_path(self):
-        return os.path.join(os.getcwd(), 'logs', 'app.log')
-
+   
     def create_workspace(self):
         vault_dir, ok = QInputDialog.getItem(self, "Select Vault", 
                                              "Choose a vault for the new workspace:", 
@@ -693,36 +941,29 @@ class MainApplication(QMainWindow):
             sticky_note_manager.add_sticky_note(content)
         else:
             logging.error(f"Expected StickyNoteManager, got {type(sticky_note_manager)}")
-
-    def closeEvent(self, event):
-        event.accept()  # Always accept the close event
-        self.cleanup_processes()
-        super().closeEvent(event)
-
-    def cleanup_processes(self):
-        thread_pool = QThreadPool.globalInstance()
-        thread_pool.clear()  # Clear all queued tasks
-        
-        # Wait for active threads to finish
-        while thread_pool.activeThreadCount() > 0:
-            logging.info(f"Waiting for {thread_pool.activeThreadCount()} active threads to finish...")
-            if not thread_pool.waitForDone(1000):  # Wait for up to 1 second
-                logging.warning("Some threads are taking longer than expected to finish")
-        
-        logging.info("All threads have finished")
-        
-        # Terminate all running processes
-        self.cccore.process_manager.cleanup_processes()
-        for process in self.child_processes.values():
-            if process.state() == QProcess.Running:
-                process.terminate()
-                process.waitForFinished(1000)  # Wait for 1 second
-                if process.state() == QProcess.Running:
-                    process.kill()  # Force kill if it doesn't terminate
-          
-        # Clear the process dictionary
-        
-        self.child_processes.clear()
+    def setup_animations(self):
+        """Initialize all window animations"""
+        try:
+            # Window opacity animation for fade effects
+            self.opacity_animation = QPropertyAnimation(self, b"windowOpacity")
+            self.opacity_animation.setDuration(200)  # 200ms duration
+            
+            # Window snap animation for window snapping
+            self.snap_animation = QPropertyAnimation(self, b"geometry")
+            self.snap_animation.setDuration(150)  # 150ms duration
+            self.snap_animation.setEasingCurve(QEasingCurve.Type.OutQuad)
+            
+            # Initialize snap threshold
+            self.snap_threshold = 20  # pixels
+            
+            # Initialize dragging state
+            self.is_dragging = False
+            self.drag_position = None
+            
+            logging.debug("Window animations initialized successfully")
+        except Exception as e:
+            logging.error(f"Error setting up animations: {str(e)}")
+            logging.error(traceback.format_exc())
 
     def fade_in(self):
         logging.info("Starting fade_in animation")
@@ -743,29 +984,34 @@ class MainApplication(QMainWindow):
             logging.debug(f"Mouse press event on {obj}")
         return super().eventFilter(obj, event)
 
-    def create_docks(self):
-        logging.info("Creating startup docks")
-        default_docks = [
-            "File Explorer", "Code Editor", "Terminal", "AI Chat", 
-            "Symbolic Linker", "Sticky Notes", "Process Manager", 
-            "Vaults Manager", "Projects Manager"
-        ]
-        # Remove "AuraText" from the default_docks list
-        for name in default_docks:
-            logging.info(f"Ensuring dock: {name}")
-            dock = self.cccore.widget_manager.ensure_dock(name)
-            if dock:
-                self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
-                logging.info(f"Successfully added dock: {name}")
-            else:
-                logging.warning(f"Failed to create or add dock: {name}")
-        logging.info("Startup docks creation completed")
-
+    
     def create_auratext_window(self):
         auratext_window = self.cccore.create_auratext_window()
        
         auratext_window.show()
-  
+    def setup_window_properties(self):
+        """Set up window properties and geometry"""
+        try:
+            # Set window title
+            self.setWindowTitle(self.settings_manager.get_value('window_title', 'Computinator Code'))
+            
+            # Set window geometry
+            default_geometry = (100, 100, 1280, 720)  # x, y, width, height
+            geometry = self.settings_manager.get_value('window_geometry', default_geometry)
+            self.setGeometry(*geometry)
+            
+            # Set window flags and attributes
+            self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint)
+            self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+            
+            # Set window opacity for fade effects
+            self.setWindowOpacity(1.0)
+            
+            logging.info("Window properties initialized successfully")
+            
+        except Exception as e:
+            logging.error(f"Error setting up window properties: {e}")
+            logging.error(traceback.format_exc())
     def cleanup(self):
         if hasattr(self, 'profiler'):
             self.profiler.disable()
@@ -776,9 +1022,15 @@ class MainApplication(QMainWindow):
         logging.info("Starting application cleanup")
         
         # Clean up client if it exists
-        if hasattr(self, 'client'):
+        if hasattr(self, 'client') and self.client:
             asyncio.create_task(self.client.close())
-        
+         # Close RiskkitClient
+           
+            # Save any pending data
+        if hasattr(self, 'data_mux') and self.data_mux:
+            state = self.data_mux.save_state() 
+            # Save state to file or database
+            
         # Set a timeout for cleanup operations
         cleanup_timeout = 5  # seconds
         
@@ -805,7 +1057,23 @@ class MainApplication(QMainWindow):
                     logging.warning(f"Cannot: {e}")
         
         QThreadPool.globalInstance().waitForDone(2000)  # Wait up to 5 seconds for all threads to finish
-        logging.info("Cleanup process completed")
+        try:
+            # Save window state
+            self.save_window_state()
+            
+            # Clean up managers
+            if hasattr(self, 'cccore'):
+                if hasattr(self.cccore, 'widget_manager'):
+                    self.cccore.widget_manager.cleanup()
+                if hasattr(self.cccore, 'process_manager'):
+                    self.cccore.process_manager.cleanup_processes()
+                    
+            # Clean up any remaining resources
+            self.cleanup_resources()
+        except Exception as e:
+            logging.error(f"Error during cleanup: {e}")
+        finally:
+            logging.info("Cleanup process completed")
 
         logging.info("Application cleanup complete")
 
@@ -818,38 +1086,187 @@ class MainApplication(QMainWindow):
         # Add a toggle action to the View menu
         self.cccore.menu_manager.view_menu.addAction(many_projects_dock.toggleViewAction())
         self.cccore.widget_manager.dock_widgets["Many Projects Manager"] = many_projects_dock
-
-    def open_project_in_new_window(self, vault_name, project_name):
-        # Create a new AuraText window
-        new_window = self.cccore.create_auratext_window()
-        
-        # Set the vault for the new window
-        vault = self.cccore.vault_manager.get_vault(vault_name)
-        if vault:
-            new_window.set_vault(vault)
-        
-        # Switch to the selected project in the new window
-        new_window.cccore.project_manager.switch_project(vault_name, project_name)
-        
-        # Update the UI of the new window
-        new_window.update_ui_for_project(project_name)
-        
-        # Show the new window
-        new_window.show()
-
-    # ... (other methods remain the same)
         # Update other UI elements as needed
-def post_show_init(self):
-    logging.warning("Entering post_show_init")
-    try:
-        logging.warning("Attempting to show Cool dock")
-        self.cccore.widget_manager.show_cool_dock()
-        logging.warning("Cool dock shown successfully")
-    except Exception as e:
-        logging.error(f"Error showing Cool dock in post_show_init: {str(e)}")
-        logging.error(traceback.format_exc())
-    logging.warning("Exiting post_show_init")
-        #$self.create_workspace()
+    def post_show_init(self):
+        """Initialize components after window is shown"""
+        try:
+            logging.info("Starting post-show initialization")
+            
+            # Apply theme to all widgets
+            self.apply_theme_to_widgets()
+            logging.info("Theme applied to all widgets")
+            
+            # Setup late connections
+            self.setup_late_connections()
+            logging.info("Late connections established")
+            
+            # Initialize late-loading components
+            if hasattr(self.cccore, 'late_init'):
+                self.cccore.late_init()
+                logging.info("CCCore late initialization completed")
+                
+            # Update UI elements that depend on loaded data
+            if hasattr(self, 'update_workspace_dependent_ui'):
+                self.update_workspace_dependent_ui()
+                logging.info("Workspace-dependent UI updated")
+            
+            logging.info("Post-show initialization completed successfully")
+            
+        except Exception as e:
+            logging.error(f"Error in post-show initialization: {e}")
+            logging.error(traceback.format_exc())
+            
+    def cleanup_resources(self):
+        """Clean up application resources"""
+        try:
+            # Clean up managers
+            if hasattr(self, 'cccore'):
+                if hasattr(self.cccore, 'widget_manager'):
+                    self.cccore.widget_manager.cleanup()
+                if hasattr(self.cccore, 'process_manager'):
+                    self.cccore.process_manager.cleanup_processes()
+                    
+            # Clean up any open windows
+            for window in QApplication.topLevelWindows():
+                window.close()
+                
+            # Clean up any remaining resources
+            self.cleanup_widgets()
+            self.cleanup_connections()
+            
+            logging.info("Resources cleaned up successfully")
+            
+        except Exception as e:
+            logging.error(f"Error cleaning up resources: {e}")
+            logging.error(traceback.format_exc())
+            
+    def cleanup_widgets(self):
+        """Clean up widget resources"""
+        try:
+            if hasattr(self, 'central_widget'):
+                self.central_widget.deleteLater()
+            if hasattr(self, 'statusBar'):
+                self.statusBar().deleteLater()
+        except Exception as e:
+            logging.error(f"Error cleaning up widgets: {e}")
+            
+    def cleanup_connections(self):
+        """Clean up signal connections"""
+        try:
+            if hasattr(self, 'tab_widget'):
+                self.tab_widget.currentChanged.disconnect()
+        except Exception as e:
+            logging.error(f"Error cleaning up connections: {e}")
+
+    def setup_late_connections(self):
+        """Setup connections that need to be made after window is shown"""
+        try:
+            # Connect workspace selector if it exists
+            if hasattr(self.cccore.widget_manager, 'workspace_selector'):
+                selector = self.cccore.widget_manager.workspace_selector
+                if selector:
+                    selector.currentTextChanged.connect(self.handle_workspace_change)
+                    logging.info("Workspace selector connections established")
+                    
+            # Connect any remaining dock widget signals
+            for dock_name, dock in self.cccore.widget_manager.dock_widgets.items():
+                if hasattr(dock.widget(), 'late_connect'):
+                    dock.widget().late_connect()
+                    logging.info(f"Late connections established for {dock_name}")
+                    
+            logging.info("Late connections setup completed")
+            
+        except Exception as e:
+            logging.error(f"Error setting up late connections: {e}")
+            logging.error(traceback.format_exc())
+
+    def apply_theme_to_widgets(self):
+        """Apply current theme to all widgets"""
+        try:
+            # Get current theme
+            theme = self.cccore.theme_manager.get_current_theme()
+            
+            # Apply to dock widgets
+            for dock in self.cccore.widget_manager.dock_widgets.values():
+                if hasattr(dock.widget(), 'apply_theme'):
+                    dock.widget().apply_theme(theme)
+                    
+            # Apply to main window components
+            self.apply_theme_to_window(theme)
+            
+            logging.info("Theme applied to all widgets")
+            
+        except Exception as e:
+            logging.error(f"Error applying theme to widgets: {e}")
+            logging.error(traceback.format_exc())
+
+    def apply_theme_to_window(self, theme):
+        """Apply theme to main window components"""
+        try:
+            # Apply window colors
+            self.setStyleSheet(f"""
+                QMainWindow {{
+                    background-color: {theme.get('main_window_color', '#2E3440')};
+                }}
+                QDockWidget {{
+                    background-color: {theme.get('window_color', '#3B4252')};
+                    color: {theme.get('text_color', '#ECEFF4')};
+                }}
+                QDockWidget::title {{
+                    background-color: {theme.get('header_color', '#4C566A')};
+                    padding: 3px;
+                }}
+                QMenuBar {{
+                    background-color: {theme.get('header_color', '#4C566A')};
+                    color: {theme.get('text_color', '#ECEFF4')};
+                }}
+                QToolBar {{
+                    background-color: {theme.get('header_color', '#4C566A')};
+                    border: none;
+                }}
+                QStatusBar {{
+                    background-color: {theme.get('header_color', '#4C566A')};
+                    color: {theme.get('text_color', '#ECEFF4')};
+                }}
+            """)
+            
+            # Apply to menu bar
+            if hasattr(self, 'menuBar'):
+                self.menuBar().setStyleSheet(f"""
+                    QMenuBar::item:selected {{
+                        background-color: {theme.get('theme_color', '#81A1C1')};
+                    }}
+                """)
+                
+            logging.info("Theme applied to main window")
+            
+        except Exception as e:
+            logging.error(f"Error applying theme to window: {e}")
+            logging.error(traceback.format_exc())
+
+    def setup_toolbar(self):
+        """Initialize the toolbar"""
+        try:
+            self.toolbar = self.addToolBar("Main Toolbar")
+            self.toolbar.setObjectName("MainToolbar")
+            
+            # Add workspace selector
+            if hasattr(self.cccore.widget_manager, 'setup_workspace_selector'):
+                selector = self.cccore.widget_manager.setup_workspace_selector()
+                if selector:
+                    self.toolbar.addWidget(selector)
+                    logging.info("Workspace selector added to toolbar")
+                else:
+                    logging.warning("Failed to add workspace selector to toolbar")
+                    
+            # Add other toolbar items here
+            
+            logging.info("Toolbar setup completed successfully")
+            
+        except Exception as e:
+            logging.error(f"Error setting up toolbar: {e}")
+            logging.error(traceback.format_exc())
+
 def exception_hook(exctype, value, tb):
     logging.error("Uncaught exception", exc_info=(exctype, value, tb))
     traceback.print_exception(exctype, value, tb)
@@ -868,7 +1285,8 @@ def setup_logging():
         handlers=[
             logging.FileHandler(log_file_path, mode='w'),
             logging.StreamHandler()
-        ]
+        ],
+        force=True  # Force reconfiguration
     )
 
     # Test logging
@@ -926,6 +1344,7 @@ def main():
         
         logging.info("Initializing managers")
         cccore, overlay = initialize_managers(settings_manager)
+        
         logging.info("Creating WidgetManager")
         widget_manager = WidgetManager(cccore)
 
@@ -934,21 +1353,22 @@ def main():
         
         logging.info("Setting overlay for CCCore")
         cccore.set_overlay(overlay)
-
         
         logging.info("Setting widget_manager for CCCore")
         cccore.set_widget_manager(widget_manager)
         
+        logging.info("Creating MainApplication instance")
+        main_app = MainApplication(cccore)
+
+        # Set main window for widget manager and CCCore
+        logging.info("Setting main_window for widget_manager and CCCore")
+        widget_manager.set_main_window(main_app)
+        cccore.set_main_window(main_app)
+        
         logging.info("Performing CCCore late initialization")
         cccore.late_init()
         
-        logging.info("Creating MainApplication instance")
-        main_app = MainApplication(settings_manager, cccore)
-
-       # logging.info("Setting main_window for widget_manager")
-       # cccore.set_main_window(main_app)
         def show(self):
-        
             super().show()
             
         def show_app():
@@ -956,12 +1376,20 @@ def main():
             try:
                 logging.info("Attempting to show main application window")
                 main_app.show()
+                
+                # Apply window state after showing
+                main_app.restore_window_state()
+                
+                # Fade in the window
+                QTimer.singleShot(100, main_app.fade_in)
+                
+                # Post-show initialization
+                QTimer.singleShot(200, main_app.post_show_init)
+                
                 logging.info("Main application window shown successfully")
-                logging.info("Attempting to fade in main application")
-                main_app.fade_in()
-                logging.info("Main application faded in successfully")
+                
             except Exception as e:
-                logging.critical(f"Failed to show or fade in main application window: {e}", exc_info=True)
+                logging.critical(f"Failed to show main application window: {e}", exc_info=True)
                 QApplication.quit()
             logging.info("Exiting show_app function")
             try:
@@ -977,10 +1405,19 @@ def main():
         QTimer.singleShot(0, show_app)
 
         def cleanup():
-            main_app.cleanup()
-            cccore.process_manager.cleanup_processes()
-            app.quit()
-
+            """Handle application cleanup"""
+            logging.info("Starting application cleanup")
+            try:
+                if 'main_app' in locals():
+                    main_app.cleanup()
+                if hasattr(cccore, 'process_manager'):
+                    cccore.process_manager.cleanup_processes()
+                logging.info("Cleanup process completed")
+            except Exception as e:
+                logging.error(f"Error during cleanup: {e}")
+            finally:
+                logging.info("Application cleanup complete")
+                
         app.aboutToQuit.connect(cleanup)
 
         logging.debug("Entering Qt event loop")

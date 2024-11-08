@@ -3,6 +3,11 @@ from pydantic import BaseModel, Field, model_validator, field_validator, compute
 from datetime import datetime, timedelta
 from enum import Enum
 import re
+from .enums import (
+    RiskPriority, RiskStatus, RiskProbability,
+    ImpactSeverity, ImpactArea, ImpactTimeframe,
+    RelationshipType, ResourceType, RewardType
+)
 
 class RiskCategoryBase(BaseModel):
     """Base fields for risk categories"""
@@ -40,6 +45,87 @@ class RiskPriority(str, Enum):
     HIGH = "High"
     CRITICAL = "Critical"
 
+# Add Impact enums
+class ImpactSeverity(str, Enum):
+    LOW = "Low"
+    MEDIUM = "Medium"
+    HIGH = "High"
+    CRITICAL = "Critical"
+
+class ImpactArea(str, Enum):
+    FINANCIAL = "Financial"
+    OPERATIONAL = "Operational"
+    REPUTATIONAL = "Reputational"
+    REGULATORY = "Regulatory"
+    TECHNICAL = "Technical"
+    STRATEGIC = "Strategic"
+
+class ImpactTimeframe(str, Enum):
+    IMMEDIATE = "Immediate"
+    SHORT_TERM = "Short Term"
+    MEDIUM_TERM = "Medium Term"
+    LONG_TERM = "Long Term"
+
+# Add Impact base class
+class ImpactBase(BaseModel):
+    """Base Impact fields"""
+    description: str = Field(..., min_length=10, max_length=1000)
+    area: ImpactArea
+    severity: ImpactSeverity
+    likelihood: RiskPriority  # Reuse existing RiskPriority enum
+    estimated_cost: Optional[float] = Field(None, ge=0)
+    timeframe: ImpactTimeframe
+    notes: Optional[str] = Field(None, max_length=2000)
+    risk_id: int = Field(..., description="Risk ID this impact belongs to")
+    
+    @field_validator('description')
+    @classmethod
+    def description_must_be_meaningful(cls, v: str) -> str:
+        words = v.split()
+        if len(words) < 3:
+            raise ValueError('Description must be meaningful (at least 3 words)')
+        return v.strip()
+
+    @computed_field
+    @property
+    def impact_score(self) -> float:
+        severity_values = {
+            ImpactSeverity.LOW: 1,
+            ImpactSeverity.MEDIUM: 2,
+            ImpactSeverity.HIGH: 3,
+            ImpactSeverity.CRITICAL: 4
+        }
+        likelihood_values = {
+            RiskPriority.LOW: 1,
+            RiskPriority.MEDIUM: 2,
+            RiskPriority.HIGH: 3,
+            RiskPriority.CRITICAL: 4
+        }
+        return severity_values[self.severity] * likelihood_values[self.likelihood]
+
+# Add Impact update/create classes
+class ImpactCreate(ImpactBase):
+    """Fields specific to impact creation"""
+    pass
+
+class ImpactUpdate(ImpactBase):
+    """Fields specific to impact updates"""
+    id: int
+    version: int
+    last_updated: datetime
+    change_reason: str = Field(..., min_length=10, max_length=500)
+    previous_severity: Optional[ImpactSeverity] = None
+
+    @model_validator(mode='after')
+    def validate_severity_change(self) -> 'ImpactUpdate':
+        """Validate severity changes"""
+        if (self.previous_severity and 
+            self.severity != self.previous_severity and 
+            len(self.change_reason) < 20):
+            raise ValueError('Severity changes require detailed explanation (min 20 chars)')
+        return self
+
+
 class RiskBase(BaseModel):
     """Base Risk fields shared between Create and Update"""
     description: str = Field(..., min_length=10, max_length=1000)
@@ -52,6 +138,21 @@ class RiskBase(BaseModel):
     budget: Optional[float] = Field(None, ge=0)
     owner: Optional[str] = None
     project_id: int = Field(..., description="Project ID this risk belongs to")
+    impacts: List[ImpactBase] = Field(default_factory=list)
+    mitigation: Optional[str] = Field(None, min_length=10, max_length=1000)
+    
+    # Add missing fields
+    version: Optional[int] = None
+    last_updated: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    created_by: Optional[str] = None
+    dependencies: List[int] = Field(default_factory=list)
+    resource_requirements: Dict[str, float] = Field(default_factory=dict)
+    
+    # Add reward fields that were missing
+    reward_type: Optional[RewardType] = None
+    estimated_value: Optional[float] = Field(None, ge=0)
+    reward_probability: Optional[RiskProbability] = None
     
     @field_validator('description')
     @classmethod
@@ -94,9 +195,24 @@ class RiskBase(BaseModel):
         }
         return priority_values[self.impact] * priority_values[self.probability]
 
+    @computed_field
+    @property
+    def total_impact_score(self) -> float:
+        """Calculate total impact score across all impacts"""
+        if not self.impacts:
+            return 0.0
+        return sum(impact.impact_score for impact in self.impacts)
+
+    @computed_field
+    @property
+    def max_impact_severity(self) -> ImpactSeverity:
+        """Get the highest severity among all impacts"""
+        if not self.impacts:
+            return ImpactSeverity.LOW
+        return max(impact.severity for impact in self.impacts)
+
 class RiskCreate(RiskBase):
     """Fields specific to risk creation"""
-    mitigation: Optional[str] = Field(None, min_length=10, max_length=1000)
     dependencies: List[int] = Field(default_factory=list)
     resource_requirements: Dict[str, float] = Field(default_factory=dict)
     
@@ -126,27 +242,11 @@ class RiskUpdate(RiskBase):
     last_updated: datetime
     change_reason: str = Field(..., min_length=10, max_length=500)
     previous_status: Optional[RiskStatus] = None
-    
-    @field_validator('version')
-    @classmethod
-    def version_required(cls, v: Optional[int]) -> int:
-        """Ensure version is provided for updates"""
-        if not v:
-            raise ValueError("version is required when updating a risk")
-        return v
-
-    @field_validator('change_reason')
-    @classmethod
-    def validate_change_reason(cls, v: str, info) -> str:
-        """Validate change reason, especially for status changes"""
-        # Get the current values from the validation context
-        values = info.data
-        if ('status' in values and 
-            'previous_status' in values and 
-            values['status'] != values['previous_status'] and 
-            len(v) < 20):
-            raise ValueError('Status changes require detailed explanation (min 20 chars)')
-        return v
+    reward_type: Optional[RewardType] = None
+    estimated_value: Optional[float] = None
+    reward_probability: Optional[RiskProbability] = None
+    impact_area: Optional[ImpactArea] = None
+    impact_timeframe: Optional[ImpactTimeframe] = None
 
     @model_validator(mode='after')
     def validate_status_transition(self) -> 'RiskUpdate':
@@ -154,41 +254,23 @@ class RiskUpdate(RiskBase):
         if not self.previous_status or not self.status:
             return self
 
-        valid_transitions = {
-            RiskStatus.OPEN: {
-                RiskStatus.IN_PROGRESS: "Can transition to in progress",
-                RiskStatus.ACCEPTED: "Can be accepted without mitigation"
-            },
-            RiskStatus.IN_PROGRESS: {
-                RiskStatus.MITIGATED: "Mitigation complete",
-                RiskStatus.ACCEPTED: "Risk accepted during mitigation"
-            },
-            RiskStatus.MITIGATED: {
-                RiskStatus.CLOSED: "Risk fully mitigated and verified"
-            },
-            RiskStatus.ACCEPTED: {
-                RiskStatus.CLOSED: "Accepted risk now closed"
-            },
-            RiskStatus.CLOSED: {}  # Cannot transition from CLOSED
-        }
-
-        if self.status not in valid_transitions.get(self.previous_status, {}):
-            allowed = valid_transitions.get(self.previous_status, {}).keys()
-            raise ValueError(
-                f'Invalid status transition: {self.previous_status} -> {self.status}. '
-                f'Allowed transitions: {", ".join(str(s) for s in allowed)}'
-            )
-
-        # Additional validation for specific transitions
-        if self.status in [RiskStatus.MITIGATED, RiskStatus.CLOSED]:
-            if not hasattr(self, 'mitigation') or not self.mitigation:
-                raise ValueError(f'Mitigation plan required when transitioning to {self.status}')
-
+        # Validate required fields for specific transitions
         if self.status == RiskStatus.ACCEPTED:
-            if len(self.change_reason) < 50:
-                raise ValueError('Accepting a risk requires detailed justification (min 50 chars)')
+            if not self.acceptance_rationale:
+                raise ValueError("Acceptance rationale required when accepting risk")
+            if not self.approved_by:
+                raise ValueError("Approver required when accepting risk")
+
+        if self.status == RiskStatus.CLOSED:
+            if not self.closure_notes:
+                raise ValueError("Closure notes required when closing risk")
+
+        if self.status == RiskStatus.MITIGATED:
+            if not self.mitigation:
+                raise ValueError("Mitigation plan required when marking as mitigated")
 
         return self
+
     @field_validator('version')
     @classmethod
     def version_required(cls, v: Optional[int]) -> int:
@@ -196,6 +278,7 @@ class RiskUpdate(RiskBase):
         if not v:
             raise ValueError("version is required when updating a risk")
         return v
+
     @computed_field
     @property
     def has_status_changed(self) -> bool:
@@ -227,7 +310,7 @@ class RiskUpdate(RiskBase):
 class ResourceBase(BaseModel):
     """Base Resource fields"""
     name: str = Field(..., min_length=3, max_length=100)
-    type: str = Field(..., pattern="^(Financial|Human|Material|Technical)$")
+    type: ResourceType  # Use enum instead of pattern
     value: float = Field(..., ge=0)
     quantity: float = Field(..., ge=0)
     unit: str = Field(..., min_length=1)
@@ -293,7 +376,7 @@ class ResourceRequirement(BaseModel):
 class RiskRelationship(BaseModel):
     source_id: int
     target_id: int
-    relationship_type: str = Field(..., pattern="^(depends_on|blocks|relates_to)$")
+    relationship_type: RelationshipType  # Use enum instead of pattern
     strength: float = Field(..., ge=0, le=1)
     
     @field_validator('source_id', 'target_id')
@@ -340,3 +423,60 @@ class BatchValidationResult(BaseModel):
     item_results: Dict[int, ValidationResult] = Field(default_factory=dict)
     resource_impacts: Dict[str, float] = Field(default_factory=dict)
     dependency_graph: Optional[Dict] = None
+
+class ImpactBase(BaseModel):
+    """Base Impact fields"""
+    description: str = Field(..., min_length=10, max_length=1000)
+    area: ImpactArea
+    severity: ImpactSeverity
+    likelihood: RiskPriority  # Reuse existing RiskPriority enum
+    estimated_cost: Optional[float] = Field(None, ge=0)
+    timeframe: ImpactTimeframe
+    notes: Optional[str] = Field(None, max_length=2000)
+    risk_id: int = Field(..., description="Risk ID this impact belongs to")
+    
+    @field_validator('description')
+    @classmethod
+    def description_must_be_meaningful(cls, v: str) -> str:
+        words = v.split()
+        if len(words) < 3:
+            raise ValueError('Description must be meaningful (at least 3 words)')
+        return v.strip()
+
+    @computed_field
+    @property
+    def impact_score(self) -> float:
+        severity_values = {
+            ImpactSeverity.LOW: 1,
+            ImpactSeverity.MEDIUM: 2,
+            ImpactSeverity.HIGH: 3,
+            ImpactSeverity.CRITICAL: 4
+        }
+        likelihood_values = {
+            RiskPriority.LOW: 1,
+            RiskPriority.MEDIUM: 2,
+            RiskPriority.HIGH: 3,
+            RiskPriority.CRITICAL: 4
+        }
+        return severity_values[self.severity] * likelihood_values[self.likelihood]
+
+class ImpactCreate(ImpactBase):
+    """Fields specific to impact creation"""
+    pass
+
+class ImpactUpdate(ImpactBase):
+    """Fields specific to impact updates"""
+    id: int
+    version: int
+    last_updated: datetime
+    change_reason: str = Field(..., min_length=10, max_length=500)
+    previous_severity: Optional[ImpactSeverity] = None
+
+    @model_validator(mode='after')
+    def validate_severity_change(self) -> 'ImpactUpdate':
+        """Validate severity changes"""
+        if (self.previous_severity and 
+            self.severity != self.previous_severity and 
+            len(self.change_reason) < 20):
+            raise ValueError('Severity changes require detailed explanation (min 20 chars)')
+        return self

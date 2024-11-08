@@ -18,7 +18,7 @@ class WorkspaceManager:
     def __init__(self, cccore):
         self.cccore = cccore
         self.workspaces = {}
-        self.active_workspace = None
+        self.active_workspaces = {}  # Map vault paths to active workspaces
         self.config_file = os.path.join(self.cccore.vault_manager.get_current_vault_path() or tempfile.gettempdir(), "workspace_config.json")
         
         self.load_config()
@@ -78,18 +78,20 @@ class WorkspaceManager:
     def remove_workspace(self, vault_path, name):
         if vault_path in self.workspaces and name in self.workspaces[vault_path] and name != self.default_workspace_name:
             del self.workspaces[vault_path][name]
-            if self.active_workspace and self.active_workspace.name == name:
+            if self.active_workspaces.get(vault_path) == name:
                 self.set_active_workspace(vault_path, self.default_workspace_name)
             self.save_config()
 
-    def get_active_workspace(self):
-        return self.active_workspace
+    def get_active_workspace(self, vault_path=None):
+        """Get active workspace for a vault"""
+        if vault_path is None:
+            return None
+        return self.active_workspaces.get(vault_path)
 
-    def set_active_workspace(self, vault_path, name):
-        if vault_path in self.workspaces and name in self.workspaces[vault_path]:
-            self.active_workspace = self.workspaces[vault_path][name]
-            self.active_workspace_name = name
-            self.save_config()
+    def set_active_workspace(self, vault_path, workspace_name):
+        """Set active workspace for a vault"""
+        if vault_path and workspace_name in self.get_workspaces(vault_path):
+            self.active_workspaces[vault_path] = workspace_name
             return True
         return False
 

@@ -1,25 +1,47 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QPushButton
-from PyQt6.QtCore import QFileSystemWatcher, QTimer, pyqtSignal
+from PyQt6.QtCore import (
+    QFileSystemWatcher, QTimer, pyqtSignal, 
+    QSettings, QMutex, QThread, QMutexLocker
+)
 from PyQt6.QtGui import QTextCursor
-from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QPushButton, QVBoxLayout, QFileDialog, QMessageBox
-from PyQt6.QtCore import QSettings
+from PyQt6.QtWidgets import (
+    QComboBox, QHBoxLayout, QPushButton, 
+    QVBoxLayout, QFileDialog, QMessageBox
+)
+import logging
+
 from NITTY_GRITTY.ThreadTrackers import SafeQThread
+
 class LogLoader(SafeQThread):
     log_chunk_loaded = pyqtSignal(str)
     finished = pyqtSignal()
+    update_signal = pyqtSignal(str)
 
-    def __init__(self, file_path):
-        super().__init__()
-        self.file_path = file_path
+    def __init__(self, log_path: str, parent=None):
+        super().__init__(parent)
+        self.log_path = log_path
+        self._stop = False
+        self._mutex = QMutex()
+        self.setObjectName(f"LogLoader-{log_path}")
+
+    def stop(self):
+        """Safely stop the thread"""
+        with QMutexLocker(self._mutex):
+            self._stop = True
 
     def run(self):
         try:
-            with open(self.file_path, 'r') as log_file:
-                while chunk := log_file.read(1024 * 1024):  # Read 1MB at a time
+            with open(self.log_path, 'r') as log_file:
+                while not self._stop and (chunk := log_file.read(1024 * 1024)):  # Read 1MB at a time
                     self.log_chunk_loaded.emit(chunk)
+                    if self._stop:
+                        break
         except FileNotFoundError:
-            self.log_chunk_loaded.emit(f"Log file not found: {self.file_path}")
-        self.finished.emit()
+            self.log_chunk_loaded.emit(f"Log file not found: {self.log_path}")
+        except Exception as e:
+            logging.error(f"Error reading log file: {e}")
+        finally:
+            self.finished.emit()
 
 class LogViewerWidget(QWidget):
     def __init__(self, initial_log_file_path, parent=None):
@@ -28,9 +50,15 @@ class LogViewerWidget(QWidget):
         self.log_paths = self.settings.value("log_paths", [initial_log_file_path])
         self.current_log_path = initial_log_file_path
         self.full_log_content = ""
-
+        self.log_loader = None
+        self._loading = False
+        self._debounce_timer = QTimer()
+        self._debounce_timer.setSingleShot(True)
+        self._debounce_timer.timeout.connect(self._do_load_logs)
+        self._file_changed = False
+        
         self.setup_ui()
-        QTimer.singleShot(0, self.load_logs)  # Defer log loading
+        QTimer.singleShot(0, self.load_logs)
 
     def setup_ui(self):
         self.text_edit = QTextEdit(self)
@@ -66,24 +94,66 @@ class LogViewerWidget(QWidget):
         layout.addLayout(button_layout)
         self.setLayout(layout)
 
-        self.file_watcher = QFileSystemWatcher([self.current_log_path])
-        self.file_watcher.fileChanged.connect(self.load_logs)
+        # Update file watcher setup
+        self.file_watcher = QFileSystemWatcher(self)
+        self.file_watcher.fileChanged.connect(self._on_file_changed)
+        if self.current_log_path:
+            self.file_watcher.addPath(self.current_log_path)
+
+    def _on_file_changed(self, path):
+        """Handle file change events with debounce"""
+        if path == self.current_log_path and not self._loading:
+            self._file_changed = True
+            self.load_logs()
 
     def load_logs(self):
-        self.full_log_content = ""
-        self.text_edit.clear()
-        self.log_loader = LogLoader(self.current_log_path)
-        self.log_loader.log_chunk_loaded.connect(self.append_log_chunk)
-        self.log_loader.finished.connect(self.on_log_loading_finished)
-        if not self.log_loader.isRunning():
+        """Debounced log loading"""
+        if self._loading:
+            return
+        
+        if self._debounce_timer.isActive():
+            self._debounce_timer.stop()
+        self._debounce_timer.start(500)  # 500ms debounce
+
+    def _do_load_logs(self):
+        """Actual log loading implementation"""
+        if self._loading:
+            return
+            
+        self._loading = True
+        self._file_changed = False
+        
+        try:
+            # Clean up previous loader if it exists
+            if self.log_loader and self.log_loader.isRunning():
+                self.log_loader.stop()
+                self.log_loader.quit()
+                self.log_loader.wait()
+                
+            self.full_log_content = ""
+            self.text_edit.clear()
+            
+            self.log_loader = LogLoader(self.current_log_path, parent=self)
+            self.log_loader.log_chunk_loaded.connect(self.append_log_chunk)
+            self.log_loader.finished.connect(self._on_loading_complete)
             self.log_loader.start()
+            
+            # Re-add the file to the watcher if needed
+            if self.current_log_path not in self.file_watcher.files():
+                self.file_watcher.addPath(self.current_log_path)
+                
+        except Exception as e:
+            logging.error(f"Error loading logs: {e}")
+            self._loading = False
+
+    def _on_loading_complete(self):
+        """Handle completion of log loading"""
+        self._loading = False
+        self.filter_logs()
 
     def append_log_chunk(self, chunk):
         self.full_log_content += chunk
         self.text_edit.append(chunk)
-
-    def on_log_loading_finished(self):
-        self.filter_logs()
 
     def filter_logs(self):
         filter_type = self.log_type_filter.currentText()
@@ -116,9 +186,14 @@ class LogViewerWidget(QWidget):
             self.text_edit.setPlainText(f"Error clearing log file: {str(e)}")
 
     def change_log_file(self, new_path):
+        """Change the current log file"""
+        if new_path == self.current_log_path:
+            return
+            
         self.current_log_path = new_path
         self.file_watcher.removePaths(self.file_watcher.files())
-        self.file_watcher.addPath(self.current_log_path)
+        if new_path:
+            self.file_watcher.addPath(new_path)
         self.load_logs()
 
     def add_log_file(self):
@@ -141,3 +216,12 @@ class LogViewerWidget(QWidget):
             self.change_log_file(self.log_path_selector.currentText())
         else:
             QMessageBox.warning(self, "Cannot Remove", "You must have at least one log file.")
+
+    def closeEvent(self, event):
+        """Clean up threads when widget is closed"""
+        self._debounce_timer.stop()
+        if self.log_loader and self.log_loader.isRunning():
+            self.log_loader.stop()
+            self.log_loader.quit()
+            self.log_loader.wait()
+        super().closeEvent(event)

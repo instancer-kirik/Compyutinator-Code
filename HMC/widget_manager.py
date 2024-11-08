@@ -5,7 +5,7 @@ import os
 auratext_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'AuraText')
 sys.path.append(auratext_dir)
 
-from PyQt6.QtWidgets import  QVBoxLayout, QDockWidget, QWidget, QSlider, QComboBox, QLabel, QTabWidget, QSizePolicy
+from PyQt6.QtWidgets import  QVBoxLayout, QDockWidget, QWidget, QSlider, QComboBox, QLabel, QTabWidget, QSizePolicy, QToolBar
 import json
 from PyQt6.QtGui import QAction
 from PyQt6.QtCore import Qt, QSettings, QByteArray, QTimer
@@ -36,14 +36,40 @@ import traceback
 from GUX.file_search_widget import FileSearchWidget
 from HMC.project_manager import ManyProjectsManagerWidget
 from GUX.widget_vault import VaultWidget, VaultsManagerWidget,  AdvancedDataViewerWidget, StateInspectorWidget
+from GUX.risk_manager import RiskManager
+from GUX.log_viewer_widget import LogViewerWidget
+from HMC.transcriptor_live_widget import VoiceTypingWidget
+from datetime import datetime
+from GUX.widgets.ram_monitor import RAMMonitor
+from GUX.device_manager_view import DeviceManagerView
+class WidgetReference:
+    def __init__(self, widget, parent=None):
+        self.widget = widget
+        self.parent = parent
+        self.created_at = datetime.now()
+        self.is_valid = True
+        
+    def invalidate(self):
+        self.is_valid = False
+        self.widget = None
+
 class WidgetManager:
     def __init__(self, cccore):
         self.cccore = cccore
         self.main_window = None
         self.docks = {}
         self.widgets = {}  
+        self.widget_refs = {}  # Add reference tracking
         self.dock_widgets = {}  # Add this line to store strong references to dock widgets
         self.all_dock_widgets = {}  # This will store all created dock widgets
+        self.tab_widgets = {}  # Add this to track tab widgets
+        
+        # Define which widgets go in tabs
+        self.tab_config = {
+            'Logging': {'title': 'Logs', 'method': self.LoggingWidget},
+            'STT': {'title': 'Voice Typing', 'method': self.STTWidget},
+        }
+        
         self.load_config()
         self.db_manager = cccore.db_manager
         self.download_manager = self.cccore.download_manager
@@ -67,19 +93,83 @@ class WidgetManager:
         
         self.auratext_windows = []
         self.startup_layout_applied = False
+        self.widget_methods = {}
+        self.setup_widget_methods()
+        # Initialize workspace selector
+        self.workspace_selector = None
+
+    def setup_widget_methods(self):
+        """Initialize widget creation methods"""
+        try:
+            self.widget_methods = {
+                'File Explorer': lambda parent: FileExplorerWidget(self.cccore, parent),
+                'Code Editor': lambda parent: CodeEditorWidget(self.cccore, parent),
+                'Terminal': lambda parent: TerminalWidget(self.cccore, parent),
+                'AI Chat': lambda parent: AIChatWidget(self.cccore, parent),
+                'Symbolic Linker': lambda parent: SymbolicLinkerWidget(self.cccore, parent),
+                'Sticky Notes': lambda parent: StickyNoteManager(self.cccore, parent),
+                'Process Manager': lambda parent: ProcessManagerWidget(self.cccore, parent),
+                'Vaults Manager': lambda parent: VaultsManagerWidget(self.cccore, parent),
+                'Projects Manager': lambda parent: ManyProjectsManagerWidget(self.cccore, parent),  # Use ManyProjectsManager instead
+                'Many Projects Manager': lambda parent: ManyProjectsManagerWidget(self.cccore, parent),
+                'Device Manager': lambda parent: DeviceManagerView(parent),
+            }
+            logging.info("Widget methods initialized successfully")
+        except Exception as e:
+            logging.error(f"Error setting up widget methods: {e}")
+
+    def LoggingWidget(self, cccore):
+        # First ensure the directory exists
+        app_data_dir = cccore.settings_manager.ensure_app_data_dir()
+        if app_data_dir is None:
+            if sys.platform.startswith('win32'):
+                app_data_dir = os.path.join(os.getenv('APPDATA'), 'ComputinatorCode')
+            else:
+                app_data_dir = os.path.join(os.path.expanduser('~'), '.computinator_code')
+            os.makedirs(app_data_dir, exist_ok=True)
+        
+        log_file = os.path.join(app_data_dir, 'app.log')
+        return LogViewerWidget(initial_log_file_path=log_file)
+
+    def STTWidget(self, cccore):
+        """Create and return a speech-to-text widget"""
+        if 'stt' not in self.widgets:
+            self.widgets['stt'] = VoiceTypingWidget(cccore.input_manager)
+        return self.widgets['stt']
 
     def load_config(self):
         try:
             with open('config.json', 'r') as f:
                 self.config = json.load(f)
-            self.startup_config = self.config['layout']
+            self.startup_config = self.config.get('layout', {
+                'left': ['File Explorer', 'Many Projects Manager'],  # Use Many Projects Manager consistently
+                'right': ['Code Editor', 'Sticky Notes', 'AI Chat'],
+                'bottom': ['Terminal', 'Process Manager', 'Vaults Manager'],
+                'floating': []
+            })
+            logging.info("Configuration loaded successfully")
         except Exception as e:
             logging.error(f"Error loading config: {str(e)}")
             self.config = {}
             self.startup_config = {}
         return self.startup_config
     def set_main_window(self, main_window):
-        self.main_window = main_window
+        """Set the main window reference"""
+        try:
+            if main_window is None:
+                logging.error("Attempted to set None as main window")
+                return
+                
+            self.main_window = main_window
+            logging.info(f"Main window set successfully: {main_window}")
+            
+            # Initialize any window-dependent components
+            if hasattr(self, 'workspace_selector'):
+                self.setup_workspace_selector()
+                
+        except Exception as e:
+            logging.error(f"Error setting main window: {e}")
+            logging.error(traceback.format_exc())
 
     def get_or_create_dock(self, name,widget=None, area=Qt.DockWidgetArea.LeftDockWidgetArea, parent=None):#also makes widgets?
         logging.info(f"Attempting to get or create dock: {name}")
@@ -183,31 +273,32 @@ class WidgetManager:
             return True
         
     def create_startup_docks(self):
+        """Create and arrange all startup docks"""
         try:
-            # Create and add your startup docks here
-            self.create_dock("Projects Manager", self.ProjectManagerWidget(self.cccore, parent=self.main_window), parent=self.main_window)
-            #self.add_cool_dock()  # Add this line to create the Cool dock on startup
-            # ... other startup docks
+            default_docks = {
+                "File Explorer": Qt.DockWidgetArea.LeftDockWidgetArea,
+                "Code Editor": Qt.DockWidgetArea.LeftDockWidgetArea,
+                "Terminal": Qt.DockWidgetArea.BottomDockWidgetArea,
+                "AI Chat": Qt.DockWidgetArea.RightDockWidgetArea,
+                "Symbolic Linker": Qt.DockWidgetArea.LeftDockWidgetArea,
+                "Sticky Notes": Qt.DockWidgetArea.RightDockWidgetArea,
+                "Process Manager": Qt.DockWidgetArea.BottomDockWidgetArea,
+                "Vaults Manager": Qt.DockWidgetArea.LeftDockWidgetArea,
+                "Projects Manager": Qt.DockWidgetArea.LeftDockWidgetArea
+            }
             
-            # Create and add the AI Chat dock
-            ai_chat_widget = self.AIChatWidget(self.cccore, parent=self.main_window)
-            ai_chat_dock = self.create_dock("AI Chat", ai_chat_widget, parent=self.main_window)
-            if ai_chat_dock:
-                self.main_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, ai_chat_dock)
-                logging.info("AI Chat dock created and added to the right dock area")
-            else:
-                logging.error("Failed to create AI Chat dock")
+            for name, area in default_docks.items():
+                dock = self.ensure_dock(name)
+                if dock and self.main_window:
+                    self.main_window.addDockWidget(area, dock)
+                    logging.info(f"Added {name} dock to {area}")
+                    
+            # Create Cool dock last
+            self.add_cool_dock()
+            
         except Exception as e:
             logging.error(f"Error creating startup docks: {e}")
             logging.error(traceback.format_exc())
-     #   default_docks = [
-    #         "File Explorer", "Code Editor", "Terminal", "AI Chat", 
-    #         "Symbolic Linker", "Sticky Notes", "Process Manager", 
-    #         "Vaults Manager", "Projects Manager", "AuraText"
-    #     ]
-    #     for name in default_docks:
-    #         self.ensure_dock(name)
-    #     logging.info("Startup docks creation completed")
 
     def ensure_dock(self, name):
         logging.info(f"Ensuring dock: {name}")
@@ -315,7 +406,7 @@ class WidgetManager:
 
     # def create_auratext_dock(self):
     #     if self.auratext_dock is None:
-    #         auratext_widget = self.AuraTextWidget(self.cccore)
+    #         auratext_widget = self.AuraTextWidget(self.cccore, parent=self.main_window)
     #         self.auratext_dock = self.create_dock("AuraText", auratext_widget, self.main_window)
     #         self.add_dock_widget(self.auratext_dock, "AuraText", Qt.DockWidgetArea.RightDockWidgetArea)
     #     return self.auratext_dock
@@ -353,6 +444,17 @@ class WidgetManager:
 
     def get_all_dock_widgets(self):
         return self.all_dock_widgets
+    def register_widget(self, name, widget, parent=None):
+        """Register a widget reference"""
+        self.widget_refs[name] = WidgetReference(widget, parent)
+        return widget
+        
+    def get_widget(self, name):
+        """Get widget by name, ensuring it's valid"""
+        ref = self.widget_refs.get(name)
+        if ref and ref.is_valid and ref.widget:
+            return ref.widget
+        return None
     def add_advanced_data_viewer_dock(self):
         if 'advanced_data_viewer_dock' not in self.docks:
             advanced_data_viewer = AdvancedDataViewerWidget(self.cccore)
@@ -417,7 +519,14 @@ class WidgetManager:
                                                    vault_manager=cccore.vault_manager,
                                                    project_manager=cccore.project_manager)
         return self.widgets['ai_chat']
-
+    def RiskManagerWidget(self, cccore):
+        if 'risk_manager' not in self.widgets:
+            self.widgets['risk_manager'] = RiskManager(
+                cccore=cccore,
+                config_manager=cccore.settings_manager,
+                notification_manager=cccore.notification_manager
+            )
+        return self.widgets['risk_manager']
     def MergeWidget(self, cccore):
         if not hasattr(self, 'merge_widget'):
             self.merge_widget = MergeWidget(parent=self.main_window,)
@@ -594,5 +703,227 @@ class WidgetManager:
                 logging.warning("Failed to create or retrieve Cool dock")
         except Exception as e:
             logging.error(f"Error showing Cool dock: {str(e)}")
+            logging.error(traceback.format_exc())
+
+    def RiskManagerWidget(self, cccore):
+        if 'risk_manager' not in self.widgets:
+            self.widgets['risk_manager'] = RiskManager(
+               
+               config_manager=self.cccore.settings_manager,
+               notification_manager=self.cccore.notification_manager,
+               cccore=cccore
+            )
+        return self.widgets['risk_manager']
+       
+    def setup_central_tabs(self):
+        """Initialize all central tab widgets"""
+        if not self.main_window or not hasattr(self.main_window, 'tab_widget'):
+            logging.warning("Main window or tab widget not initialized")
+            return
+
+        logging.info("Setting up central tabs")
+        try:
+            # Add logging widget
+            logging_widget = self.LoggingWidget(self.cccore)
+            self.main_window.tab_widget.addTab(logging_widget, "Logs")
+            self.tab_widgets['Logging'] = logging_widget
+            logging.info("Added logging widget to tabs")
+
+            # Add STT widget
+            stt_widget = self.STTWidget(self.cccore)
+            self.main_window.tab_widget.addTab(stt_widget, "Voice Typing")
+            self.tab_widgets['STT'] = stt_widget
+            logging.info("Added STT widget to tabs")
+
+        except Exception as e:
+            logging.error(f"Error setting up central tabs: {str(e)}")
+            logging.error(traceback.format_exc())
+
+    def add_to_central_tabs(self, widget, tab_name):
+        """Add a widget to the central tab widget"""
+        if not self.main_window or not hasattr(self.main_window, 'tab_widget'):
+            logging.warning(f"Cannot add {tab_name} to central tabs - tab widget not initialized")
+            return False
+            
+        try:
+            self.main_window.tab_widget.addTab(widget, tab_name)
+            self.tab_widgets[tab_name] = widget
+            logging.info(f"Added {tab_name} to central tabs")
+            return True
+        except Exception as e:
+            logging.error(f"Error adding {tab_name} to central tabs: {str(e)}")
+            return False
+
+    def setup_workspace_selector(self):
+        """Create and configure workspace selector"""
+        try:
+            if not hasattr(self, 'workspace_selector') or self.workspace_selector is None:
+                from PyQt6.QtWidgets import QComboBox
+                
+                self.workspace_selector = QComboBox()
+                self.workspace_selector.setObjectName("WorkspaceSelector")
+                self.workspace_selector.setMaximumWidth(200)
+                
+                # Get workspaces from current vault
+                if hasattr(self.cccore, 'workspace_manager'):
+                    current_vault = self.cccore.vault_manager.get_current_vault()
+                    if current_vault:
+                        workspaces = self.cccore.workspace_manager.get_workspace_names(current_vault.path)
+                        if workspaces:
+                            self.workspace_selector.addItems(workspaces)
+                            current = self.cccore.workspace_manager.get_current_workspace()
+                            if current:
+                                index = self.workspace_selector.findText(current)
+                                if index >= 0:
+                                    self.workspace_selector.setCurrentIndex(index)
+                                    
+                # Connect signals
+                if hasattr(self.cccore.workspace_manager, 'workspace_changed'):
+                    self.workspace_selector.currentTextChanged.connect(
+                        self.cccore.workspace_manager.set_current_workspace
+                    )
+                    
+                logging.info("Workspace selector initialized successfully")
+                return self.workspace_selector
+                
+        except Exception as e:
+            logging.error(f"Error setting up workspace selector: {e}")
+            logging.error(traceback.format_exc())
+            self.workspace_selector = None
+            
+        return None
+
+    def get_workspace_selector(self):
+        """Get or create workspace selector"""
+        if not hasattr(self, 'workspace_selector') or not self.workspace_selector:
+            self.workspace_selector = self.setup_workspace_selector()
+        return self.workspace_selector
+
+    def setup_toolbar(self):
+        """Initialize and setup toolbar"""
+        try:
+            if not self.main_window:
+                logging.error("Main window not set in widget manager")
+                return None
+            
+            toolbar = QToolBar('Main Toolbar', self.main_window)
+            toolbar.setObjectName('MainToolbar')
+            
+            # Add standard actions
+            actions = {
+                'New File': ('Ctrl+N', self.main_window.on_new_file),
+                'Open File': ('Ctrl+O', self.main_window.on_open_file),
+                'Save': ('Ctrl+S', self.main_window.on_save_file),
+                'Toggle File Explorer': ('Ctrl+B', self.main_window.toggle_file_explorer),
+                'Toggle Terminal': ('Ctrl+`', self.main_window.toggle_terminal)
+            }
+            
+            for name, (shortcut, handler) in actions.items():
+                action = QAction(name, self.main_window)
+                action.setShortcut(shortcut)
+                action.triggered.connect(handler)
+                toolbar.addAction(action)
+                if name in ['Save', 'Toggle Terminal']:
+                    toolbar.addSeparator()
+                    
+            # Add workspace selector
+            workspace_selector = self.get_workspace_selector()
+            if workspace_selector:
+                toolbar.addWidget(workspace_selector)
+            else:
+                logging.warning("Failed to add workspace selector to toolbar")
+                
+            logging.info("Toolbar setup completed successfully")
+            return toolbar
+            
+        except Exception as e:
+            logging.error(f"Error setting up toolbar: {str(e)}")
+            logging.error(traceback.format_exc())
+            return None
+
+    def cleanup(self):
+        """Clean up all managed widgets and resources"""
+        try:
+            # Clean up docks
+            for name, dock in list(self.dock_widgets.items()):
+                try:
+                    if dock and not self.is_dock_deleted(dock):
+                        dock.close()
+                        dock.deleteLater()
+                except Exception as e:
+                    logging.error(f"Error cleaning up dock {name}: {e}")
+                    
+            # Clean up widgets
+            for name, ref in list(self.widget_refs.items()):
+                try:
+                    if ref.is_valid and ref.widget:
+                        ref.widget.close()
+                        ref.widget.deleteLater()
+                        ref.invalidate()
+                except Exception as e:
+                    logging.error(f"Error cleaning up widget {name}: {e}")
+                    
+            # Clear collections
+            self.dock_widgets.clear()
+            self.widget_refs.clear()
+            self.widgets.clear()
+            
+        except Exception as e:
+            logging.error(f"Error during widget manager cleanup: {e}")
+            logging.error(traceback.format_exc())
+
+    def save_state(self):
+        """Save current widget states"""
+        state = {
+            'dock_geometry': {},
+            'widget_states': {},
+            'layout': self.startup_config
+        }
+        
+        for name, dock in self.dock_widgets.items():
+            if not self.is_dock_deleted(dock):
+                state['dock_geometry'][name] = dock.saveGeometry()
+                
+        for name, ref in self.widget_refs.items():
+            if ref.is_valid and hasattr(ref.widget, 'save_state'):
+                state['widget_states'][name] = ref.widget.save_state()
+                
+        return state
+
+    def restore_state(self, state):
+        """Restore widget states"""
+        try:
+            # Restore dock geometry
+            for name, geometry in state.get('dock_geometry', {}).items():
+                if name in self.dock_widgets:
+                    self.dock_widgets[name].restoreGeometry(geometry)
+                    
+            # Restore widget states
+            for name, widget_state in state.get('widget_states', {}).items():
+                widget = self.get_widget(name)
+                if widget and hasattr(widget, 'restore_state'):
+                    widget.restore_state(widget_state)
+                    
+        except Exception as e:
+            logging.error(f"Error restoring widget states: {e}")
+            logging.error(traceback.format_exc())
+
+    def apply_theme_to_widgets(self, theme):
+        """Apply theme to all managed widgets"""
+        try:
+            # Apply to dock widgets
+            for dock in self.dock_widgets.values():
+                if hasattr(dock.widget(), 'apply_theme'):
+                    dock.widget().apply_theme(theme)
+                    
+            # Apply to standalone widgets
+            for ref in self.widget_refs.values():
+                if ref.is_valid and hasattr(ref.widget, 'apply_theme'):
+                    ref.widget.apply_theme(theme)
+                    
+            logging.info("Theme applied to all managed widgets")
+            
+        except Exception as e:
+            logging.error(f"Error applying theme to managed widgets: {e}")
             logging.error(traceback.format_exc())
   

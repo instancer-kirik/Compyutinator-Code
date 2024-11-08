@@ -62,6 +62,11 @@ websockets = "^13.1"
 cryptography = "^43.0.3"
 anthropic = "^0.38.0"
 backoff = "^2.2.1"
+pyqt6-webengine = "^6.7.0"
+python-xlib = "^0.33"
+opencv-python = "^4.10.0.84"
+pygobject = "^3.50.0"
+pycamera = "^0.3.2"
 
 
 [build-system]
