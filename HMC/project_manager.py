@@ -302,60 +302,62 @@ class ProjectManager:
         extensions = project.get('file_extensions', ['.py', '.js', '.cpp'])
         return file_path.suffix in extensions
     
-    def _parse_file_symbols(self, file_path: Path, project: dict):
-        """Parse symbols from a file using LSP if available"""
-        try:
-            if self.lsp_manager and self.lsp_manager.initialized:
-                # Use LSP for better symbol detection
-                symbols = self.lsp_manager.get_document_symbols(str(file_path))
-                if symbols:
-                    project['symbols'][file_path] = symbols
-                    return
+    def _parse_file_symbols(self, content: str, file_path: Path) -> List[CodeSymbol]:
+        """Parse a file's content for code symbols and their references"""
+        symbols = []
+        lines = content.splitlines()
+        current_class = None
+        symbol_stack = []
+        
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            indent = len(line) - len(stripped)
             
-            # Fallback to basic parsing if LSP not available
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
+            # Track scope using indentation
+            while symbol_stack and symbol_stack[-1][1] >= indent:
+                symbol_stack.pop()
             
-            symbols = []
-            current_class = None
-            
-            for line_num, line in enumerate(content.splitlines(), 1):
-                stripped = line.strip()
+            if stripped.startswith('class '):
+                class_name = stripped[6:].split('(')[0].strip(':').strip()
+                current_class = CodeSymbol(
+                    name=class_name,
+                    type='class',
+                    line=i + 1,
+                    column=indent,
+                    file_path=file_path,
+                    parent=symbol_stack[-1][0] if symbol_stack else None
+                )
+                symbols.append(current_class)
+                symbol_stack.append((current_class, indent))
                 
-                if stripped.startswith('class '):
-                    class_match = re.match(r'class\s+(\w+)', stripped)
-                    if class_match:
-                        class_name = class_match.group(1)
-                        current_class = CodeSymbol(
-                            name=class_name,
-                            type='class',
-                            line=line_num,
-                            column=line.index('class'),
-                            file_path=file_path
-                        )
-                        symbols.append(current_class)
+            elif stripped.startswith('def '):
+                func_name = stripped[4:].split('(')[0].strip()
+                method = CodeSymbol(
+                    name=func_name,
+                    type='method' if current_class else 'function',
+                    line=i + 1,
+                    column=indent,
+                    file_path=file_path,
+                    parent=symbol_stack[-1][0] if symbol_stack else None
+                )
+                if symbol_stack:
+                    symbol_stack[-1][0].children.append(method)
+                symbols.append(method)
+                symbol_stack.append((method, indent))
                 
-                elif stripped.startswith('def '):
-                    func_match = re.match(r'def\s+(\w+)', stripped)
-                    if func_match:
-                        func_name = func_match.group(1)
-                        func_symbol = CodeSymbol(
-                            name=func_name,
-                            type='method' if current_class else 'function',
-                            line=line_num,
-                            column=line.index('def'),
-                            file_path=file_path,
-                            parent=current_class
-                        )
-                        if current_class:
-                            current_class.children.append(func_symbol)
-                        else:
-                            symbols.append(func_symbol)
-            
-            project['symbols'][file_path] = symbols
-            
-        except Exception as e:
-            logging.error(f"Error parsing symbols from {file_path}: {str(e)}")
+            # Add reference tracking
+            else:
+                # Look for symbol references in the line
+                for symbol in symbols:
+                    if symbol.name in stripped:
+                        # Add reference to both symbols
+                        referenced_symbol = next((s for s in symbols if s.name in stripped), None)
+                        if referenced_symbol and referenced_symbol != symbol:
+                            if not hasattr(symbol, 'references'):
+                                symbol.references = []
+                            symbol.references.append(referenced_symbol)
+        
+        return symbols
     
     def get_file_symbols(self, file_path: Path) -> List[CodeSymbol]:
         """Get symbols for a specific file in the current project"""
@@ -2124,5 +2126,131 @@ Created: {datetime.now().strftime('%Y-%m-%d')}
     def get_config_filename(self, project_type: ProjectType) -> str:
         """Get the appropriate config filename based on project type"""
         return 'resolvinator_config.json' if project_type == ProjectType.RESOLVINATOR else 'project_config.json'
+
+    def get_project_technical_flow(self, project_name: str) -> Dict[str, Any]:
+        """Generate a comprehensive technical flow overview of the project with Nix integration"""
+        project_path = self.get_project_path(project_name)
+        if not project_path:
+            return {}
+        
+        flow_data = {
+            'project_info': {
+                'name': project_name,
+                'type': self.get_project_type(project_name),
+                'path': project_path,
+                'vault_info': {
+                    'name': self.cccore.vault_manager.current_vault.name if self.cccore.vault_manager.current_vault else None,
+                    'path': str(self.cccore.vault_manager.get_current_vault_path())
+                }
+            },
+            'structure': {},  # Code structure with symbols
+            'dependencies': set(),  # Project dependencies
+            'entry_points': [],  # Main entry points
+            'relationships': [],  # Symbol relationships
+            'environment': {
+                'nix_enabled': bool(self.cccore.vault_manager.get_nix_store_path()),
+                'nix_store_path': str(self.cccore.vault_manager.get_nix_store_path() or ''),
+                'knowledge_graph': {
+                    'tags': list(self.cccore.vault_manager.current_vault.get_all_tags()),
+                    'references': list(self.cccore.vault_manager.current_vault.get_all_references()),
+                    'backlinks': list(self.cccore.vault_manager.current_vault.get_all_backlinks())
+                }
+            }
+        }
+        
+        # Analyze project files
+        for root, _, files in os.walk(project_path):
+            for file in files:
+                if file.endswith('.py'):
+                    file_path = Path(os.path.join(root, file))
+                    relative_path = file_path.relative_to(project_path)
+                    
+                    # Get or parse symbols
+                    symbols = self.get_file_symbols(file_path)
+                    if not symbols:
+                        with open(file_path, 'r') as f:
+                            content = f.read()
+                            symbols = self._parse_file_symbols(content, file_path)
+                    
+                    # Add to structure
+                    flow_data['structure'][str(relative_path)] = {
+                        'symbols': [
+                            {
+                                'name': sym.name,
+                                'type': sym.type,
+                                'line': sym.line,
+                                'column': sym.column,
+                                'parent': sym.parent.name if sym.parent else None,
+                                'children': [child.name for child in sym.children]
+                            }
+                            for sym in symbols
+                        ]
+                    }
+                    
+                    # Extract dependencies
+                    flow_data['dependencies'].update(self._extract_dependencies(content))
+                    
+                    # Identify entry points
+                    if '__main__' in content or 'if __name__ == "__main__"' in content:
+                        flow_data['entry_points'].append(str(relative_path))
+        
+        # Add file metadata from vault index
+        if self.cccore.vault_manager.current_vault:
+            vault = self.cccore.vault_manager.current_vault
+            for file_path, file_info in vault.get_index().get('files', {}).items():
+                if str(file_path).startswith(str(project_name)):
+                    flow_data['structure'][file_path] = {
+                        **flow_data['structure'].get(file_path, {}),
+                        'metadata': {
+                            'type': file_info['type'],
+                            'size': file_info['size'],
+                            'created': file_info['created'],
+                            'modified': file_info['modified'],
+                            'tags': file_info['tags'],
+                            'links': file_info['links']
+                        }
+                    }
+        
+        # Convert dependencies to list for JSON serialization
+        flow_data['dependencies'] = list(flow_data['dependencies'])
+        
+        return flow_data
+
+    def _parse_file_symbols(self, content: str, file_path: Path) -> List[CodeSymbol]:
+        """Parse a file's content for code symbols"""
+        symbols = []
+        lines = content.splitlines()
+        current_class = None
+        
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            indent = len(line) - len(stripped)
+            
+            if stripped.startswith('class '):
+                class_name = stripped[6:].split('(')[0].strip(':').strip()
+                current_class = CodeSymbol(
+                    name=class_name,
+                    type='class',
+                    line=i + 1,
+                    column=indent,
+                    file_path=file_path
+                )
+                symbols.append(current_class)
+                
+            elif stripped.startswith('def '):
+                func_name = stripped[4:].split('(')[0].strip()
+                method = CodeSymbol(
+                    name=func_name,
+                    type='method' if current_class else 'function',
+                    line=i + 1,
+                    column=indent,
+                    file_path=file_path,
+                    parent=current_class
+                )
+                if current_class:
+                    current_class.children.append(method)
+                symbols.append(method)
+        
+        return symbols
 
    

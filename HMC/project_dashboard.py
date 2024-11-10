@@ -6,6 +6,14 @@ from GUX.markdown_viewer import MarkdownViewer
 from GUX.widgets.task_checklist_manager import TaskChecklistManager
 import os
 from datetime import datetime
+from typing import Dict, List
+from AuraText.auratext.Core.file_outline_widget import FileOutlineWidget
+from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene
+from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QPen, QPainterPath
+from HMC.symbol_manager import CodeSymbol, SymbolManager
+from pathlib import Path
+from typing import Dict, List
 
 class ProjectDashboard(QWidget):
     def __init__(self, cccore):
@@ -66,6 +74,10 @@ class ProjectDashboard(QWidget):
         # Tasks Tab with TaskChecklistManager
         self.task_manager = TaskChecklistManager(self.cccore.project_manager)
         left_tabs.addTab(self.task_manager, "Tasks")
+        
+        # Add Project Outline tab
+        self.project_outline = ProjectOutlineTab()
+        left_tabs.addTab(self.project_outline, "Project Outline")
         
         splitter.addWidget(left_tabs)
         
@@ -144,6 +156,11 @@ class ProjectDashboard(QWidget):
             
             # Update recent activity
             self.update_recent_activity()
+            
+            # Update project outline
+            flow_map = self.cccore.project_manager.get_project_technical_flow(project_name)
+            self.project_outline.outline_tree.populate_project_outline(flow_map)
+            self.project_outline.update_references(flow_map)
     
     def create_new_note(self):
         """Create a new markdown note"""
@@ -255,4 +272,92 @@ class ProjectDashboard(QWidget):
             self.risk_table.setItem(i, 1, QTableWidgetItem(risk.description))
             self.risk_table.setItem(i, 2, QTableWidgetItem(risk.status))
             self.risk_table.setItem(i, 3, QTableWidgetItem(risk.owner or ""))
+    
+class ProjectOutlineTab(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        
+        # Left side: Tree view of files and symbols
+        self.outline_tree = FileOutlineWidget()
+        
+        # Right side: Reference visualization
+        self.ref_view = QGraphicsView()
+        self.ref_scene = QGraphicsScene()
+        self.ref_view.setScene(self.ref_scene)
+        
+        # Add zoom controls
+        zoom_layout = QHBoxLayout()
+        self.zoom_in_btn = QPushButton("+")
+        self.zoom_out_btn = QPushButton("-")
+        self.zoom_in_btn.clicked.connect(lambda: self.ref_view.scale(1.2, 1.2))
+        self.zoom_out_btn.clicked.connect(lambda: self.ref_view.scale(0.8, 0.8))
+        zoom_layout.addWidget(self.zoom_in_btn)
+        zoom_layout.addWidget(self.zoom_out_btn)
+        
+        right_layout = QVBoxLayout()
+        right_layout.addLayout(zoom_layout)
+        right_layout.addWidget(self.ref_view)
+        
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.addWidget(self.outline_tree)
+        
+        right_widget = QWidget()
+        right_widget.setLayout(right_layout)
+        splitter.addWidget(right_widget)
+        
+        layout.addWidget(splitter)
+        
+    def update_outline(self, project_name: str, symbol_manager: SymbolManager):
+        """Update both the tree and reference visualization"""
+        # Get symbols from symbol manager
+        vault_symbols = symbol_manager.vault_symbols.get(project_name, {})
+        
+        # Update tree view
+        self.outline_tree.populate_project_outline(vault_symbols)
+        
+        # Update reference visualization
+        self.update_references(vault_symbols)
+        
+    def update_references(self, symbols_map: Dict[Path, List[CodeSymbol]]):
+        """Update the reference visualization"""
+        self.ref_scene.clear()
+        
+        # Create nodes for each symbol
+        nodes = {}
+        y_pos = 0
+        x_pos = 0
+        last_file = None
+        
+        for file_path, symbols in symbols_map.items():
+            if file_path != last_file:
+                y_pos = 0
+                x_pos += 200
+                last_file = file_path
+                
+            for symbol in symbols:
+                node = self.ref_scene.addEllipse(x_pos, y_pos, 10, 10)
+                node.setToolTip(f"{symbol.name} ({symbol.type})\n{file_path.name}")
+                nodes[f"{file_path}:{symbol.name}"] = node
+                y_pos += 30
+        
+        # Draw connections based on parent-child relationships
+        for file_path, symbols in symbols_map.items():
+            for symbol in symbols:
+                if symbol.parent:
+                    parent_key = f"{file_path}:{symbol.parent.name}"
+                    symbol_key = f"{file_path}:{symbol.name}"
+                    
+                    if parent_key in nodes and symbol_key in nodes:
+                        start = nodes[parent_key].sceneBoundingRect().center()
+                        end = nodes[symbol_key].sceneBoundingRect().center()
+                        
+                        path = QPainterPath()
+                        path.moveTo(start)
+                        path.lineTo(end)
+                        
+                        self.ref_scene.addPath(path, QPen(Qt.GlobalColor.blue))
+        
+        # Fit the view to all items
+        self.ref_view.fitInView(self.ref_scene.itemsBoundingRect(), Qt.AspectRatioMode.KeepAspectRatio)
     
