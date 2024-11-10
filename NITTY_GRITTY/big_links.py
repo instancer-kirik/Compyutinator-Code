@@ -3,15 +3,19 @@ import shutil
 import logging
 import stat
 import json
+import psutil  # For mount points
+
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QInputDialog, QProgressBar, QFileDialog, QMessageBox, 
-    QTreeView, QStyle, QStyledItemDelegate, QTextEdit, QScrollArea, 
-    QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox, QSlider, QMenu, QDialog
+    QTreeView, QStyle, QStyledItemDelegate, QAbstractItemView, QTextEdit, QScrollArea, 
+    QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox, QSlider, QMenu, QDialog, QGroupBox,
+    QSplitter
 )
 from PyQt6.QtCore import pyqtSignal, Qt, QDir, QModelIndex, QObject, QThread
 from PyQt6.QtGui import QFileSystemModel, QIcon, QPainter, QColor, QBrush, QFont
 from NITTY_GRITTY.ThreadTrackers import SafeQThread
+from GUX.file_explorer import FileExplorerWidget
 
 def is_admin():
     try:
@@ -260,211 +264,269 @@ class PermissionDelegate(QStyledItemDelegate):
             logging.error(f"Error in PermissionDelegate paint: {e}")
             super().paint(painter, option, index)
 
-class FileExplorerWidget(QTreeView):
-    path_selected = pyqtSignal(str)
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setup_ui()
-        
-    def setup_ui(self):
-        try:
-            self.model = QFileSystemModel()
-            self.model.setRootPath(QDir.rootPath())
-            self.setModel(self.model)
-            self.setRootIndex(self.model.index(QDir.rootPath()))
-            
-            # Configure view
-            self.setColumnWidth(0, 250)
-            for col in range(1, self.model.columnCount()):
-                self.hideColumn(col)
-                
-            self.setItemDelegate(PermissionDelegate(self))
-            self.setSelectionMode(QTreeView.SelectionMode.SingleSelection)
-            self.setDragEnabled(True)
-            self.setAcceptDrops(True)
-            self.setDropIndicatorShown(True)
-            self.setAlternatingRowColors(True)
-            
-            # Set file filters
-            self.model.setFilter(QDir.Filter.AllDirs | QDir.Filter.NoDotAndDotDot)
-            
-            # Add dark theme styling
-            self.setStyleSheet("""
-                QTreeView {
-                    background-color: #2E3440;
-                    color: #D8DEE9;
-                    border: 1px solid #4C566A;
-                }
-                QTreeView::item {
-                    padding: 4px;
-                }
-                QTreeView::item:selected {
-                    background-color: #5E81AC;
-                }
-                QTreeView::item:hover {
-                    background-color: #434C5E;
-                }
-                QTreeView::branch {
-                    background-color: #2E3440;
-                }
-                QTreeView::branch:has-siblings:!adjoins-item {
-                    border-image: url(vline.png) 0;
-                }
-                QTreeView::branch:selected {
-                    background-color: #5E81AC;
-                }
-            """)
-            
-        except Exception as e:
-            logging.error(f"Error setting up FileExplorerWidget: {e}")
-
-    def mouseDoubleClickEvent(self, event):
-        super().mouseDoubleClickEvent(event)
-        index = self.currentIndex()
-        if index.isValid():
-            path = self.model.filePath(index)
-            self.path_selected.emit(path)
-
 class SymbolicLinkerWidget(QWidget):
     def __init__(self, parent=None, cccore=None):
         super().__init__(parent)
         self.cccore = cccore
+        self.source_path = None
+        self.target_path = None
         self.bookmarks = []
-        self.initUI()
-
-    def initUI(self):
-        layout = QVBoxLayout(self)
-        
-        # View mode selector
-        self.view_mode_combo = QComboBox()
-        self.view_mode_combo.addItems(["List View", "Tree View"])
-        self.view_mode_combo.currentTextChanged.connect(self.on_view_mode_changed)
-        layout.addWidget(self.view_mode_combo)
-        
-        # Add header with instructions
-        header_label = QLabel("Select source and target directories to create a symbolic link")
-        header_label.setStyleSheet("font-weight: bold; padding: 5px;")
-        layout.addWidget(header_label)
-
-        # Create horizontal layout for dual file explorers
-        explorer_layout = QHBoxLayout()
-
-        # Source file explorer
-        source_group = QVBoxLayout()
-        source_label = QLabel("Source Directory:")
-        self.source_explorer = FileExplorerWidget()
-        self.source_explorer.path_selected.connect(self.set_source_path)
-        source_group.addWidget(source_label)
-        source_group.addWidget(self.source_explorer)
-        explorer_layout.addLayout(source_group)
-
-        # Target file explorer
-        target_group = QVBoxLayout()
-        target_label = QLabel("Target Directory:")
-        self.target_explorer = FileExplorerWidget()
-        self.target_explorer.path_selected.connect(self.set_target_path)
-        target_group.addWidget(target_label)
-        target_group.addWidget(self.target_explorer)
-        explorer_layout.addLayout(target_group)
-
-        layout.addLayout(explorer_layout)
-
-        # Add path display
-        self.path_display = QLabel('Source: None\nTarget: None')
-        self.path_display.setStyleSheet("background-color: #f0f0f0; padding: 5px; border-radius: 3px;")
-        layout.addWidget(self.path_display)
-
-        # Add message container
-        self.message_container = QLabel('Select directories to begin')
-        self.message_container.setStyleSheet("color: #666; padding: 5px;")
-        layout.addWidget(self.message_container)
-
-        # Add new features
-        self.search_bar = QLineEdit()
-        self.search_bar.setPlaceholderText("Search files...")
-        self.search_bar.textChanged.connect(self.filter_view)
-        layout.addWidget(self.search_bar)
-        
-        self.bookmark_button = QPushButton("Bookmark")
-        self.bookmark_button.clicked.connect(self.add_bookmark)
-        layout.addWidget(self.bookmark_button)
-        
-        self.bookmarks_menu = QMenu()
+        self.setup_ui()
         self.load_bookmarks()
 
-        # Add new tools
-        tools_layout = QHBoxLayout()
-        tools_layout.addWidget(QLabel("Tools:"))
-        tools_layout.addWidget(self.create_tool_button("Compare Directories", self.compare_directories))
-        tools_layout.addWidget(self.create_tool_button("Batch Rename", self.batch_rename))
-        tools_layout.addWidget(self.create_tool_button("Size Analysis", self.analyze_sizes))
-        layout.addLayout(tools_layout)
-
-        # Create button layout
-        button_layout = QHBoxLayout()
-
-        # Add operation buttons
-        self.start_move_button = QPushButton('Create Symlink')
-        self.start_move_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DirLinkIcon))
-        self.start_move_button.clicked.connect(self.move_contents_and_create_symlink)
-        self.start_move_button.setEnabled(False)
-        button_layout.addWidget(self.start_move_button)
-
-        self.remove_symlink_button = QPushButton('Remove Symlink')
-        self.remove_symlink_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogCancelButton))
-        self.remove_symlink_button.clicked.connect(self.remove_symlink)
-        self.remove_symlink_button.setEnabled(False)
-        button_layout.addWidget(self.remove_symlink_button)
-
-        self.rollback_button = QPushButton('Undo Operation')
-        self.rollback_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogResetButton))
-        self.rollback_button.clicked.connect(self.undo_move)
-        self.rollback_button.setEnabled(False)
-        button_layout.addWidget(self.rollback_button)
-
-        # Add a new button for snapshotting filesystem
-        self.snapshot_button = QPushButton('Snapshot Filesystem')
-        self.snapshot_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogListView))
-        self.snapshot_button.clicked.connect(self.snapshot_filesystem)
-        button_layout.addWidget(self.snapshot_button)
-
-        layout.addLayout(button_layout)
-
-        # Add progress bar
+    def setup_ui(self):
+        """Initialize the UI components"""
+        main_layout = QVBoxLayout(self)
+        
+        # Create toolbar
+        toolbar = QHBoxLayout()
+        self.create_symlink_button = self.create_tool_button("Create Symlink", self.create_symbolic_link)
+        self.rollback_button = self.create_tool_button("Rollback", self.rollback_operation)
+        self.remove_symlink_button = self.create_tool_button("Remove Link", self.remove_symlink)
+        self.snapshot_button = self.create_tool_button("Snapshot", self.snapshot_filesystem)
+        
+        toolbar.addWidget(self.create_symlink_button)
+        toolbar.addWidget(self.rollback_button)
+        toolbar.addWidget(self.remove_symlink_button)
+        toolbar.addWidget(self.snapshot_button)
+        main_layout.addLayout(toolbar)
+        
+        # Create search bar
+        search_layout = QHBoxLayout()
+        self.search_box = QLineEdit()
+        self.search_box.setPlaceholderText("Search files...")
+        self.search_box.textChanged.connect(self.filter_view)
+        search_layout.addWidget(self.search_box)
+        main_layout.addLayout(search_layout)
+        
+        # Create splitter for explorers
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        
+        # Source explorer
+        self.source_explorer = FileExplorerWidget(self, self.cccore)
+        self.source_explorer.file_selected.connect(self.set_source_path)
+        source_group = QGroupBox("Source")
+        source_layout = QVBoxLayout()
+        source_layout.addWidget(self.source_explorer)
+        source_group.setLayout(source_layout)
+        
+        # Target explorer
+        self.target_explorer = FileExplorerWidget(self, self.cccore)
+        self.target_explorer.file_selected.connect(self.set_target_path)
+        target_group = QGroupBox("Target")
+        target_layout = QVBoxLayout()
+        target_layout.addWidget(self.target_explorer)
+        target_group.setLayout(target_layout)
+        
+        splitter.addWidget(source_group)
+        splitter.addWidget(target_group)
+        main_layout.addWidget(splitter)
+        
+        # Add mount points list
+        self.mount_points_label = QLabel("Mount Points:")
+        main_layout.addWidget(self.mount_points_label)
+        self.mount_points_text = QTextEdit()
+        self.mount_points_text.setMaximumHeight(60)
+        self.mount_points_text.setReadOnly(True)
+        main_layout.addWidget(self.mount_points_text)
+        self.update_mount_points()
+        
+        # Path display
+        self.path_display = QTextEdit()
+        self.path_display.setReadOnly(True)
+        self.path_display.setMaximumHeight(60)
+        main_layout.addWidget(self.path_display)
+        
+        # Progress bar
         self.progress_bar = QProgressBar()
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                border: 2px solid grey;
-                border-radius: 5px;
-                text-align: center;
-            }
-            QProgressBar::chunk {
-                background-color: #05B8CC;
-                width: 20px;
-            }
-        """)
-        layout.addWidget(self.progress_bar)
-
-        # Add permission legend
-        legend_layout = QHBoxLayout()
-        legend_layout.addWidget(QLabel("Legend:"))
-        legend_layout.addWidget(QLabel("✓ Readable"))
-        legend_layout.addWidget(QLabel("💾 Writable"))
-        legend_layout.addWidget(QLabel("🔗 Symlink"))
-        legend_layout.addStretch()
-        layout.addLayout(legend_layout)
-
-        # Add context display area
-        context_label = QLabel("Filesystem Context:")
-        layout.addWidget(context_label)
-
+        self.progress_bar.setVisible(False)
+        main_layout.addWidget(self.progress_bar)
+        
+        # Message container
+        self.message_container = QLabel()
+        self.message_container.setWordWrap(True)
+        main_layout.addWidget(self.message_container)
+        
+        # Context display
         self.context_display = QTextEdit()
         self.context_display.setReadOnly(True)
-        self.context_display.setFixedHeight(200)
-        layout.addWidget(self.context_display)
+        self.context_display.setVisible(False)
+        main_layout.addWidget(self.context_display)
+        
+        # Initialize button states
+        self.update_button_states()
 
-        self.setLayout(layout)
+    def create_tool_button(self, text, slot):
+        """Create a toolbar button"""
+        btn = QPushButton(text)
+        btn.clicked.connect(slot)
+        btn.setEnabled(False)  # Initially disabled
+        return btn
+
+    def update_mount_points(self):
+        """Update the mount points display"""
+        mount_points = []
+        for partition in psutil.disk_partitions():
+            mount_points.append(f"{partition.mountpoint} ({partition.device})")
+        self.mount_points_text.setText("\n".join(mount_points))
+
+    def create_symbolic_link(self):
+        """Create the symbolic link"""
+        try:
+            if not self.source_path or not self.target_path:
+                return
+                
+            if os.path.exists(self.target_path):
+                os.remove(self.target_path)
+                
+            os.symlink(self.source_path, self.target_path)
+            self.message_container.setText("Symbolic link created successfully!")
+            
+        except Exception as e:
+            self.message_container.setText(f"Failed to create symbolic link: {str(e)}")
+            logging.error(f"Failed to create symbolic link: {e}")
+
+    def rollback_operation(self):
+        """Rollback the last operation"""
+        # Implement rollback logic
+        pass
+
+    def remove_symlink(self):
+        """Remove the symbolic link"""
+        if self.source_path and os.path.islink(self.source_path):
+            try:
+                os.unlink(self.source_path)
+                self.message_container.setText("Symlink removed successfully.")
+                self.remove_symlink_button.setEnabled(False)
+                self.source_path = None
+                logging.info("Removed Symlink")
+            except OSError as e:
+                self.message_container.setText(f"Failed to remove symlink: {e}")
+                logging.error(f"Failed to remove symlink: {e}")
+
+    def filter_view(self, text):
+        """Filter both file explorers"""
+        self.source_explorer.set_filter(text)
+        self.target_explorer.set_filter(text)
+
+    def snapshot_filesystem(self):
+        """Create filesystem snapshot"""
+        # Implement snapshot logic
+        pass
+
+    def update_button_states(self):
+        """Update button enabled states"""
+        has_paths = bool(self.source_path and self.target_path)
+        self.create_symlink_button.setEnabled(has_paths)
+        self.rollback_button.setEnabled(False)  # Enable only after operation
+        self.remove_symlink_button.setEnabled(bool(self.source_path and os.path.islink(self.source_path)))
+        self.snapshot_button.setEnabled(True)  # Always enabled
+
+    
+    def set_source_path(self, path):
+        """Set source path and update UI"""
+        self.source_path = path
+        self.update_path_display()
+        self.update_button_states()
+
+    def set_target_path(self, path):
+        """Set target path and update UI"""
+        self.target_path = path
+        self.update_path_display()
+        self.update_button_states()
+
+    def update_path_display(self):
+        """Update the path display text"""
+        text = f"Source: {self.source_path or 'None'}\n"
+        text += f"Target: {self.target_path or 'None'}"
+        self.path_display.setText(text)
+
+    def apply_theme(self):
+        """Apply theme colors to the widget"""
+        if not hasattr(self.cccore, 'theme_manager'):
+            return
+            
+        theme = self.cccore.theme_manager.current_theme
+        colors = theme.get('colors', {})
+        
+        stylesheet = f"""
+            QWidget {{
+                background-color: {colors.get('backgroundColor', '#2E3440')};
+                color: {colors.get('textColor', '#D8DEE9')};
+            }}
+            
+            QTreeView {{
+                background-color: {colors.get('sidebarBackground', '#2E3440')};
+                color: {colors.get('sidebarText', '#D8DEE9')};
+                border: 1px solid {colors.get('sidebarHighlight', '#3B4252')};
+            }}
+            
+            QTreeView::item:hover {{
+                background-color: {colors.get('sidebarHover', '#434C5E')};
+            }}
+            
+            QTreeView::item:selected {{
+                background-color: {colors.get('sidebarHighlight', '#3B4252')};
+            }}
+            
+            QTextEdit, QLineEdit {{
+                background-color: {colors.get('inputBackground', '#3B4252')};
+                color: {colors.get('inputText', '#D8DEE9')};
+                border: 1px solid {colors.get('inputBorder', '#434C5E')};
+                border-radius: 4px;
+                padding: 4px;
+            }}
+            
+            QPushButton {{
+                background-color: {colors.get('buttonBackground', '#5E81AC')};
+                color: {colors.get('buttonText', '#ECEFF4')};
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                min-width: 80px;
+            }}
+            
+            QPushButton:hover {{
+                background-color: {colors.get('buttonHover', '#81A1C1')};
+            }}
+            
+            QPushButton:disabled {{
+                background-color: {colors.get('buttonDisabled', '#4C566A')};
+                color: {colors.get('buttonDisabledText', '#D8DEE9')};
+            }}
+            
+            QComboBox {{
+                background-color: {colors.get('inputBackground', '#3B4252')};
+                color: {colors.get('inputText', '#D8DEE9')};
+                border: 1px solid {colors.get('inputBorder', '#434C5E')};
+                border-radius: 4px;
+                padding: 4px;
+                min-width: 100px;
+            }}
+            
+            QComboBox::drop-down {{
+                border: none;
+                background-color: {colors.get('buttonBackground', '#5E81AC')};
+                width: 20px;
+            }}
+            
+            QComboBox::down-arrow {{
+                image: url({theme.get('icons', {}).get('comboBoxArrow', 'path/to/default/arrow.png')});
+            }}
+            
+            QLabel {{
+                color: {colors.get('textColor', '#D8DEE9')};
+                font-weight: bold;
+            }}
+        """
+        
+        self.setStyleSheet(stylesheet)
+        
+        # Apply theme to source and target explorers
+        if hasattr(self, 'source_explorer'):
+            self.source_explorer.apply_theme()
+        if hasattr(self, 'target_explorer'):
+            self.target_explorer.apply_theme()
 
     def on_view_mode_changed(self, mode):
         """Handle view mode changes"""
@@ -474,11 +536,6 @@ class SymbolicLinkerWidget(QWidget):
         else:
             # Switch to tree view
             pass
-
-    def create_tool_button(self, text, slot):
-        btn = QPushButton(text)
-        btn.clicked.connect(slot)
-        return btn
 
     def compare_directories(self):
         """Compare source and target directories for differences"""
@@ -496,11 +553,6 @@ class SymbolicLinkerWidget(QWidget):
         if self.source_path:
             self.show_size_analysis(self.source_path)
 
-    def filter_view(self, text):
-        """Filter file view based on search text"""
-        self.source_explorer.model().setNameFilters([f"*{text}*"])
-        self.target_explorer.model().setNameFilters([f"*{text}*"])
-
     def add_bookmark(self):
         """Add current directory to bookmarks"""
         if self.source_path:
@@ -516,25 +568,6 @@ class SymbolicLinkerWidget(QWidget):
         layout.addWidget(text_edit)
         dialog.setLayout(layout)
         dialog.exec()
-
-    def set_source_path(self, path):
-        self.source_path = path
-        self.update_button_states()
-        self.update_path_display()
-
-    def set_target_path(self, path):
-        self.target_path = path
-        self.update_button_states()
-        self.update_path_display()
-
-    def update_path_display(self):
-        self.path_display.setText(f"Source: {self.source_path or 'None'}\nTarget: {self.target_path or 'None'}")
-        paths_selected = self.source_path is not None and self.target_path is not None
-        self.start_move_button.setEnabled(paths_selected)
-
-    def update_button_states(self):
-        paths_selected = self.source_path is not None and self.target_path is not None
-        self.start_move_button.setEnabled(paths_selected)
 
     def move_contents_and_create_symlink(self):
         logging.info("Initiating move contents and create symlink operation.")
@@ -639,7 +672,7 @@ class SymbolicLinkerWidget(QWidget):
             logging.info(f"No symlink selected.")
 
     def disable_all_buttons(self):
-        self.start_move_button.setEnabled(False)
+        self.create_symlink_button.setEnabled(False)
         self.remove_symlink_button.setEnabled(False)
         self.rollback_button.setEnabled(False)
         self.snapshot_button.setEnabled(False)

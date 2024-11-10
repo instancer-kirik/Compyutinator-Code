@@ -42,6 +42,10 @@ class DeviceManagerView(QWidget):
         self.refresh_timer.timeout.connect(self.refresh_devices)
         self.refresh_timer.start(5000)  # Refresh every 5 seconds
         
+        # Add Bluetooth HID support
+        self.bt_hid_enabled = False
+        self.setup_bluetooth_hid()
+        
     def setup_ui(self):
         layout = QVBoxLayout()
         
@@ -156,6 +160,12 @@ class DeviceManagerView(QWidget):
         flows_menu = menu.addMenu("Flows")
         self.add_flows_to_menu(flows_menu, device_path)
         
+        # Add HID options for Bluetooth devices
+        if device_type == "Bluetooth":
+            if self.bt_hid_enabled:
+                menu.addAction("Connect as HID Device", 
+                    lambda: self.connect_bluetooth_hid(device_path))
+                    
         menu.exec(self.device_tree.viewport().mapToGlobal(position))
         
     def execute_command(self, command, device_path):
@@ -245,3 +255,50 @@ class DeviceManagerView(QWidget):
                 self.execute_command(cmd, device_path)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to execute flow: {e}")
+
+    def setup_bluetooth_hid(self):
+        """Initialize Bluetooth HID support"""
+        try:
+            # Add Bluetooth HID toggle to toolbar
+            self.bt_hid_btn = QPushButton("Enable BT-HID")
+            self.bt_hid_btn.setCheckable(True)
+            self.bt_hid_btn.clicked.connect(self.toggle_bluetooth_hid)
+            # Fix: Add to the existing toolbar layout instead
+            self.layout().itemAt(0).addWidget(self.bt_hid_btn)  # Add to toolbar layout
+            
+        except Exception as e:
+            logging.error(f"Error setting up Bluetooth HID: {e}")
+            
+    def toggle_bluetooth_hid(self, enabled):
+        """Toggle Bluetooth HID bridging"""
+        try:
+            if enabled:
+                # Start HID service
+                subprocess.run(['systemctl', 'start', 'bluetooth-hid'], check=True)
+                self.bt_hid_enabled = True
+                self.bt_hid_btn.setText("Disable BT-HID")
+            else:
+                # Stop HID service
+                subprocess.run(['systemctl', 'stop', 'bluetooth-hid'], check=True)
+                self.bt_hid_enabled = False
+                self.bt_hid_btn.setText("Enable BT-HID")
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to toggle Bluetooth HID: {e}")
+            self.bt_hid_btn.setChecked(self.bt_hid_enabled)
+
+    def connect_bluetooth_hid(self, device_path):
+        """Connect a Bluetooth device as HID"""
+        try:
+            # Connect device using BlueZ HID profile
+            cmd = f"bluetoothctl connect {device_path} && "\
+                  f"bluetoothctl trust {device_path} && "\
+                  f"echo 'connect {device_path}' | sudo bluetoothctl"
+            subprocess.run(cmd, shell=True, check=True)
+            
+            QMessageBox.information(self, "Success", 
+                "Device connected as HID. You may need to pair it first.")
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Error", 
+                f"Failed to connect device as HID: {e}")

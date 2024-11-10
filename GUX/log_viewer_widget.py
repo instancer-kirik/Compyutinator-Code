@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QFileDialog, QMessageBox
 )
 import logging
+import os
 
 from NITTY_GRITTY.ThreadTrackers import SafeQThread
 
@@ -44,9 +45,19 @@ class LogLoader(SafeQThread):
             self.finished.emit()
 
 class LogViewerWidget(QWidget):
-    def __init__(self, initial_log_file_path, parent=None):
+    def __init__(self, initial_log_file_path, parent=None, cccore=None):
         super().__init__(parent)
-        self.settings = QSettings("YourCompany", "YourApp")
+        self.cccore = cccore
+        # Ensure log directory exists
+        log_dir = os.path.dirname(initial_log_file_path)
+        os.makedirs(log_dir, exist_ok=True)
+        
+        # Create log file if it doesn't exist
+        if not os.path.exists(initial_log_file_path):
+            with open(initial_log_file_path, 'w') as f:
+                f.write("")
+        
+        self.settings = self.cccore.settings_manager.get_settings()
         self.log_paths = self.settings.value("log_paths", [initial_log_file_path])
         self.current_log_path = initial_log_file_path
         self.full_log_content = ""

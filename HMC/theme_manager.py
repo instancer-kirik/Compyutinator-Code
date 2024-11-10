@@ -204,6 +204,24 @@ class ThemeManager(QObject):
 
             # Apply lexer colors
             self.apply_lexer_colors(theme_data.get('lexer', {}))
+
+            # Add menu bar specific styling
+            stylesheet += """
+            QMenuBar {
+                background-color: palette(window);
+                color: palette(text);
+                border-bottom: 1px solid palette(mid);
+                min-height: 25px;
+            }
+            QMenuBar::item {
+                background-color: transparent;
+                padding: 4px 8px;
+            }
+            QMenuBar::item:selected {
+                background-color: palette(highlight);
+                color: palette(highlighted-text);
+            }
+            """
         except Exception as e:
             logging.error(f"Error applying theme: {str(e)}")
             logging.error(traceback.format_exc())

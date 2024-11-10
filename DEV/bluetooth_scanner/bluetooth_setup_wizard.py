@@ -54,6 +54,8 @@ class PermissionsPage(QWizardPage):
         # Define the rules as class attributes
         self.udev_rules = '''# Bluetooth devices
 SUBSYSTEM=="bluetooth", MODE="0666", GROUP="bluetooth"
+SUBSYSTEM=="hidraw", MODE="0666", GROUP="bluetooth"
+KERNEL=="hidraw*", MODE="0666", GROUP="bluetooth"
 '''
         
         # Update polkit rules to include DBus permissions
@@ -61,6 +63,7 @@ SUBSYSTEM=="bluetooth", MODE="0666", GROUP="bluetooth"
     if ((action.id == "org.bluez.agent.capability") ||
         (action.id == "org.bluez.device.capability") ||
         (action.id == "org.freedesktop.systemd1.manage-units") ||
+        (action.id == "org.bluez.profile.input") ||
         (action.id == "org.freedesktop.login1.power-off") ||
         (action.id == "org.freedesktop.login1.reboot")) {
         return polkit.Result.YES;
@@ -147,41 +150,57 @@ EOL
 # Restart DBus to apply changes
 systemctl restart dbus
 
-exit 0
+# Configure HID service
+cat > /etc/dbus-1/system.d/bluetooth-hid.conf << 'EOL'
+<?xml version="1.0" encoding="UTF-8"?>
+<busconfig>
+  <policy user="{username}">
+    <allow send_destination="org.bluez"/>
+    <allow send_interface="org.bluez.Input1"/>
+    <allow send_interface="org.bluez.Profile1"/>
+    <allow send_interface="org.bluez.Device1"/>
+    <allow send_interface="org.bluez.Agent1"/>
+  </policy>
+</busconfig>
+EOL
+
+# Enable HID support in Bluetooth daemon
+sed -i 's/#Experimental = false/Experimental = true/' /etc/bluetooth/main.conf
+echo 'Enable=Source,Sink,Media,Socket' >> /etc/bluetooth/main.conf
 '''
-            
+
             self.progress.setValue(30)
             self.status_label.setText("Creating setup script...")
-            
+
             # Write the setup script
             with open('/tmp/bluetooth_setup.sh', 'w') as f:
                 f.write(setup_script)
             os.chmod('/tmp/bluetooth_setup.sh', 0o755)
-            
+
             self.progress.setValue(50)
             self.status_label.setText("Running setup script...")
-            
+
             # Run single privileged command
             result = subprocess.run(
                 ['pkexec', '/tmp/bluetooth_setup.sh'],
                 capture_output=True,
                 text=True
             )
-            
+
             if result.returncode != 0:
                 raise Exception(f"Setup failed: {result.stderr}")
-            
+
             self.progress.setValue(100)
             self.status_label.setText("Setup completed successfully!")
             self.tasks_completed = True
-            
+
             # Remove the next/back buttons for this page
             self.wizard().setOption(QWizard.WizardOption.HaveCustomButton1, False)
             self.wizard().setOption(QWizard.WizardOption.HaveNextButtonOnLastPage, False)
-            
+
             # Automatically move to completion page
             QTimer.singleShot(1000, lambda: self.wizard().next())
-            
+
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to configure permissions:\n{str(e)}")
             self.status_label.setText("Error configuring permissions!")
@@ -306,7 +325,7 @@ class CompletionPage(QWizardPage):
         # Close the wizard
         self.wizard().accept()
         # Import and start the scanner
-        from bluetooth_scanner import MainWindow
+        from .bluetooth_scanner import MainWindow
         self.scanner_window = MainWindow()
         self.scanner_window.show()
 

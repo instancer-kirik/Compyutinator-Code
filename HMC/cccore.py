@@ -41,17 +41,25 @@ from PyQt6.QtCore import QTimer, pyqtSignal, QObject
 from .macro_manager import MacroManager
 from .menu_manager import MenuManager
 from .notification_manager import NotificationManager
+import transformers
+import warnings
 
 class CCCore(QObject):  # referred to as mm in other files (auratext)
     lsp_manager_initialized = pyqtSignal()
 
-    def __init__(self, settings_manager, main_window=None):
-        super().__init__()  # Call the QObject's __init__ method
-        logging.info("Initializing CCCore")
+    def __init__(self, settings_manager=None):
+        super().__init__()
+        
+        # Suppress HuggingFace messages
+        transformers.logging.set_verbosity_error()
+        warnings.filterwarnings('ignore', category=UserWarning, module='transformers')
+        
         self.settings_manager = settings_manager
-        self.main_window = main_window
-        self.action_handlers = ActionHandlers(window=main_window, cccore=self)
+        self.main_window = None
         self.main_window_set = False
+        self._window_ref = None  # Strong reference holder
+        self.settings_manager = settings_manager
+        self.action_handlers = None
         self.menu_manager = None
         self.widget_manager = None
         self.auratext_windows = []
@@ -103,6 +111,7 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         self.late_init()
         
     def init_managers(self):
+        self.action_handlers = ActionHandlers(window=self.main_window, cccore=self)
         self.db_manager = DatabaseManager('local')
         from HMC.ai_model_manager import ModelManager
         self.model_manager = ModelManager(self.settings_manager)
@@ -129,13 +138,39 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         self.config_manager = ConfigManager()
     def late_init(self):
         if not self.late_init_done:
-            self.file_manager = FileManager(self)
-            self.editor_manager = EditorManager(self)
-            self.editor_manager.set_current_window(self.main_window)
-            self.init_lsp_manager()
-            self.editor_manager.late_init()
-            
-            self.late_init_done = True
+            try:
+                # Initialize managers
+                self.file_manager = FileManager(self)
+                self.editor_manager = EditorManager(self)
+                self.editor_manager.set_current_window(self.main_window)
+                
+                # Initialize menu manager if not already done
+                if not hasattr(self, 'menu_manager'):
+                    self.menu_manager = MenuManager(self.main_window, self)
+                
+                # Initialize LSP manager
+                self.init_lsp_manager()
+                
+                # Late init editor manager
+                self.editor_manager.late_init()
+                
+                # Ensure proper widget state
+                if self.main_window:
+                    self.main_window.raise_()
+                    self.main_window.activateWindow()
+                    
+                    # Reset any problematic widgets
+                    for widget in self.main_window.findChildren(QWidget):
+                        if widget.cursor().shape() != Qt.CursorShape.ArrowCursor:
+                            widget.setCursor(Qt.CursorShape.ArrowCursor)
+                        if widget.windowFlags() & Qt.WindowType.WindowStaysOnTopHint:
+                            widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+                
+                self.late_init_done = True
+                logging.info("CCCore late initialization complete")
+                
+            except Exception as e:
+                logging.error(f"Error in late initialization: {e}")
     def init_lsp_manager(self):
         self.lsp_manager = LSPManager(self)
         self.lsp_manager.initialize()
@@ -258,16 +293,42 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
             logging.warning("Editor manager not initialized. Cannot open config file.")
 
     def set_main_window(self, main_window):
+        """Set the main window and initialize related components"""
         if self.main_window_set:
             logging.warning("Main window already set, skipping")
             return
+            
+        if main_window is None:
+            logging.error("Attempted to set None as main window")
+            return
+            
         logging.info(f"Setting main window: {main_window}")
-        main_window.setWindowOpacity(0)
         self.main_window = main_window
-        self.theme_manager.main_window = main_window
-        # Don't create menu manager here anymore - let MainApplication handle it
-        self.widget_manager.set_main_window_and_create_docks(main_window)
+        self._window_ref = main_window  # Keep strong reference
+        
+        
+        # Set main window for managers
+        if self.widget_manager:
+            self.widget_manager.set_main_window_and_create_docks(main_window)
+        if self.theme_manager:
+            self.theme_manager.main_window = main_window
+            
+        # Mark as set
         self.main_window_set = True
+        logging.info("Main window set successfully")
+        
+        # Post-setup initialization
+        QTimer.singleShot(0, self.post_window_setup)
+        
+    def post_window_setup(self):
+        """Ensure proper window setup after Qt event loop starts"""
+        if self.main_window and self.main_window.isVisible():
+            logging.info("Window already visible")
+            return
+            
+        if self.main_window:
+            self.main_window.show()
+            logging.info("Window shown in post_window_setup")
 
     def create_vault_window(self, vault_path):
         if vault_path not in self.vault_windows:
@@ -302,17 +363,38 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         self.menu_manager = menu_manager
     def cleanup(self):
         logging.info("Starting CCCore cleanup")
-        managers_to_cleanup = [
-            'thread_controller', 'process_manager', 'lsp_manager',
-            'file_manager', 'download_manager', 'build_manager'
-        ]
-        for manager_name in managers_to_cleanup:
-            if hasattr(self, manager_name):
-                manager = getattr(self, manager_name)
-                if hasattr(manager, 'cleanup'):
-                    logging.info(f"Cleaning up {manager_name}")
-                    manager.cleanup()
-        logging.info("CCCore cleanup complete")
+        try:
+            # Clean up risk manager first
+            if hasattr(self, 'risk_manager'):
+                try:
+                    self.risk_manager.cleanup()
+                except Exception as e:
+                    logging.error(f"Error cleaning up risk manager: {e}")
+                self.risk_manager = None
+                
+            # Then clean up other managers
+            managers_to_cleanup = [
+                'thread_controller', 'process_manager', 'lsp_manager',
+                'file_manager', 'download_manager', 'build_manager',
+                'widget_manager'  # Add widget manager to cleanup list
+            ]
+            
+            for manager_name in managers_to_cleanup:
+                if hasattr(self, manager_name):
+                    try:
+                        manager = getattr(self, manager_name)
+                        if manager and hasattr(manager, 'cleanup'):
+                            logging.info(f"Cleaning up {manager_name}")
+                            manager.cleanup()
+                    except Exception as e:
+                        logging.error(f"Error cleaning up {manager_name}: {e}")
+                    finally:
+                        setattr(self, manager_name, None)
+                        
+        except Exception as e:
+            logging.error(f"Error during CCCore cleanup: {e}")
+        finally:
+            logging.info("CCCore cleanup complete")
     def get_project_manager(self):
         return self.project_manager
     def get_vault_manager(self):

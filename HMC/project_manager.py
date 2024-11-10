@@ -14,7 +14,7 @@ from .project_config import ProjectConfig
 from datetime import datetime
 from enum import Enum
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
 from .project_dashboard import ProjectDashboard
 from GUX.dialogs.project_dialogs import ProjectCreationDialog
@@ -526,17 +526,33 @@ class ProjectManager:
             logging.error(f"Error creating Resolvinator project: {e}")
             return False
 
-    def load_project(self, project_path):
-        config_path = os.path.join(project_path, self.project_config_filename)
-        if not os.path.exists(config_path):
-            raise FileNotFoundError(f"Project configuration file not found: {config_path}")
-        
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-        
-        self.current_project = config
-        self.project_changed.emit(config)
-        return config
+    def load_project(self, project_path: str) -> Optional[Project]:
+        """Load project from path with proper error handling"""
+        try:
+            # Determine project type
+            project_type = self.get_project_type(project_path)
+            if not project_type:
+                return None
+                
+            # Load config
+            config_file = self.get_config_filename(project_type)
+            config_path = os.path.join(project_path, config_file)
+            
+            with open(config_path, 'r') as f:
+                config_data = json.load(f)
+                
+            # Create appropriate project instance
+            project = Project(
+                project_type=ProjectType(project_type),
+                path=project_path,
+                **config_data
+            )
+            
+            return project
+            
+        except Exception as e:
+            logging.error(f"Error loading project: {e}")
+            return None
 
     def get_project_files(self):
         if not self.current_project:
@@ -697,30 +713,28 @@ class ProjectManager:
         
         return self.get_project_data(project_name)
     
-    def set_current_project(self, vault_name=None, project_name=None, project_path=None):
-        if project_name is None:
-            logging.warning("No project name provided to set_current_project")
-            return False
-
-        if project_name in self.get_many_projects():
-            if project_path is None:
-                project_path = self.get_project_path(project_name)
+    def set_current_project(self, project: Project):
+        """Set the current active project with proper state management"""
+        try:
+            # Save previous project state if exists
+            if self.active_project:
+                self.save_project_state(self.active_project.attributes.name)
             
-            if vault_name is None:
-                vault_name = self.cccore.vault_manager.get_vault_for_project(project_name)
-
-            self.current_project = {
-                'name': project_name,
-                'path': project_path,
-                'vault': vault_name
-            }
-            self.settings_manager.set_value("current_project", project_name)
-            self.project_changed.emit(project_name)
-            logging.info(f"Current project set to: {project_name} in vault: {vault_name}")
-            return True
-        else:
-            logging.warning(f"Attempted to set non-existent project: {project_name}")
-            return False
+            # Set new active project
+            self.active_project = project
+            
+            # Load project state
+            self.load_project_state(project.attributes.name)
+            
+            # Setup WebSocket if needed
+            if (project.project_type == ProjectType.RESOLVINATOR and 
+                self.ws_client and project.id):
+                self.ws_client.subscribe_to_project(project.id)
+                
+            self.project_changed.emit(project.attributes.name)
+            
+        except Exception as e:
+            logging.error(f"Error setting current project: {e}")
     
     def remove_project(self, name):
         if name in self.projects:
@@ -816,14 +830,37 @@ class ProjectManager:
             logging.error(f"Error switching project: {e}")
             return False
 
-    def update_project_config(self, project_name, updated_data):
-        project_path = self.get_project_path(project_name)
-        if project_path:
-            config_file = os.path.join(project_path, 'project_config.json')
-            with open(config_file, 'w') as f:
-                json.dump(updated_data, f, indent=4)
-        else:
-            logging.error(f"Project not found: {project_name}")
+    def update_project_config(self, project_name: str, updated_data: dict) -> bool:
+        """Update project configuration with validation"""
+        try:
+            project_path = self.get_project_path(project_name)
+            if not project_path:
+                return False
+                
+            # Get current config
+            config_file = self.get_config_filename(self.get_project_type(project_name))
+            config_path = os.path.join(project_path, config_file)
+            
+            # Load existing config
+            with open(config_path, 'r') as f:
+                current_config = json.load(f)
+                
+            # Update config
+            current_config.update(updated_data)
+            
+            # Validate config
+            if not self.validate_project_config(current_config):
+                return False
+                
+            # Save updated config
+            with open(config_path, 'w') as f:
+                json.dump(current_config, f, indent=4)
+                
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error updating project config: {e}")
+            return False
 
     def build_project(self, name):
         if name in self.projects:
@@ -1422,29 +1459,120 @@ class ManyProjectsManagerWidget(QWidget):
             project_path = self.get_project_path(project_name)
             
             # Create project directories
-            directories = [
-                'notes',          # Markdown notes
-                'tasks',          # Task tracking
-                'docs',           # Documentation
-                'assets',         # Project assets
-                'scripts',        # Project scripts
-                'config',         # Configuration files
-                'data'           # Project data
-            ]
-            
-            for dir_name in directories:
-                os.makedirs(os.path.join(project_path, dir_name), exist_ok=True)
-            
-            # Create initial project config
-            config = ProjectConfig(
-                name=project_name,
-                project_type=project_type,
-                path=project_path,
-                start_date=datetime.now(),
-                websocket_enabled=project_type == "resolvinator"
-            )
-            
-            # Create initial README.md
+            directories = {
+                'notes': 'Markdown notes',
+                'tasks': 'Task tracking',
+                'docs': 'Documentation',
+                'assets': 'Project assets',
+                'scripts': 'Project scripts',
+                'config': 'Configuration files',
+                'data': 'Project data',
+                'stories': {
+                    'personas': 'User persona definitions and profiles',
+                    'journeys': 'User journey maps and flows',
+                    'scenarios': 'Use case scenarios and stories',
+                    'feedback': 'User feedback and testimonials'
+                },
+                'marketing': {
+                    'images': {
+                        'brand': 'Brand identity assets',
+                        'screenshots': 'Product screenshots',
+                        'social': 'Social media graphics',
+                        'banners': 'Marketing banners'
+                    },
+                    'videos': {
+                        'demos': 'Product demonstrations',
+                        'tutorials': 'How-to guides',
+                        'promos': 'Promotional content'
+                    },
+                    'copy': {
+                        'descriptions': 'Product descriptions',
+                        'taglines': 'Marketing taglines',
+                        'press_releases': 'Press materials'
+                    },
+                    'presentations': {
+                        'pitch_decks': 'Investor presentations',
+                        'product_demos': 'Product demonstrations'
+                    },
+                    'research': {
+                        'market_analysis': 'Market research data',
+                        'user_personas': 'Target audience profiles',
+                        'competitors': 'Competitor analysis'
+                    },
+                    'archetypes': {
+                        'brand_archetypes': 'Brand personality definitions',
+                        'user_archetypes': 'User personality profiles'
+                    },
+                    'charts': {
+                        'metrics': 'Performance metrics',
+                        'growth': 'Growth analytics',
+                        'analytics': 'Usage statistics'
+                    },
+                    'assets': {
+                        'logos': 'Brand logos',
+                        'icons': 'UI/Brand icons',
+                        'fonts': 'Brand typography'
+                    },
+                    'seo': {
+                        'keywords': 'Keyword research and mapping',
+                        'metadata': 'Meta descriptions and titles',
+                        'analytics': 'SEO performance tracking',
+                        'content': {
+                            'snippets': 'Rich snippets and structured data',
+                            'schemas': 'Schema.org markup templates',
+                            'sitemap': 'XML sitemaps and URL structure'
+                        },
+                        'backlinks': 'Backlink strategy and tracking',
+                        'competitors': 'Competitor SEO analysis',
+                        'reports': 'SEO audit reports and metrics'
+                    },
+                },
+                'requirements': {
+                    'business': 'Business requirements and objectives',
+                    'technical': 'Technical specifications and constraints',
+                    'functional': 'Functional requirements and features',
+                    'security': 'Security requirements and compliance',
+                    'performance': 'Performance requirements and metrics',
+                    'integrations': 'Third-party integration requirements'
+                },
+                'contacts': {
+                    'team': 'Project team contacts and roles',
+                    'stakeholders': 'Project stakeholder information',
+                    'vendors': 'Third-party vendor contacts',
+                    'clients': 'Client contact information',
+                    'support': 'Support team contacts'
+                },
+                'meta': {
+                    'roadmap': 'Project roadmap and milestones',
+                    'budget': 'Budget tracking and forecasts',
+                    'risks': 'Risk assessment and mitigation',
+                    'decisions': 'Decision log and rationale',
+                    'meetings': 'Meeting notes and action items',
+                    'reviews': 'Project reviews and retrospectives'
+                }
+            }
+
+            def create_directory_structure(base_path, structure, depth=0):
+                if isinstance(structure, dict):
+                    for name, content in structure.items():
+                        dir_path = os.path.join(base_path, name)
+                        os.makedirs(dir_path, exist_ok=True)
+                        
+                        # Create README for each directory
+                        readme_content = f"# {name.title()}\n\n"
+                        if isinstance(content, dict):
+                            readme_content += "## Contents\n\n"
+                            for subdir, desc in content.items():
+                                readme_content += f"- **{subdir}**: {desc}\n"
+                            create_directory_structure(dir_path, content, depth + 1)
+                        else:
+                            readme_content += f"{content}\n"
+                        
+                        with open(os.path.join(dir_path, 'README.md'), 'w') as f:
+                            f.write(readme_content)
+
+            # Create directory structure
+            create_directory_structure(project_path, directories)
             readme_template = f"""# {project_name}
 
 ## Overview
@@ -1452,40 +1580,413 @@ Project Type: {project_type}
 Created: {datetime.now().strftime('%Y-%m-%d')}
 
 ## Quick Links
-- [Tasks](tasks/README.md)
-- [Documentation](docs/README.md)
-- [Project Notes](notes/README.md)
+- [Tasks](tasks/README.md) - Project tasks and milestones
+- [Documentation](docs/README.md) - Technical documentation
+- [Project Notes](notes/README.md) - Development notes and updates
+- [Stories](stories/README.md) - User stories and scenarios
+- [Marketing](marketing/README.md) - Brand and marketing assets
+- [SEO](marketing/seo/README.md) - Search engine optimization
 
 ## Project Structure
 {project_name}/
-├── notes/ # Project notes and documentation
-├── tasks/ # Task tracking and management
-├── docs/ # Project documentation
-├── assets/ # Project assets and resources
-├── scripts/ # Project scripts and tools
-├── config/ # Configuration files
-└── data/ # Project data files
+├── notes/          # Project notes and documentation
+├── tasks/          # Task tracking and management
+├── docs/           # Technical documentation
+├── assets/         # Project assets and resources
+├── scripts/        # Project scripts and tools
+├── config/         # Configuration files
+├── data/          # Project data files
+├── stories/        # User stories and scenarios
+│   ├── personas/   # User persona definitions
+│   ├── journeys/   # User journey maps
+│   └── scenarios/  # Use case scenarios
+└── marketing/      # Marketing and brand assets
+    ├── images/     # Visual assets
+    │   ├── brand/  # Brand identity assets
+    │   ├── social/ # Social media graphics
+    │   └── promo/  # Promotional materials
+    ├── copy/       # Marketing text and content
+    ├── research/   # Market analysis and research
+    ├── archetypes/ # Brand and user archetypes
+    └── seo/        # Search engine optimization
+        ├── keywords/     # Keyword research and mapping
+        ├── metadata/     # Meta descriptions and titles
+        ├── content/      # SEO content templates
+        │   ├── snippets/ # Rich snippets
+        │   └── schemas/  # Schema markup
+        ├── analytics/    # SEO performance data
+        └── reports/      # SEO audits and reports
+
+## Brand Story
+[Brief description of the project's purpose and vision]
+
+## Target Audience
+- Primary: [Describe primary user]
+- Secondary: [Describe secondary user]
+
+## SEO Strategy
+### Keywords
+- Primary: [Main keyword]
+- Secondary: [Supporting keywords]
+- Long-tail: [Specific phrases]
+
+### Content Pillars
+1. [Main topic area]
+2. [Secondary topic area]
+3. [Additional topic area]
+
+### Technical SEO Checklist
+- [ ] Configure meta descriptions
+- [ ] Implement schema markup
+- [ ] Setup XML sitemap
+- [ ] Configure robots.txt
+- [ ] Setup analytics tracking
+- [ ] Mobile optimization
+- [ ] Page speed optimization
 
 ## Getting Started
-1. Check the tasks directory for current tasks
-2. Review project documentation in docs
-3. Add project notes in the notes directory
+1. Review the project documentation in `docs/`
+2. Check current tasks in `tasks/`
+3. Understand user stories in `stories/`
+4. Review brand guidelines in `marketing/brand/`
+5. Configure SEO settings in `marketing/seo/`
+
+## Development
+- Language: [Primary language]
+- Framework: [Main framework]
+- Dependencies: [Key dependencies]
+
+## Recent Updates
+- Project created on {datetime.now().strftime('%Y-%m-%d')}
+
+## Contributing
+[Brief contribution guidelines]
+
+## License
+[License information]
+"""
+
+            # Create brand archetype template
+            archetype_path = os.path.join(project_path, 'marketing/archetypes/brand_archetypes')
+            archetype_template = """# Brand Archetypes
+
+## Primary Archetype
+- Name: 
+- Characteristics:
+- Values:
+- Voice and Tone:
+- Visual Elements:
+
+## Secondary Archetypes
+1. Name:
+   - Purpose:
+   - Traits:
+   - Expression:
+
+2. Name:
+   - Purpose:
+   - Traits:
+   - Expression:
+
+## Brand Personality Matrix
+- Professional <-> Casual
+- Traditional <-> Modern
+- Serious <-> Playful
+- Technical <-> Accessible
+
+## Anti-Archetypes
+- What we're not:
+- Traits to avoid:
+- Voice to avoid:
+
+## Implementation Guidelines
+- Communication Style:
+- Visual Expression:
+- Content Tone:
+- Customer Interaction:
+"""
+            
+            with open(os.path.join(archetype_path, 'brand_archetype_template.md'), 'w') as f:
+                f.write(archetype_template)
+
+            # Create SEO config file
+            seo_config_template = """{
+    "seo_config": {
+        "site_name": "",
+        "default_title_template": "%s | Your Brand",
+        "default_description": "",
+        "default_keywords": [],
+        "social_media": {
+            "twitter_card": "summary_large_image",
+            "twitter_site": "@yourbrand",
+            "og_type": "website",
+            "og_site_name": "Your Brand"
+        },
+        "structured_data": {
+            "organization": {
+                "@type": "Organization",
+                "name": "",
+                "url": "",
+                "logo": ""
+            }
+        },
+        "tracking": {
+            "google_analytics_id": "",
+            "google_search_console": "",
+            "bing_webmaster": ""
+        }
+    }
+}
+"""
+            seo_config_path = os.path.join(project_path, 'marketing/seo/config.json')
+            with open(seo_config_path, 'w') as f:
+                f.write(seo_config_template)
+
+            with open(os.path.join(project_path, 'project_readme.md'), 'w') as f:
+                f.write(readme_template)
+                
+            requirements_template = """# Project Requirements
+
+## Business Requirements
+- [ ] Market analysis completed
+- [ ] Business objectives defined
+- [ ] Success metrics established
+- [ ] Budget constraints identified
+- [ ] Timeline requirements set
+
+## Technical Requirements
+### Infrastructure
+- [ ] Hosting requirements
+- [ ] Database requirements
+- [ ] Security requirements
+- [ ] Scalability needs
+- [ ] Backup/recovery requirements
+
+### Performance
+- [ ] Load time targets
+- [ ] Concurrent user expectations
+- [ ] Resource usage limits
+- [ ] Availability requirements
+- [ ] Response time goals
+
+### Integration Requirements
+- [ ] Third-party services
+- [ ] API requirements
+- [ ] Data exchange formats
+- [ ] Authentication methods
+- [ ] Webhook requirements
+
+## Compliance Requirements
+- [ ] Data protection standards
+- [ ] Industry regulations
+- [ ] Security certifications
+- [ ] Accessibility requirements
+- [ ] Legal requirements
+
+## Dependencies
+- [ ] External systems
+- [ ] Third-party libraries
+- [ ] Development tools
+- [ ] Testing tools
+- [ ] Deployment requirements
+"""
+
+            contacts_template = """# Project Contacts
+
+## Team Members
+| Role | Name | Email | Phone | Time Zone |
+|------|------|-------|-------|-----------|
+| Project Manager | | | | |
+| Tech Lead | | | | |
+| Developer | | | | |
+| Designer | | | | |
+
+## Stakeholders
+| Role | Organization | Name | Email | Priority |
+|------|--------------|------|-------|----------|
+| | | | | |
+
+## Vendors
+| Service | Company | Contact | Email | Contract # |
+|---------|----------|---------|-------|------------|
+| | | | | |
+
+## Emergency Contacts
+| Situation | Name | Role | Phone | Email |
+|-----------|------|------|-------|-------|
+| Technical Emergency | | | | |
+| Security Incident | | | | |
+| Service Outage | | | | |
+
+## Communication Preferences
+| Contact | Preferred Method | Best Time | Frequency |
+|---------|-----------------|------------|-----------|
+| | | | |
+"""
+
+        # Update README template with new sections
+            readme_template = f"""# {project_name}
+
+## Requirements Overview
+- [Business Requirements](requirements/business/README.md)
+- [Technical Requirements](requirements/technical/README.md)
+- [Security Requirements](requirements/security/README.md)
+- [Integration Requirements](requirements/integrations/README.md)
+
+## Project Contacts
+- [Team Directory](contacts/team/README.md)
+- [Stakeholder Registry](contacts/stakeholders/README.md)
+- [Vendor Contacts](contacts/vendors/README.md)
+
+## Project Metadata
+- [Project Roadmap](meta/roadmap/README.md)
+- [Risk Register](meta/risks/README.md)
+- [Decision Log](meta/decisions/README.md)
+- [Meeting Notes](meta/meetings/README.md)
+
+## Dependencies
+### Required Services
+- [List of required services]
+
+### Development Dependencies
+- [List of development tools]
+
+### External Integrations
+- [List of external integrations]
+
+## Environment Setup
+1. [Development environment setup steps]
+2. [Testing environment configuration]
+3. [Production deployment requirements]
+
+## Monitoring & Metrics
+- Performance Metrics
+- User Analytics
+- Error Tracking
+- Usage Statistics
+
+## Support & Maintenance
+- Support Contact: [contact information]
+- Bug Reporting Process: [process description]
+- Update Schedule: [schedule information]
+- Backup Strategy: [backup details]
+
+"""
+
+           
+            # Create directory structure (using existing directories dict)
+            create_directory_structure(project_path, directories)
+            
+            # Define and write templates
+            templates = {
+                'requirements/README.md': requirements_template,
+                'contacts/README.md': contacts_template,
+                'marketing/archetypes/brand_archetypes/brand_archetype_template.md': archetype_template,
+                'marketing/seo/config.json': seo_config_template,
+                'README.md': self.generate_readme_template(project_name, project_type)
+            }
+
+            # Write all templates
+            for file_path, content in templates.items():
+                full_path = os.path.join(project_path, file_path)
+                os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                with open(full_path, 'w') as f:
+                    f.write(content)
+
+            return True
+
+        except Exception as e:
+            logging.error(f"Error creating project structure: {e}")
+            return False
+
+    def generate_readme_template(self, project_name: str, project_type: str) -> str:
+        """Generate the main README template"""
+        return f"""# {project_name}
+
+## Overview
+Project Type: {project_type}
+Created: {datetime.now().strftime('%Y-%m-%d')}
+
+## Quick Links
+- [Tasks](tasks/README.md) - Project tasks and milestones
+- [Documentation](docs/README.md) - Technical documentation
+- [Project Notes](notes/README.md) - Development notes and updates
+- [Stories](stories/README.md) - User stories and scenarios
+- [Marketing](marketing/README.md) - Brand and marketing assets
+- [SEO](marketing/seo/README.md) - Search engine optimization
+
+## Project Structure
+{project_name}/
+├── notes/          # Project notes and documentation
+├── tasks/          # Task tracking and management
+├── docs/           # Technical documentation
+├── assets/         # Project assets and resources
+├── scripts/        # Project scripts and tools
+├── config/         # Configuration files
+├── data/          # Project data files
+├── stories/        # User stories and scenarios
+│   ├── personas/   # User persona definitions
+│   ├── journeys/   # User journey maps
+│   └── scenarios/  # Use case scenarios
+└── marketing/      # Marketing and brand assets
+    ├── images/     # Visual assets
+    │   ├── brand/  # Brand identity assets
+    │   ├── social/ # Social media graphics
+    │   └── promo/  # Promotional materials
+    ├── copy/       # Marketing text and content
+    ├── research/   # Market analysis and research
+    ├── archetypes/ # Brand and user archetypes
+    └── seo/        # Search engine optimization
+        ├── keywords/     # Keyword research and mapping
+        ├── metadata/     # Meta descriptions and titles
+        ├── content/      # SEO content templates
+        │   ├── snippets/ # Rich snippets
+        │   └── schemas/  # Schema markup
+        ├── analytics/    # SEO performance data
+        └── reports/      # SEO audits and reports
+
+## Brand Story
+[Brief description of the project's purpose and vision]
+
+## Target Audience
+- Primary: [Describe primary user]
+- Secondary: [Describe secondary user]
+
+## SEO Strategy
+### Keywords
+- Primary: [Main keyword]
+- Secondary: [Supporting keywords]
+- Long-tail: [Specific phrases]
+
+### Content Pillars
+1. [Main topic area]
+2. [Secondary topic area]
+3. [Additional topic area]
+
+### Technical SEO Checklist
+- [ ] Configure meta descriptions
+- [ ] Implement schema markup
+- [ ] Setup XML sitemap
+- [ ] Configure robots.txt
+- [ ] Setup analytics tracking
+- [ ] Mobile optimization
+- [ ] Page speed optimization
+
+## Getting Started
+1. Review the project documentation in `docs/`
+2. Check current tasks in `tasks/`
+3. Understand user stories in `stories/`
+4. Review brand guidelines in `marketing/brand/`
+5. Configure SEO settings in `marketing/seo/`
+
+## Development
+- Language: [Primary language]
+- Framework: [Main framework]
+- Dependencies: [Key dependencies]
 
 ## Recent Updates
 - Project created on {datetime.now().strftime('%Y-%m-%d')}
 """
-            
-            with open(os.path.join(project_path, 'README.md'), 'w') as f:
-                f.write(readme_template)
-            
-            # Save project config
-            config.save()
-            
-            return True
-            
-        except Exception as e:
-            logging.error(f"Error creating project structure: {e}")
-            return False
 
     def activate_project(self, project_name: str) -> bool:
         """Activate a project for tracking"""
@@ -1619,3 +2120,9 @@ Created: {datetime.now().strftime('%Y-%m-%d')}
         tools_menu = self.menuBar().addMenu("&Tools")
         command_manager_action = tools_menu.addAction("&Command Manager")
         command_manager_action.triggered.connect(self.show_command_manager)
+
+    def get_config_filename(self, project_type: ProjectType) -> str:
+        """Get the appropriate config filename based on project type"""
+        return 'resolvinator_config.json' if project_type == ProjectType.RESOLVINATOR else 'project_config.json'
+
+   

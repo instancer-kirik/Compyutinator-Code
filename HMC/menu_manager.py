@@ -10,41 +10,28 @@ from HMC.project_dashboard import ProjectDashboard
 
 class MenuManager:
     def __init__(self, main_window, cccore):
-        self.main_window = main_window
-        self.cccore = cccore
-        self.action_handlers = cccore.action_handlers
-        self.device_manager_dock = None
-        self.menus = {}
-        self.setup_menus()
-        self.initialize_docks()
-        
-    def setup_menus(self):
-        """Set up all menus"""
-        # File Menu
-        file_menu = self.main_window.menuBar().addMenu('&File')
-        self.menus['file'] = file_menu
-        
-        # Add basic file actions
-        new_action = QAction('&New', self.main_window)
-        new_action.setShortcut('Ctrl+N')
-        new_action.triggered.connect(self.cccore.action_handlers.new_file)
-        file_menu.addAction(new_action)
-        
-        # Edit Menu
-        edit_menu = self.main_window.menuBar().addMenu('&Edit')
-        self.menus['edit'] = edit_menu
-        
-        # View Menu
-        view_menu = self.main_window.menuBar().addMenu('&View')
-        self.menus['view'] = view_menu
-        
-        # Tools Menu
-        tools_menu = self.main_window.menuBar().addMenu('&Tools')
-        self.menus['tools'] = tools_menu
-        
-        # Help Menu
-        help_menu = self.main_window.menuBar().addMenu('&Help')
-        self.menus['help'] = help_menu
+        """Initialize menu manager"""
+        try:
+            self.main_window = main_window
+            self.cccore = cccore
+            self.action_handlers = ActionHandlers(main_window, cccore)
+            self.device_manager_dock = None
+            self.dock_widgets = {}
+            
+            # Initialize menu references
+            self.file_menu = None
+            self.edit_menu = None
+            self.view_menu = None
+            self.tools_menu = None
+            self.vault_menu = None
+            self.graph_menu = None
+            self.workspace_menu = None
+            self.help_menu = None
+            self.macro_menu = None
+            
+            logging.info("MenuManager initialized successfully")
+        except Exception as e:
+            logging.error(f"Error initializing MenuManager: {e}")
 
     def initialize_docks(self):
         """Initialize dock widgets once window is ready"""
@@ -68,61 +55,62 @@ class MenuManager:
             logging.error(f"Error initializing device manager: {e}")
 
     def create_menu_bar(self):
-        logging.warning("Creating menu bar")
-        menubar = QMenuBar(self.main_window)
-        
-        menus = {
-            "File": self.create_file_menu(),
-            "Edit": self.create_edit_menu(),
-            "View": self.create_view_menu(),
-            "Tools": self.create_tools_menu(),
-            "Vault": self.create_vault_menu(),
-            "Graph": self.create_graph_menu(),
-            "Workspace": self.create_workspace_menu(),
-            "Help": self.create_help_menu()
-        }
+        """Create the menu bar with all menus"""
+        try:
+            menubar = QMenuBar(self.main_window)
+            
+            # Create all menus
+            self.file_menu = self.create_file_menu(menubar)
+            self.edit_menu = self.create_edit_menu(menubar)
+            self.view_menu = self.create_view_menu(menubar)
+            self.tools_menu = self.create_tools_menu(menubar)
+            self.vault_menu = self.create_vault_menu(menubar)
+            self.graph_menu = self.create_graph_menu(menubar)
+            self.workspace_menu = self.create_workspace_menu(menubar)
+            self.help_menu = self.create_help_menu(menubar)
+            self.macro_menu = self.create_macro_menu()
+            menubar.addMenu(self.macro_menu)
+            
+            self.main_window.setMenuBar(menubar)
+            logging.info("Menu bar created successfully")
+            return menubar
+            
+        except Exception as e:
+            logging.error(f"Error creating menu bar: {e}")
+            return None
 
-        for menu_name, menu in menus.items():
-            logging.info(f"Adding {menu_name} menu")
-            try:
-                menubar.addMenu(menu)
-            except Exception as e:
-                logging.error(f"Error adding {menu_name} menu: {str(e)}")
+    def create_file_menu(self, menubar):
+        file_menu = menubar.addMenu('&File')
+        file_menu.addAction('&New', self.action_handlers.new_file)
+        file_menu.addAction('&Open', self.action_handlers.open_file)
+        file_menu.addAction('&Save', self.action_handlers.save_file)
+        file_menu.addAction('Save &As', self.action_handlers.save_file_as)
+        file_menu.addSeparator()
+        file_menu.addAction('&Exit', self.main_window.close)
+        return file_menu
 
-        logging.warning("Menu bar created successfully")
-        return menubar
-
-    def create_file_menu(self):
-        self.file_menu = QMenu("&File", self.main_window)
-        self.file_menu.addAction("New", self.action_handlers.new_file)
-        self.file_menu.addAction("Open", self.action_handlers.open_file)
-        self.file_menu.addAction("Save", self.action_handlers.save_file)
-        self.file_menu.addAction("Save As", self.action_handlers.save_file_as)
-        self.file_menu.addSeparator()
-        
-        # Add null check for main_window
-        if self.main_window:
-            self.file_menu.addAction(self.create_action("Exit", self.main_window.close, "Ctrl+Q"))
-        else:
-            logging.warning("Main window not set, skipping Exit action")
-            self.file_menu.addAction(self.create_action("Exit", lambda: None, "Ctrl+Q"))
-        
-        return self.file_menu
-
-    def create_edit_menu(self):
-        self.edit_menu = QMenu("&Edit", self.main_window)
-        self.edit_menu.addAction("Undo", self.action_handlers.undo)
-        self.edit_menu.addAction("Redo", self.action_handlers.redo)
+    def create_edit_menu(self, menubar):
+        self.edit_menu = menubar.addMenu('&Edit')
+        self.edit_menu.addAction('&Undo', self.action_handlers.undo)
+        self.edit_menu.addAction('&Redo', self.action_handlers.redo)
         self.edit_menu.addSeparator()
-        self.edit_menu.addAction("Cut", self.action_handlers.cut_document)
-        self.edit_menu.addAction("Copy", self.action_handlers.copy_document)
-        self.edit_menu.addAction("Paste", self.action_handlers.paste_document)
-        self.edit_menu.addAction("Theme Builder", self.main_window.cccore.widget_manager.show_theme_builder)
-        self.edit_menu.addAction("Settings", self.action_handlers.show_settings)
+        self.edit_menu.addAction('&Cut', self.action_handlers.cut_document)
+        self.edit_menu.addAction('&Copy', self.action_handlers.copy_document)
+        self.edit_menu.addAction('&Paste', self.action_handlers.paste_document)
+        self.edit_menu.addAction('Theme Builder', self.main_window.cccore.widget_manager.show_theme_builder)
+        self.edit_menu.addAction('Settings', self.action_handlers.show_settings)
         return self.edit_menu
 
-    def create_view_menu(self):
-        self.view_menu = QMenu("View", self.main_window)
+    def create_view_menu(self, menubar):
+        self.view_menu = menubar.addMenu('&View')
+        
+        # Add BigLinks toggle
+        try:
+            biglinks_dock = self.cccore.widget_manager.get_or_create_dock("Big Links")
+            if biglinks_dock:
+                self.view_menu.addAction(biglinks_dock.toggleViewAction())
+        except Exception as e:
+            logging.warning(f"BigLinks dock not available: {e}")
         
         # Add Device Manager to View menu for consistency
         device_view = self.view_menu.addAction("Device Manager")
@@ -160,7 +148,13 @@ class MenuManager:
 
         self.view_menu.addSeparator()
         self.view_menu.addAction(self.create_action("Show Demo Diff Merger", self.spawn_prefilled_merger))
+         # Add dock widget toggles
         
+        # Add Risk Manager action
+        risk_manager_action = QAction('Risk Manager', self.main_window)
+        risk_manager_action.setStatusTip('Show Risk Manager')
+        risk_manager_action.triggered.connect(lambda: self.cccore.widget_manager.show_dock_widget('Risk Manager'))
+        self.view_menu.addAction(risk_manager_action)
         # Add Many Projects Manager toggle
         # try:
         #     # Add a toggle action to the View menu
@@ -178,11 +172,28 @@ class MenuManager:
             
         except AttributeError:
             logging.warning("Advanced Data Viewer not found, skipping addition of toggle action.")
+        
+        # Add Risk Manager action
+        risk_manager_action = QAction('Risk Manager', self.main_window)
+        risk_manager_action.setStatusTip('Show Risk Manager')
+        risk_manager_action.triggered.connect(lambda: self.cccore.widget_manager.show_dock_widget('Risk Manager'))
+        self.view_menu.addAction(risk_manager_action)
+        self.view_menu.addAction(self.create_action('Log Viewer', lambda: self.cccore.widget_manager.show_dock_widget('Log Viewer')))
         return self.view_menu
 
     
-    def create_tools_menu(self):
-        tools_menu = QMenu("&Tools", self.main_window)
+    def create_tools_menu(self, menubar):
+        """Create tools menu"""
+        tools_menu = menubar.addMenu('&Tools')
+        
+        # Add Big Links action
+        big_links_action = QAction('Big Links', self.main_window)
+        big_links_action.setShortcut("Ctrl+B")
+        big_links_action.triggered.connect(
+            lambda: self.cccore.widget_manager.show_dock_widget("Big Links")
+        )
+        tools_menu.addAction(big_links_action)
+        
         tools_menu.addAction(self.create_action("Plugin Manager", self.action_handlers.show_plugin_manager))
         tools_menu.addAction(self.create_action("Theme Manager", self.action_handlers.show_theme_manager))
         tools_menu.addAction(self.create_action("Workspace Manager", self.action_handlers.show_workspace_manager))
@@ -211,8 +222,8 @@ class MenuManager:
         
         return tools_menu
 
-    def create_vault_menu(self):
-        self.vault_menu = QMenu("&Vault", self.main_window)
+    def create_vault_menu(self, menubar):
+        self.vault_menu = menubar.addMenu('&Vault')
         self.vault_menu.addAction(self.create_action("Add Vault Directory", self.action_handlers.add_vault_directory))
         self.vault_menu.addAction(self.create_action("Remove Vault Directory", self.action_handlers.remove_vault_directory))
         self.vault_menu.addAction(self.create_action("Set Default Vault", self.action_handlers.set_default_vault))
@@ -223,15 +234,15 @@ class MenuManager:
         self.vault_menu.addAction(self.create_action("Vault Graph", self.action_handlers.show_vault_graph))
         return self.vault_menu
 
-    def create_graph_menu(self):
-        self.graph_menu = QMenu("&Graph", self.main_window)
+    def create_graph_menu(self, menubar):
+        self.graph_menu = menubar.addMenu('&Graph')
         self.graph_menu.addAction(self.create_action("Show 2D Graph", self.action_handlers.show_2d_graph))
         self.graph_menu.addAction(self.create_action("Show 3D Graph", self.action_handlers.show_3d_graph))
         self.graph_menu.addAction(self.create_action("Graph Settings", self.action_handlers.show_graph_settings))
         return self.graph_menu
 
-    def create_workspace_menu(self):
-        self.workspace_menu = QMenu("&Workspace", self.main_window)
+    def create_workspace_menu(self, menubar):
+        self.workspace_menu = menubar.addMenu('&Workspace')
         
         # Project management actions
         self.workspace_menu.addAction(self.create_action("Create Workspace", self.main_window.create_workspace))
@@ -263,8 +274,8 @@ class MenuManager:
         except Exception as e:
             logging.error(f"Error showing project dashboard: {e}")
 
-    def create_help_menu(self):
-        self.help_menu = QMenu("&Help", self.main_window)
+    def create_help_menu(self, menubar):
+        self.help_menu = menubar.addMenu('&Help')
         self.help_menu.addAction(self.create_action("About", self.action_handlers.show_about))
         self.help_menu.addAction(self.create_action("Documentation", self.action_handlers.show_documentation))
         self.help_menu.addAction(self.create_action("Check for Updates", self.action_handlers.check_for_updates))

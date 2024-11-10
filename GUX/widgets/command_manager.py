@@ -27,6 +27,39 @@ class CommandConfig:
         if self.last_used is None:
             self.last_used = datetime.now()
 
+BUILTIN_COMMANDS = {
+    "install_nix": CommandConfig(
+        name="Install Nix Package Manager",
+        command="sh <(curl -L https://nixos.org/nix/install)",
+        description="Installs the Nix package manager on your system. Nix is a powerful package manager that enables reproducible, declarative and reliable systems.",
+        category="System Setup",
+        environment="Default",
+        variables={},
+        success_count=0,
+        fail_count=0
+    ),
+    "install_nix_daemon": CommandConfig(
+        name="Install Nix (Multi-user)",
+        command="sh <(curl -L https://nixos.org/nix/install) --daemon",
+        description="Installs Nix in multi-user mode with daemon support. Recommended for most systems.",
+        category="System Setup",
+        environment="Default",
+        variables={},
+        success_count=0,
+        fail_count=0
+    ),
+    "verify_nix": CommandConfig(
+        name="Verify Nix Installation",
+        command="nix-shell -p nix-info --run 'nix-info -m'",
+        description="Displays detailed information about your Nix installation and system configuration.",
+        category="System Setup",
+        environment="Default",
+        variables={},
+        success_count=0,
+        fail_count=0
+    )
+}
+
 class CommandEditorDialog(QDialog):
     def __init__(self, command_data=None, parent=None):
         super().__init__(parent)
@@ -43,7 +76,15 @@ class CommandEditorDialog(QDialog):
         self.name_edit = QLineEdit()
         self.category_combo = QComboBox()
         self.category_combo.setEditable(True)
-        self.category_combo.addItems(["General", "Build", "Test", "Deploy", "Database", "Network"])
+        self.category_combo.addItems([
+            "General", 
+            "System Setup", 
+            "Build", 
+            "Test", 
+            "Deploy", 
+            "Database", 
+            "Network"
+        ])
         
         self.env_combo = QComboBox()
         self.env_combo.setEditable(True)
@@ -137,6 +178,15 @@ class CommandManager(QWidget):
         self.commands: Dict[str, CommandConfig] = {}
         self.setup_ui()
         self.load_commands()
+        self.add_builtin_commands()
+
+    def add_builtin_commands(self):
+        """Add built-in commands if they don't already exist"""
+        for name, cmd in BUILTIN_COMMANDS.items():
+            if name not in self.commands:
+                self.commands[name] = cmd
+        self.save_commands()
+        self.refresh_tree()
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -144,7 +194,14 @@ class CommandManager(QWidget):
         # Toolbar
         toolbar = QHBoxLayout()
         self.category_filter = QComboBox()
-        self.category_filter.addItems(["All Categories", "General", "Build", "Test", "Deploy"])
+        self.category_filter.addItems([
+            "All Categories", 
+            "System Setup", 
+            "General", 
+            "Build", 
+            "Test", 
+            "Deploy"
+        ])
         self.category_filter.currentTextChanged.connect(self.filter_commands)
         
         self.env_filter = QComboBox()

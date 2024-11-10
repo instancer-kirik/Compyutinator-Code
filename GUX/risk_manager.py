@@ -221,8 +221,8 @@ class RiskManager(QMainWindow):
         }
     ]
 
-    def __init__(self, cccore=None, config_manager=None, notification_manager=None):
-        super().__init__()
+    def __init__(self, parent=None, cccore=None, config_manager=None, notification_manager=None):
+        super().__init__(parent)
         self.cccore = cccore
         self.config_manager = config_manager or ConfigManager()
         self.notification_manager = notification_manager

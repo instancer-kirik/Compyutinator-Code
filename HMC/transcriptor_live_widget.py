@@ -156,11 +156,11 @@ class VoiceTypingWidget(QWidget):
     @pyqtSlot(int)
     def update_audio_level(self, level):
         try:
-            normalized_level = min(100, max(0, int(level / 100)))
-            self.audio_level.setLevel(normalized_level)
+            normalized_level = min(100, max(0, int(level)))
+            if hasattr(self, 'audio_level'):
+                self.audio_level.setLevel(normalized_level)
         except Exception as e:
-            logging.error("Error updating audio level: %s", str(e))
-
+            logging.error(f"Error updating audio level: {e}")
     @pyqtSlot(str, bool)
     def update_transcription(self, text, is_final):
         try:
@@ -239,3 +239,4 @@ class VoiceTypingWidget(QWidget):
                 QTimer.singleShot(100, self.update_spinner)  # Update spinner every 100ms
         except Exception as e:
             logging.error("Error updating spinner: %s", str(e))
+

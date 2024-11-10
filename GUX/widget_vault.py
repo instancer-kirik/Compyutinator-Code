@@ -16,6 +16,36 @@ from AuraText.auratext.scripts.def_path import resource
 from PyQt6.QtCore import pyqtSignal
 import logging
 from PyQt6.QtGui import QIcon, QFileSystemModel, QFont
+from PyQt6.QtGui import QPainter
+
+class AudioLevelWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.level = 0
+        self._painter = None
+        
+    def setLevel(self, level):
+        # Normalize level between 0 and 1
+        self.level = min(1.0, max(0.0, float(level) / 2000.0))  # Adjusted scale factor
+        self.update()
+        
+    def paintEvent(self, event):
+        if not hasattr(self, '_painter') or self._painter is None:
+            self._painter = QPainter()
+        
+        try:
+            self._painter.begin(self)
+            # Draw background
+            self._painter.fillRect(0, 0, self.width(), self.height(), Qt.GlobalColor.gray)
+            
+            # Draw level bar
+            if self.level > 0:
+                level_width = int(self.width() * self.level)
+                self._painter.fillRect(0, 0, level_width, self.height(), Qt.GlobalColor.green)
+                
+        finally:
+            if self._painter.isActive():
+                self._painter.end()
 
 class VaultsManagerWidget(QWidget):
     vault_selected = pyqtSignal(str)
@@ -309,24 +339,24 @@ class AudioLevelWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.level = 0
-
+        self._painter = None
+        
     def setLevel(self, level):
-        self.level = level
+        self.level = min(1.0, max(0.0, float(level) / 100.0))
         self.update()
-
+        
     def paintEvent(self, event):
-        super().paintEvent(event)
-        painter = QPainter(self.viewport())
-        painter.setOpacity(0.2)
-        document = self.document()
-        block = document.begin()
-        while block.isValid():
-            if block.text().startswith('-'):
-                layout = block.layout()
-                if layout:  # Check if layout exists
-                    line_rect = layout.lineAt(0).rect()
-                    painter.fillRect(line_rect, QColor(100, 100, 100))
-            block = block.next()
+        painter = QPainter(self)
+        try:
+            # Draw background
+            painter.fillRect(0, 0, self.width(), self.height(), Qt.GlobalColor.gray)
+            
+            # Draw level bar
+            if self.level > 0:
+                level_width = int(self.width() * self.level)
+                painter.fillRect(0, 0, level_width, self.height(), Qt.GlobalColor.green)
+        finally:
+            painter.end()
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QPushButton, QTextEdit, QLabel
 
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QPushButton, QTextEdit, QLabel, QHBoxLayout
