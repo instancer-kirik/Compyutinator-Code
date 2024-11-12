@@ -7,11 +7,11 @@ from GUX.widgets.task_checklist_manager import TaskChecklistManager
 import os
 from datetime import datetime
 from typing import Dict, List
-from AuraText.auratext.Core.file_outline_widget import FileOutlineWidget
+from GUX.widgets.file_outline_widget import FileOutlineWidget
 from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPen, QPainterPath
-from HMC.symbol_manager import CodeSymbol, SymbolManager
+from .symbol_manager import CodeSymbol, SymbolManager
 from pathlib import Path
 from typing import Dict, List
 

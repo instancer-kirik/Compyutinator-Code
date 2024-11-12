@@ -66,13 +66,15 @@ class LocalProjectAttributes(BaseProjectAttributes):
 
 @dataclass
 class ResolvinatorProjectAttributes(BaseProjectAttributes):
-    risk_appetite: Optional[float] = None
+    risk_appetite: str = "cautious"  # Changed from float to str with default
     start_date: Optional[datetime] = None
     target_date: Optional[datetime] = None
     completion_date: Optional[datetime] = None
+    status: str = "planning"  # Added default status
     settings: Dict[str, Any] = None
     
     def __post_init__(self):
+        super().__post_init__()
         self.settings = self.settings or {
             "risk_matrix_config": {
                 "probability_weights": {
@@ -85,7 +87,9 @@ class ResolvinatorProjectAttributes(BaseProjectAttributes):
                 "impact_weights": {
                     "negligible": 1,
                     "minor": 2,
-                    "moderate": 3
+                    "moderate": 3,
+                    "major": 4,
+                    "severe": 5
                 }
             },
             "notification_preferences": {
@@ -360,12 +364,10 @@ class ProjectManager:
         return symbols
     
     def get_file_symbols(self, file_path: Path) -> List[CodeSymbol]:
-        """Get symbols for a specific file in the current project"""
-        project = self.get_current_project()
-        if not project:
-            return []
-        
-        return project.get('symbols', {}).get(file_path, [])
+        """Get symbols for a file, either from cache or by parsing"""
+        if hasattr(self, 'symbol_manager'):
+            return self.symbol_manager.get_file_symbols(file_path)
+        return []
 
     def create_project(self, vault_name: str, project_name: str, project_path: str, project_type: ProjectType, **kwargs) -> bool:
         """Create a new project of specified type"""
@@ -2157,7 +2159,7 @@ Created: {datetime.now().strftime('%Y-%m-%d')}
                 }
             }
         }
-        
+
         # Analyze project files
         for root, _, files in os.walk(project_path):
             for file in files:
@@ -2211,6 +2213,9 @@ Created: {datetime.now().strftime('%Y-%m-%d')}
                         }
                     }
         
+        # Add symbol relationships
+        flow_data['relationships'] = self._analyze_symbol_relationships(flow_data['structure'])
+        
         # Convert dependencies to list for JSON serialization
         flow_data['dependencies'] = list(flow_data['dependencies'])
         
@@ -2253,4 +2258,51 @@ Created: {datetime.now().strftime('%Y-%m-%d')}
         
         return symbols
 
-   
+    def _extract_dependencies(self, content: str) -> set:
+        """Extract Python dependencies from file content"""
+        dependencies = set()
+        import_pattern = r'^(?:from|import)\s+([a-zA-Z0-9_\.]+)'
+        
+        for line in content.splitlines():
+            if match := re.match(import_pattern, line.strip()):
+                # Get the base package name
+                package = match.group(1).split('.')[0]
+                if package not in ['__future__', 'typing']:  # Skip built-in modules
+                    dependencies.add(package)
+        
+        return dependencies
+
+    def _analyze_symbol_relationships(self, structure: Dict) -> List[Dict]:
+        """Analyze relationships between symbols across files"""
+        relationships = []
+        symbol_map = {}
+        
+        # First pass: build symbol map
+        for file_path, info in structure.items():
+            for symbol in info.get('symbols', []):
+                symbol_map[symbol['name']] = {
+                    'file': file_path,
+                    'type': symbol['type'],
+                    'references': []
+                }
+        
+        # Second pass: analyze references
+        for file_path, info in structure.items():
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            for symbol_name in symbol_map:
+                if symbol_name in content:
+                    symbol_map[symbol_name]['references'].append(file_path)
+        
+        # Build relationships
+        for symbol_name, info in symbol_map.items():
+            if len(info['references']) > 1:  # Only include symbols with multiple references
+                relationships.append({
+                    'symbol': symbol_name,
+                    'type': info['type'],
+                    'defined_in': info['file'],
+                    'referenced_in': info['references']
+                })
+        
+        return relationships

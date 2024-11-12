@@ -46,7 +46,6 @@ zep-python = "^2.0.2"
 pandas = "^2.2.3"
 matplotlib = "^3.9.2"
 debugpy = "^1.8.6"
-networkx = "^3.3"
 pyqtgraph = "^0.13.7"
 fuzzywuzzy = "^0.18.0"
 python-levenshtein = "^0.26.0"
@@ -67,6 +66,7 @@ python-xlib = "^0.33"
 opencv-python = "^4.10.0.84"
 pygobject = "^3.50.0"
 pycamera = "^0.3.2"
+networkx = "<3.0"
 
 
 [build-system]

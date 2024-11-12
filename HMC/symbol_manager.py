@@ -14,10 +14,23 @@ class CodeSymbol:
     file_path: Path
     parent: Optional['CodeSymbol'] = None
     children: List['CodeSymbol'] = None
+    references: List['SymbolReference'] = None  # Add references field
     
     def __post_init__(self):
         if self.children is None:
             self.children = []
+        if self.references is None:
+            self.references = []
+
+@dataclass
+class SymbolReference:
+    """Represents a reference to a symbol from another location"""
+    symbol: CodeSymbol
+    file_path: Path
+    line: int
+    column: int
+    reference_type: str  # 'import', 'call', 'inheritance', 'assignment'
+    context: str  # The line of code containing the reference
 
 class SymbolManager(QObject):
     symbols_updated = pyqtSignal(Path)
@@ -27,21 +40,7 @@ class SymbolManager(QObject):
         self.cccore = cccore
         self.file_symbols: Dict[Path, List[CodeSymbol]] = {}
         self.vault_symbols: Dict[str, Dict[Path, List[CodeSymbol]]] = {}
-        
-    def update_vault_symbols(self, vault_name: str):
-        """Update symbols for all code files in a vault"""
-        vault = self.cccore.vault_manager.vaults.get(vault_name)
-        if not vault:
-            return
-            
-        self.vault_symbols[vault_name] = {}
-        
-        # Use existing vault index to find code files
-        index = vault.get_index()
-        for rel_path, file_info in index['files'].items():
-            if file_info['type'] == 'code':
-                full_path = vault.path / rel_path
-                self.parse_file(full_path, vault_name)
+        self.symbol_index: Dict[str, CodeSymbol] = {}  # Quick lookup by name
     
     def parse_file(self, file_path: Path, vault_name: Optional[str] = None):
         """Parse symbols from a file"""
@@ -52,14 +51,16 @@ class SymbolManager(QObject):
             symbols = []
             current_class = None
             
+            # First pass: collect symbols
             for line_num, line in enumerate(content.splitlines(), 1):
                 stripped = line.strip()
                 
                 # Class definition
                 if stripped.startswith('class '):
-                    class_match = re.match(r'class\s+(\w+)', stripped)
+                    class_match = re.match(r'class\s+(\w+)(?:\((.*?)\))?:', stripped)
                     if class_match:
                         class_name = class_match.group(1)
+                        bases = class_match.group(2)
                         current_class = CodeSymbol(
                             name=class_name,
                             type='class',
@@ -68,6 +69,21 @@ class SymbolManager(QObject):
                             file_path=file_path
                         )
                         symbols.append(current_class)
+                        self.symbol_index[class_name] = current_class
+                        
+                        # Handle inheritance references
+                        if bases:
+                            for base in bases.split(','):
+                                base = base.strip()
+                                if base in self.symbol_index:
+                                    current_class.references.append(SymbolReference(
+                                        symbol=self.symbol_index[base],
+                                        file_path=file_path,
+                                        line=line_num,
+                                        column=line.index(base),
+                                        reference_type='inheritance',
+                                        context=line.strip()
+                                    ))
                 
                 # Function/method definition
                 elif stripped.startswith('def '):
@@ -86,6 +102,11 @@ class SymbolManager(QObject):
                             current_class.children.append(func_symbol)
                         else:
                             symbols.append(func_symbol)
+                        self.symbol_index[func_name] = func_symbol
+            
+            # Second pass: find references
+            for line_num, line in enumerate(content.splitlines(), 1):
+                self._find_references(line, line_num, file_path, symbols)
             
             self.file_symbols[file_path] = symbols
             if vault_name:
@@ -98,3 +119,62 @@ class SymbolManager(QObject):
         except Exception as e:
             logging.error(f"Error parsing symbols from {file_path}: {str(e)}")
             return []
+    
+    def _find_references(self, line: str, line_num: int, file_path: Path, symbols: List[CodeSymbol]):
+        """Find references to symbols in a line of code"""
+        # Import references
+        import_match = re.match(r'^from\s+(\w+)\s+import\s+(.+)$', line.strip())
+        if import_match:
+            module, imports = import_match.groups()
+            for imp in imports.split(','):
+                imp = imp.strip()
+                if imp in self.symbol_index:
+                    self.symbol_index[imp].references.append(SymbolReference(
+                        symbol=self.symbol_index[imp],
+                        file_path=file_path,
+                        line=line_num,
+                        column=line.index(imp),
+                        reference_type='import',
+                        context=line.strip()
+                    ))
+        
+        # Function/method calls
+        for symbol in symbols:
+            if symbol.name + '(' in line:
+                col = line.index(symbol.name)
+                symbol.references.append(SymbolReference(
+                    symbol=symbol,
+                    file_path=file_path,
+                    line=line_num,
+                    column=col,
+                    reference_type='call',
+                    context=line.strip()
+                ))
+        
+        # Variable assignments
+        for symbol in symbols:
+            if re.match(rf'\b{symbol.name}\s*=', line):
+                col = line.index(symbol.name)
+                symbol.references.append(SymbolReference(
+                    symbol=symbol,
+                    file_path=file_path,
+                    line=line_num,
+                    column=col,
+                    reference_type='assignment',
+                    context=line.strip()
+                ))
+    
+    def get_symbol_references(self, symbol_name: str) -> List[SymbolReference]:
+        """Get all references to a symbol across files"""
+        symbol = self.symbol_index.get(symbol_name)
+        if symbol:
+            return symbol.references
+        return []
+    
+    def get_file_references(self, file_path: Path) -> Dict[str, List[SymbolReference]]:
+        """Get all symbol references in a file"""
+        references = {}
+        for symbol in self.file_symbols.get(file_path, []):
+            if symbol.references:
+                references[symbol.name] = symbol.references
+        return references

@@ -177,7 +177,7 @@ class MainApplication(QMainWindow):
         
         try:
             # Set window properties
-            self.setWindowTitle("Compyutinator")
+            self.setWindowTitle("Compyutinator Code")
             self.setDockOptions(
                 QMainWindow.DockOption.AllowTabbedDocks |
                 QMainWindow.DockOption.AllowNestedDocks

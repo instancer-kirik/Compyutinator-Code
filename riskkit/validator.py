@@ -1,6 +1,6 @@
 from typing import List, Dict, Set
 from .schemas import RiskCreate, BatchRiskCreate, ValidationResult
-from datetime import datetime
+from datetime import datetime, timedelta
 import networkx as nx
 
 class RiskValidator:

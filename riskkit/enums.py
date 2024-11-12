@@ -7,19 +7,26 @@ class EventPriority(str, Enum):
     CRITICAL = "critical"
 
 # Risk-related enums
-class RiskPriority(str, Enum):
+class RiskPriority(Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
+class RiskAppetite(Enum):
+    AVERSE = "averse"
+    MINIMAL = "minimal"
+    CAUTIOUS = "cautious"
+    FLEXIBLE = "flexible"
+    AGGRESSIVE = "aggressive"
 
-class RiskStatus(str, Enum):
+class RiskStatus(Enum):
     OPEN = "open"
     IN_PROGRESS = "in_progress"
     MITIGATED = "mitigated"
     ACCEPTED = "accepted"
     CLOSED = "closed"
     REJECTED = "rejected"
+    ARCHIVED = "archived"
 class RiskProbability(str, Enum):
     RARE = "rare"
     UNLIKELY = "unlikely"
@@ -35,7 +42,7 @@ class ImpactSeverity(str, Enum):
     HIGH = "high"
     CRITICAL = "critical"
 
-class ImpactArea(str, Enum):
+class ImpactArea(Enum):
     FINANCIAL = "financial"
     OPERATIONAL = "operational"
     REPUTATIONAL = "reputational"
@@ -44,7 +51,7 @@ class ImpactArea(str, Enum):
     STRATEGIC = "strategic"
     FUNCTIONALITY = "functionality"
 
-class ImpactTimeframe(str, Enum):
+class ImpactTimeframe(Enum):
     IMMEDIATE = "immediate"
     SHORT_TERM = "short_term"
     MEDIUM_TERM = "medium_term"
@@ -67,15 +74,17 @@ class RewardType(str, Enum):
     ACHIEVEMENT = "achievement"
     MILESTONE = "milestone"
     RECOGNITION = "recognition"
+
+    RISK = "risk"
     OTHER = "other"
 
-class RewardStatus(str, Enum):
+class RewardStatus(Enum):
     PENDING = "pending"
     ACHIEVED = "achieved"
     EXPIRED = "expired"
     REVOKED = "revoked"
 
-class RewardTier(str, Enum):
+class RewardTier(Enum):
     BRONZE = "bronze"
     SILVER = "silver"
     GOLD = "gold"

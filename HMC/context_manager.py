@@ -6,6 +6,8 @@ import os
 from transformers import AutoTokenizer, BasicTokenizer
 import logging
 import re
+from typing import Dict
+from .symbol_manager import SymbolManager, CodeSymbol
 
 class ContextManager:
     def __init__(self, cccore, max_tokens=4000, max_file_size=1024*1024, model_name="arcee-ai/Llama-3.1-SuperNova-Lite"):
@@ -15,6 +17,7 @@ class ContextManager:
         self.tokenizer = self.load_tokenizer(model_name)
         self.memory_manager = cccore.model_manager.memory_manager #this is after the model manager is initialized
         self.contexts = []  # Keep this for backward compatibility
+        self.symbol_manager = SymbolManager(cccore)
 
     def load_tokenizer(self, model_name):
         try:
@@ -223,5 +226,44 @@ class ContextManager:
 
     def add_project_info(self, info_type, content):
         self.memory_manager.add_project_info(info_type, content)
+
+    def add_technical_context(self, project_name: str):
+        """Add technical context from project structure and symbols"""
+        project_flow = self.cccore.project_manager.get_project_technical_flow(project_name)
+        
+        # Add project structure context
+        structure_context = self._format_structure_context(project_flow['structure'])
+        self.add_context(
+            structure_context,
+            "Project Structure",
+            memory_type='technical'
+        )
+        
+        # Add symbol relationships
+        if 'relationships' in project_flow:
+            relationship_context = self._format_relationship_context(project_flow['relationships'])
+            self.add_context(
+                relationship_context,
+                "Symbol Relationships",
+                memory_type='technical'
+            )
+    
+    def _format_structure_context(self, structure: Dict) -> str:
+        """Format project structure into readable context"""
+        context_parts = []
+        for file_path, info in structure.items():
+            symbols = info.get('symbols', [])
+            context_parts.append(f"File: {file_path}")
+            
+            for symbol in symbols:
+                indent = "  " if symbol['parent'] is None else "    "
+                symbol_type = symbol['type'].capitalize()
+                context_parts.append(f"{indent}{symbol_type}: {symbol['name']} (line {symbol['line']})")
+                
+                if symbol['children']:
+                    for child in symbol['children']:
+                        context_parts.append(f"      - {child}")
+        
+        return "\n".join(context_parts)
 
 

@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict
 from datetime import datetime
 from .schemas import RiskUpdate, RiskCreate, RiskStatus, RiskPriority, RiskCategory
-
+from .enums import RiskAppetite
 class Risk:
     """Local risk management class"""
     def __init__(self, risk_id: int, description: str):
@@ -19,6 +19,7 @@ class Risk:
         self.dependencies: List[int] = []
         self._version: int = 1
         self.project_id: Optional[int] = None
+        self.risk_appetite: RiskAppetite = RiskAppetite.CAUTIOUS  # Default value
 
     @property
     def category(self) -> Optional[RiskCategory]:
@@ -86,7 +87,8 @@ class Risk:
             "owner": self.owner,
             "dependencies": self.dependencies,
             "version": self._version,
-            "project_id": self.project_id
+            "project_id": self.project_id,
+            "risk_appetite": self.risk_appetite.value
         }
         if self._category:
             data["category"] = self._category.model_dump()
@@ -104,7 +106,8 @@ class Risk:
             category=self.category,
             mitigation=self.mitigation,
             owner=self.owner,
-            last_updated=self.last_updated
+            last_updated=self.last_updated,
+            risk_appetite=self.risk_appetite
         )
 
     @classmethod
@@ -122,4 +125,5 @@ class Risk:
         risk.dependencies = data["dependencies"]
         risk._version = data.get("version", 1)
         risk.project_id = data.get("project_id")
+        risk.risk_appetite = RiskAppetite(data.get("risk_appetite", "cautious"))
         return risk
