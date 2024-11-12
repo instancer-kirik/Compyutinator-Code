@@ -6,9 +6,8 @@ How to run it?
 Good luck, still in active development
 first you're gonna need 
 ```
-cd AuraText
-git clone https://github.com/instancer-kirik/Aura-Text.git
-mv Aura-text/* .
+git clone -b feature/theme-lexers-plugins-fix https://github.com/instancer-kirik/Aura-Text.git
+mv Aura-text/* AuraText #RENAME
 
 cd ..
 poetry install
