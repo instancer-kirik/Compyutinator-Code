@@ -14,7 +14,7 @@ from PyQt6.QtCore import QTimer
 from datetime import datetime
 from typing import Optional, List
 from HMC.projects.project_config import ProjectConfig
-from riskkit.enums import ProjectType
+from HMC.projects.project_types import ProjectType
 #WORKSPACES IS UI RELATED, probably, filesets open?
 ##Vaults can be considered as top-level containers.
 # Projects can exist within vaults.
@@ -402,12 +402,12 @@ class VaultManager(QObject):
     vault_removed = pyqtSignal(str)
     project_removed = pyqtSignal(str, str)
 
-    def __init__(self, settings_manager, cccore):
+    def __init__(self, cccore):
         super().__init__()  # Initialize the QObject
-        self.settings_manager = settings_manager
+        self.config_manager = cccore.config_manager
         self.cccore = cccore
         self.indexing_queue = asyncio.Queue()
-        self.project_manager = cccore.get_project_manager()
+        
         self.app_config_dir = Path.home() / ".computinator_code"
         self.app_config_dir.mkdir(exist_ok=True)
         self.vaults_config_file = self.app_config_dir / "vaults_config.json"
@@ -450,10 +450,10 @@ class VaultManager(QObject):
             self.set_current_vault(next(iter(self.vaults)))
 
     def ensure_default_vault(self):
-        app_data_dir = self.settings_manager.get_value('app_data_dir')
+        app_data_dir = self.config_manager.get_value('app_data_dir')
         if not app_data_dir:
             app_data_dir = os.path.join(os.path.expanduser("~"), ".computinator_code")
-            self.settings_manager.set_value('app_data_dir', app_data_dir)
+            self.config_manager.set_value('app_data_dir', app_data_dir)
         
         default_path = os.path.join(app_data_dir, 'default_vault')
         if not os.path.exists(default_path):
@@ -675,10 +675,10 @@ class VaultManager(QObject):
         return self.current_vault.get_all_filesets() if self.current_vault else []
 
     def get_config(self, key, default=None):
-        return self.settings_manager.get_value(key, default)
+        return self.config_manager.get_value(key, default)
 
     def set_config(self, key, value):
-        self.settings_manager.set_value(key, value)
+        self.config_manager.set_value(key, value)
     
     def get_index(self):
         return self.current_vault.get_index() if self.current_vault else {}
@@ -706,7 +706,7 @@ class VaultManager(QObject):
 
     def add_vault(self, name, path=None):
         if path is None:
-            path = os.path.join(self.settings_manager.get_value('app_data_dir'), name)
+            path = os.path.join(self.config_manager.get_value('app_data_dir'), name)
         
         if name in self.vaults:
             logging.warning(f"Vault with name '{name}' already exists.")

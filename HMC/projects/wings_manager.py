@@ -1,52 +1,61 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
-from enum import Enum
 from pathlib import Path
 import logging
 from datetime import datetime
 import json
-from .wing_template import WingTemplateManager
-
-from HMC.projects.project_config import ProjectConfig
-from HMC.projects.project_wing import Wing, WingType, WingStatus
+from .project_types import WingType, WingStatus
+from .project_wing import Wing
+from .wing_config import WingConfig
 class WingsManager:
-    """Manages project wings/extensions"""
-    def __init__(self, project_config: ProjectConfig):
-        self.project_config = project_config
-        self.wings: Dict[str, Wing] = project_config.wings
-        self.template_manager = WingTemplateManager(self)
-
-    def create_wing(self, name: str, wing_type: WingType, description: str = "", 
-                   config: Dict[str, Any] = None) -> Optional[Wing]:
-        """Create a new wing"""
+    def __init__(self, project_path: Path):
+        self.project_path = project_path
+        self.wings: Dict[str, Wing] = {}
+        
+    def create_wing(self, name: str, wing_type: WingType, 
+                   description: str = "", config: Optional[WingConfig] = None) -> Optional[Wing]:
         try:
             wing_id = f"{name.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            wing_path = self.project_path / "wings" / wing_id
             
             wing = Wing(
                 id=wing_id,
                 name=name,
                 type=wing_type,
                 description=description,
-                config=config or {}
+                status=WingStatus.ACTIVE,
+                config=config or WingConfig(),
+                path=wing_path
             )
             
-            # Generate wing structure from template
-            wing_path = self.template_manager.generate_wing(
-                f"{wing_type.value}_wing",
-                wing.to_dict()
-            )
-            
-            if wing_path:
-                wing.path = wing_path
-                if self.project_config.add_wing(wing):
-                    self.save_wing_config(wing)
-                    return wing
-            
+            # Create wing directory and save config
+            wing_path.mkdir(parents=True, exist_ok=True)
+            if wing.save_config():
+                self.wings[wing_id] = wing
+                return wing
             return None
-
+            
         except Exception as e:
-            logging.error(f"Error creating wing {name}: {e}")
+            logging.error(f"Error creating wing: {e}")
             return None
+            
+    def update_wing_config(self, wing_id: str, updates: Dict[str, Any]) -> bool:
+        """Update wing configuration"""
+        wing = self.get_wing(wing_id)
+        if not wing:
+            return False
+            
+        try:
+            for section, values in updates.items():
+                if hasattr(wing.config, section):
+                    current = getattr(wing.config, section)
+                    current.update(values)
+            
+            return wing.save_config()
+            
+        except Exception as e:
+            logging.error(f"Error updating wing config: {e}")
+            return False
 
     def save_wing_config(self, wing: Wing):
         """Save wing configuration to file"""

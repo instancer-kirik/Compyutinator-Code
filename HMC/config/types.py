@@ -54,15 +54,20 @@ class ApiConfig:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
 
 @dataclass
+class TypingEffectConfig:
+    """Typing effect configuration"""
+    enabled: bool = True
+    speed: int = 100
+    particle_count: int = 10
+
+@dataclass
 class AppConfig:
     """Application configuration"""
     app_data_dir: Path = field(default_factory=lambda: Path.home() / ".computinator")
     vault_path: Path = field(default_factory=lambda: Path.home() / "ComputinatorVault")
     
     # Features
-    typing_effect_enabled: bool = True
-    typing_effect_speed: int = 100
-    typing_effect_particle_count: int = 10
+    typing_effect: TypingEffectConfig = field(default_factory=TypingEffectConfig)
     
     # System
     offline_mode: bool = False

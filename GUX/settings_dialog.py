@@ -1,7 +1,8 @@
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
                            QSlider, QCheckBox, QPushButton, QTabWidget,
-                           QTableWidget, QTableWidgetItem, QKeySequenceEdit, QWidget)
+                           QTableWidget, QTableWidgetItem, QKeySequenceEdit, QWidget, QGroupBox, QDialogButtonBox, QMessageBox)
 from PyQt6.QtCore import Qt
+import logging
 
 class HotkeyEditor(QTableWidget):
     def __init__(self, settings_manager):
@@ -35,63 +36,67 @@ class HotkeyEditor(QTableWidget):
         self.settings_manager.set_hotkey(action, shortcut)
 
 class SettingsDialog(QDialog):
-    def __init__(self, settings_manager, parent=None):
+    def __init__(self, config_manager, parent=None):
         super().__init__(parent)
-        self.settings_manager = settings_manager
+        self.config_manager = config_manager
         self.setup_ui()
+        self.load_settings()
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
         
-        # Create tab widget
-        tab_widget = QTabWidget()
+        # Typing Effect Settings
+        typing_group = QGroupBox("Typing Effect")
+        typing_layout = QVBoxLayout()
         
-        # General settings tab
-        general_tab = QWidget()
-        general_layout = QVBoxLayout(general_tab)
-        
-        # Add existing settings to general tab
         self.typing_effect_checkbox = QCheckBox("Enable Typing Effect")
-        self.typing_effect_checkbox.setChecked(self.settings_manager.get_typing_effect_enabled())
-        general_layout.addWidget(self.typing_effect_checkbox)
-        
-        # Typing effect speed
-        speed_layout = QHBoxLayout()
-        speed_layout.addWidget(QLabel("Typing Effect Speed:"))
         self.speed_slider = QSlider(Qt.Orientation.Horizontal)
-        self.speed_slider.setRange(50, 500)
-        self.speed_slider.setValue(self.settings_manager.get_typing_effect_speed())
-        speed_layout.addWidget(self.speed_slider)
-        general_layout.addLayout(speed_layout)
-        
-        # Particle count
-        particle_layout = QHBoxLayout()
-        particle_layout.addWidget(QLabel("Particle Count:"))
+        self.speed_slider.setRange(50, 200)
         self.particle_slider = QSlider(Qt.Orientation.Horizontal)
-        self.particle_slider.setRange(1, 50)
-        self.particle_slider.setValue(self.settings_manager.get_typing_effect_particle_count())
-        particle_layout.addWidget(self.particle_slider)
-        general_layout.addLayout(particle_layout)
+        self.particle_slider.setRange(0, 20)
         
-        # Hotkeys tab
-        hotkeys_tab = HotkeyEditor(self.settings_manager)
+        typing_layout.addWidget(self.typing_effect_checkbox)
+        typing_layout.addWidget(QLabel("Effect Speed:"))
+        typing_layout.addWidget(self.speed_slider)
+        typing_layout.addWidget(QLabel("Particle Count:"))
+        typing_layout.addWidget(self.particle_slider)
+        typing_group.setLayout(typing_layout)
         
-        # Add tabs
-        tab_widget.addTab(general_tab, "General")
-        tab_widget.addTab(hotkeys_tab, "Hotkeys")
+        layout.addWidget(typing_group)
         
-        layout.addWidget(tab_widget)
-        
-        # Save button
-        save_button = QPushButton("Save")
-        save_button.clicked.connect(self.save_settings)
-        layout.addWidget(save_button)
+        # Buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | 
+            QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.save_settings)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def load_settings(self):
+        """Load settings from ConfigManager"""
+        app_config = self.config_manager.app_config
+        self.typing_effect_checkbox.setChecked(app_config.typing_effect_enabled)
+        self.speed_slider.setValue(app_config.typing_effect_speed)
+        self.particle_slider.setValue(app_config.typing_effect_particle_count)
 
     def save_settings(self):
-        # Save existing settings
-        self.settings_manager.set_typing_effect_enabled(self.typing_effect_checkbox.isChecked())
-        self.settings_manager.set_typing_effect_speed(self.speed_slider.value())
-        self.settings_manager.set_typing_effect_particle_count(self.particle_slider.value())
-        
-        # Hotkeys are saved immediately when edited
-        self.accept()
+        """Save settings using ConfigManager"""
+        try:
+            self.config_manager.app_config.typing_effect_enabled = self.typing_effect_checkbox.isChecked()
+            self.config_manager.app_config.typing_effect_speed = self.speed_slider.value()
+            self.config_manager.app_config.typing_effect_particle_count = self.particle_slider.value()
+            
+            # Save to disk
+            self.config_manager._save_config(
+                self.config_manager.config_dir / 'app_config.json',
+                self.config_manager.app_config
+            )
+            
+            # Emit change signal
+            self.config_manager.config_changed.emit('app_config', self.config_manager.app_config)
+            
+            self.accept()
+        except Exception as e:
+            logging.error(f"Failed to save settings: {e}")
+            QMessageBox.warning(self, "Error", f"Failed to save settings: {str(e)}")

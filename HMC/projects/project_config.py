@@ -7,51 +7,47 @@ import logging
 from pathlib import Path
 from enum import Enum
 from dataclasses import field
-from riskkit.enums import ProjectType
 from HMC.system_analyzer import SystemInfo
 from HMC.projects.project_structure import PROJECT_DIRECTORIES
-from HMC.code_manager import CodeSymbol
+from HMC.symbol_manager import CodeSymbol
 from HMC.projects.project_wing import Wing
 from riskkit.enums import WingType, WingStatus
+from HMC.projects.wings_manager import WingsManager
+from .project_types import BaseProjectData, ProjectType, WingType, WingStatus
 
 @dataclass
-class ProjectConfig:
-    # Required Core Fields
-    name: str
-    project_type: ProjectType
-    path: Path
-    
-    # Basic Project Info
-    description: str = ""
-    status: str = "active"
-    visibility: str = "private"
-    domain: str = ""
-    version: str = "0.1.0"
-    created_at: datetime = field(default_factory=datetime.now)
-    updated_at: datetime = field(default_factory=datetime.now)
-        # Adding missing metadata fields
-    metadata: Dict[str, Any] = field(default_factory=lambda: {
-        "repository_url": None,
-        "documentation_url": None,
-        "issue_tracker_url": None,
-        "keywords": [],
-        "categories": [],
-        "language": None,
-        "framework": None,
-        "dependencies": {},
-        "dev_dependencies": {},
-        "contributors": [],
-        "maintainers": [],
-        "license": None
-    })
-    
+class ProjectConfig(BaseProjectData):
     # Symbol tracking (was missing)
     symbols: Dict[Path, List['CodeSymbol']] = field(default_factory=dict)
     
     # Project Structure and Symbols
     directory_structure: Dict[str, Any] = field(default_factory=lambda: PROJECT_DIRECTORIES.copy())
     relationships: Dict[str, List[str]] = field(default_factory=dict)
+    wings: Dict[str, Wing] = field(default_factory=dict)
     
+    @classmethod
+    def from_folder(cls, folder_path: str, project_name: str) -> 'ProjectConfig':
+        path = Path(folder_path)
+        project_type = cls._detect_project_type(path)
+        
+        config = cls(
+            name=project_name,
+            path=path,
+            project_type=project_type
+        )
+        
+        # Auto-detect wings
+        if (path / 'setup.py').exists() or list(path.glob('*.py')):
+            wing = config.wings_manager.create_wing('python', WingType.LANGUAGE)
+            if wing:
+                config.wings[wing.id] = wing
+                
+        if (path / 'package.json').exists():
+            wing = config.wings_manager.create_wing('javascript', WingType.LANGUAGE)
+            if wing:
+                config.wings[wing.id] = wing
+                
+        return config
     # Technical Components
     wings: Dict[str, Wing] = field(default_factory=lambda: {
         "core": Wing(
@@ -75,15 +71,10 @@ class ProjectConfig:
     
     # Technical Stack
     tech_stack: Dict[str, Any] = field(default_factory=lambda: {
-        "primary_language": None,
         "languages": [],
         "frameworks": [],
-        "dependencies": {},
-        "dev_dependencies": {},
-        "cloud_services": {},
-        "databases": {},
-        "apis": {},
-        "tools": {}
+        "primary_language": None,
+        "entry_points": {"main": "src/main.py"}
     })
     
     # Development Environment
@@ -386,7 +377,8 @@ class ProjectConfig:
             self.created_at = datetime.fromisoformat(self.created_at)
         if isinstance(self.updated_at, str):
             self.updated_at = datetime.fromisoformat(self.updated_at)
-
+        self.wings_manager = WingsManager(self)
+    
     @classmethod
     def load(cls, path: Path) -> Optional['ProjectConfig']:
         """Load ProjectConfig from a config file"""
@@ -668,16 +660,18 @@ class ProjectConfig:
             return False
 
     def get_wing_config(self, wing_id: str) -> Optional[Dict[str, Any]]:
-        """Get configuration for a specific wing"""
+        """Get merged configuration for a wing"""
         wing = self.wings.get(wing_id)
-        if wing:
-            return {
+        if not wing:
+            return None
+        
+        return {
+            "project": {
                 "tech_stack": self.tech_stack,
-                "dev_settings": self.dev_settings,
-                "dev_standards": self.dev_standards,
-                "wing_specific": wing.config
-            }
-        return None
+                "dev_settings": self.dev_settings
+            },
+            "wing": wing.config.to_dict()
+        }
             
     def validate(self) -> bool:
         """Validate project configuration"""

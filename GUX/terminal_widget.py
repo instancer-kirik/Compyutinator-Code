@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLineEdit, QMenu, QApplication
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLineEdit, QMenu, QApplication, QLabel
 from PyQt6.QtGui import QAction
 from PyQt6.QtCore import QProcess, Qt
 import os
@@ -6,50 +6,49 @@ from PyQt6.QtGui import QKeySequence, QShortcut
 from PyQt6.QtWidgets import QSplitter
 from PyQt6.QtCore import Qt
 from AuraText.auratext.Core.powershell import TerminalEmulator
+import logging
+
 class TerminalWidget(QWidget):
     def __init__(self, parent=None, cccore=None):
         super().__init__(parent)
         self.cccore = cccore
-        self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.splitter = QSplitter(self)
-        self.layout.addWidget(self.splitter)
-
+        self.setLayout(QVBoxLayout())
         self.add_terminal()
-    
-        self.setup_shortcuts()
+
+    def add_terminal(self):
+        try:
+            terminal = TerminalEmulator(self, mm=self.cccore)
+            self.layout().addWidget(terminal)
+        except Exception as e:
+            logging.error(f"Error creating terminal: {e}")
+            error_label = QLabel("Failed to initialize terminal. Check logs for details.")
+            error_label.setStyleSheet("color: red;")
+            self.layout().addWidget(error_label)
 
     def setup_shortcuts(self):
         QShortcut(QKeySequence("Ctrl+Shift+H"), self, self.split_horizontal)
         QShortcut(QKeySequence("Ctrl+Shift+V"), self, self.split_vertical)
         QShortcut(QKeySequence("Ctrl+Shift+W"), self, self.close_current_terminal)
 
-    def add_terminal(self):
-        terminal = TerminalEmulator(self, mm=self.cccore)
-        if self.cccore and hasattr(self.cccore, 'input_manager'):
-            terminal.keyPressed.connect(self.cccore.input_manager.update_typing_speed)
-        self.splitter.addWidget(terminal)
-        return terminal
-
     def split_horizontal(self):
-        current_terminal = self.splitter.widget(self.splitter.count() - 1)
+        current_terminal = self.layout().itemAt(self.layout().count() - 1).widget()
         new_terminal = self.add_terminal()
-        self.splitter.setOrientation(Qt.Orientation.Vertical)
-        self.splitter.insertWidget(self.splitter.count() - 1, new_terminal)
-        self.splitter.setStretchFactor(self.splitter.count() - 1, 1)
+        self.layout().setOrientation(Qt.Orientation.Vertical)
+        self.layout().insertWidget(self.layout().count() - 1, new_terminal)
+        self.layout().setStretchFactor(self.layout().count() - 1, 1)
         new_terminal.setFocus()
 
     def split_vertical(self):
-        current_terminal = self.splitter.widget(self.splitter.count() - 1)
+        current_terminal = self.layout().itemAt(self.layout().count() - 1).widget()
         new_terminal = self.add_terminal()
-        self.splitter.setOrientation(Qt.Orientation.Horizontal)
-        self.splitter.insertWidget(self.splitter.count() - 1, new_terminal)
-        self.splitter.setStretchFactor(self.splitter.count() - 1, 1)
+        self.layout().setOrientation(Qt.Orientation.Horizontal)
+        self.layout().insertWidget(self.layout().count() - 1, new_terminal)
+        self.layout().setStretchFactor(self.layout().count() - 1, 1)
         new_terminal.setFocus()
 
     def close_current_terminal(self):
-        current_terminal = self.splitter.widget(self.splitter.count() - 1)
-        if self.splitter.count() > 1:
+        current_terminal = self.layout().itemAt(self.layout().count() - 1).widget()
+        if self.layout().count() > 1:
             current_terminal.setParent(None)
             current_terminal.deleteLater()
         else:

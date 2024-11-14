@@ -1,34 +1,61 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any
-import uuid
-from riskkit.enums import ProjectType
+from typing import Dict, Any, Optional
+from .base_config import ProjectType
 from .project_config import ProjectConfig
 import logging
 from .wings_manager import WingsManager
-from HMC.code_manager import CodeManager
-from HMC.projects.project_wing import Wing
-from riskkit.enums import WingType, WingStatus
 
+from HMC.projects.project_wing import Wing
+from .project_types import WingType, WingStatus
+import uuid
 @dataclass
 class Project:
     name: str
     path: Path
-    type: ProjectType
+    project_type: ProjectType
     config: ProjectConfig
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    cccore: Any = field(default=None)
+    wings: Dict[str, Wing] = field(default_factory=dict)
     
     def __post_init__(self):
         if isinstance(self.path, str):
             self.path = Path(self.path)
-        if isinstance(self.type, str):
-            self.type = ProjectType(self.type)
-        
+        if isinstance(self.project_type, str):
+            self.project_type = ProjectType(self.project_type)
+            
+        # Initialize wings from config
+        if hasattr(self.config, 'wings'):
+            self.wings = self.config.wings
+        else:
+            self.wings = {}
+            
         # Initialize managers
         self.wings_manager = WingsManager(self.config)
-        self.code_manager = CodeManager(self.cccore)
-        
+        if self.cccore:
+            self.code_manager = self.cccore.code_manager
+        else:
+            self.code_manager = None
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Project':
+        """Create Project instance from dictionary"""
+        return cls(
+            name=data.get('name', ''),
+            path=Path(data.get('path', '')),
+            project_type=data.get('project_type', ProjectType.LOCAL),
+            config=ProjectConfig(**data.get('config', {})) if data.get('config') else None
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert Project to dictionary"""
+        return {
+            'name': self.name,
+            'path': str(self.path),
+            'project_type': self.project_type,
+            'config': asdict(self.config) if self.config else None
+        }   
     def add_wing(self, name: str, wing_type: WingType, description: str = "", 
                 config: Dict[str, Any] = None) -> Optional[Wing]:
         """Add a new wing to the project"""
@@ -71,34 +98,9 @@ class Project:
         return cls(
             name=name,
             path=path,
-            type=project_type,
+            project_type=project_type,
             config=config
         )
-        
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert project to dictionary for serialization"""
-        return {
-            'id': self.id,
-            'name': self.name,
-            'path': str(self.path),
-            'type': self.type.value if isinstance(self.type, ProjectType) else self.type,
-            'config': {
-                'name': self.config.name,
-                'project_type': self.config.project_type.value,
-                'path': str(self.config.path),
-                'description': self.config.description,
-                'status': self.config.status,
-                'relationships': self.config.relationships,
-                'created_at': self.config.created_at.isoformat(),
-                'updated_at': self.config.updated_at.isoformat(),
-                'directory_structure': self.config.directory_structure,
-                'dev_settings': self.config.dev_settings,
-                'integrations': self.config.integrations,
-                'tracking': self.config.tracking,
-                'metadata': self.config.metadata,
-                'quality_metrics': self.config.quality_metrics
-            }
-        }
         
     def calculate_risk_score(self, probability: str, impact: str) -> int:
         """Calculate risk score based on probability and impact"""
@@ -122,4 +124,13 @@ class Project:
         except Exception as e:
             logging.error(f"Error checking risk review: {e}")
             return True
+        
+    @classmethod
+    def from_config(cls, config: ProjectConfig) -> 'Project':
+        return cls(
+            name=config.name,
+            path=config.path,
+            project_type=config.project_type,
+            config=config
+        )
         

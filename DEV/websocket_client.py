@@ -6,7 +6,7 @@ import logging
 from typing import Optional, Dict, Any, List, Callable
 from enum import Enum
 from HMC.secrets_manager import SecretsManager
-from riskkit.config import ApiConfig
+from HMC.config.types import ApiConfig
 from riskkit.cache import Cache
 from riskkit.offline import OfflineQueue
 from riskkit.conflict import ConflictResolver

@@ -45,7 +45,6 @@ import threading
 from HMC.workspace_manager import WorkspaceManager
 from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, QEvent
 from NITTY_GRITTY.ThreadTrackers import SafeQThread
-from GUX.widgets.many_project_manager_widget import ManyProjectsManagerWidget
 from PyQt6.QtWidgets import QDockWidget
 from HMC.vm_manager import VMManagerWidget
 from HMC.history_manager import HistoryManager
@@ -1404,16 +1403,7 @@ class MainApplication(QMainWindow):
         finally:
             logging.info("Application cleanup complete")
                 
-    def setup_many_projects_manager(self):
-        self.many_projects_manager = ManyProjectsManagerWidget(self.cccore)
-        many_projects_dock = QDockWidget("Many Projects Manager", self)
-        many_projects_dock.setWidget(self.many_projects_manager)
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, many_projects_dock)
-
-        # Add a toggle action to the View menu
-        self.cccore.menu_manager.view_menu.addAction(many_projects_dock.toggleViewAction())
-        self.cccore.widget_manager.dock_widgets["Many Projects Manager"] = many_projects_dock
-        # Update other UI elements as needed
+   
     def post_show_init(self):
         """Initialize components after window is shown"""
         try:

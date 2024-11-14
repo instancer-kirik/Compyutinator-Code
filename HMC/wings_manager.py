@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 from enum import Enum
 from pathlib import Path
 import logging
@@ -8,7 +8,7 @@ import json
 from .wing_template import WingTemplateManager
 from HMC.projects.project import Project
 from HMC.projects.project_config import ProjectConfig
-
+from HMC.projects.project_types import ProjectType, WingStatus, WingType
 class WingStatus(Enum):
     ACTIVE = "active"
     DISABLED = "disabled"
@@ -81,8 +81,39 @@ class WingsManager:
     def __init__(self, cccore):
         self.cccore = cccore
         self.config_manager = cccore.config_manager
+        self.current_project = None
+        self.projects: Dict[str, Project] = {}
         self.wings: Dict[str, Wing] = {}
         self.template_manager = WingTemplateManager(self)
+
+    def load_project_from_folder(self, folder_path: Union[str, Path]) -> Optional[Project]:
+        """Load project from folder"""
+        try:
+            folder_path = Path(folder_path)
+            if not folder_path.exists():
+                logging.error(f"Project folder does not exist: {folder_path}")
+                return None
+                
+            # Create project config
+            config = ProjectConfig(
+                name=folder_path.name,
+                path=folder_path,
+                project_type=ProjectType.LOCAL  # Default to Python project
+            )
+            
+            # Create project
+            project = Project(
+                name=folder_path.name,
+                path=folder_path,
+                project_type=ProjectType.LOCAL,
+                config=config
+            )
+            
+            return project
+            
+        except Exception as e:
+            logging.error(f"Error loading project from folder: {e}")
+            return None
 
     def create_wing(self, name: str, wing_type: WingType, description: str = "", 
                    config: Dict[str, Any] = None) -> Optional[Wing]:

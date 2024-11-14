@@ -8,7 +8,7 @@ class ActionHandlers:
     def __init__(self, window, cccore):
         self.window = window
         self.cccore = cccore
-        self.settings_manager = cccore.settings_manager
+        
         self.macro_recording = False
         self.current_macro = []
         self.current_macro_name = None
@@ -133,20 +133,20 @@ class ActionHandlers:
             logging.warning("Plugin Manager dock not found")
 
     def show_settings(self):
-        if "Settings" in self.cccore.widget_manager.all_dock_widgets:
-            dock = self.cccore.widget_manager.all_dock_widgets["Settings"]
-            dock.show()
-            dock.raise_()
-        else:
-            logging.warning("Settings dock not found")
-            try:
-                dialog = SettingsDialog(self.settings_manager, self)
-                if dialog.exec() == QDialog.DialogCode.Accepted:
-                    # Reload settings in all relevant widgets
-                    self.terminal_emulator.load_typing_effect_settings()
-                    self.code_editor.load_typing_effect_settings()
-            except Exception as e:
-                logging.error(f"Failed to load typing effect settings: {e}")
+        """Show settings dialog using ConfigManager"""
+        try:
+            dialog = SettingsDialog(self.cccore.config_manager, self.window)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                # Notify components that need to reload settings
+                self.cccore.config_manager.config_changed.emit('app_config', 
+                    self.cccore.config_manager.app_config)
+        except Exception as e:
+            logging.error(f"Error showing settings dialog: {e}")
+            QMessageBox.warning(
+                self.window,
+                "Error",
+                f"Could not show settings: {str(e)}"
+            )
 
     def show_theme_manager(self):
         logging.info("Showing Theme Manager window")

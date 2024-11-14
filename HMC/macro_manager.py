@@ -10,7 +10,7 @@ class MacroManager(QObject):
         super().__init__()
         self.cccore = cccore
         self.macros = {}
-        self.macro_file = os.path.join(self.cccore.settings_manager.get_value('app_data_dir'), 'macros.json')
+        self.macro_file = os.path.join(self.cccore.config_manager.get_value('macros_path', './macros'), 'macros.json')
         self.load_macros()
 
     def load_macros(self):

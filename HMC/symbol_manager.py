@@ -178,3 +178,22 @@ class SymbolManager(QObject):
             if symbol.references:
                 references[symbol.name] = symbol.references
         return references
+    
+    def get_relevant_symbols(self, prompt: str) -> List[CodeSymbol]:
+        """Find symbols relevant to the prompt"""
+        relevant_symbols = []
+        
+        # Check for direct symbol name mentions
+        for symbol_name, symbol in self.symbol_index.items():
+            if symbol_name.lower() in prompt.lower():
+                relevant_symbols.append(symbol)
+                
+                # Include related symbols
+                if symbol.parent:
+                    relevant_symbols.append(symbol.parent)
+                relevant_symbols.extend(symbol.children)
+                
+                # Include referenced symbols
+                for ref in symbol.references:
+                    if ref.symbol not in relevant_symbols:
+                        relevant_symbols.append(ref.symbol)

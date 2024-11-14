@@ -114,69 +114,41 @@ class MenuManager:
     def create_view_menu(self, menubar):
         """Create the view menu"""
         try:
-            view_menu = menubar.addMenu('&View')
+            self.view_menu = menubar.addMenu('&View')
             
             # Add dashboard action
-            dashboard_action = self.create_action(
-                "Project Dashboard",
-                self.action_handlers.show_project_dashboard,
-                shortcut="Ctrl+Shift+D"
-            )
-            view_menu.addAction(dashboard_action)
-            view_menu.addSeparator()
+            dashboard_action = QAction("Project Dashboard", self.main_window)
+            dashboard_action.triggered.connect(lambda: self.action_handlers.show_dashboard())
+            dashboard_action.setShortcut("Ctrl+Shift+D")
+            self.view_menu.addAction(dashboard_action)
             
-            # Dashboard view
-            if hasattr(self.action_handlers, 'show_project_dashboard'):
-                self.view_menu.addAction(self.create_action(
-                    "Dashboard",
-                    self.action_handlers.show_project_dashboard,
-                    shortcut="Ctrl+Shift+D"
-                ))
-                
-                self.view_menu.addSeparator()
+            # Add dock toggles submenu
+            docks_menu = self.view_menu.addMenu("Docks")
             
-            # Add BigLinks toggle
-            try:
-                biglinks_dock = self.cccore.widget_manager.get_or_create_dock("Big Links")
-                if biglinks_dock:
-                    self.view_menu.addAction(biglinks_dock.toggleViewAction())
-            except Exception as e:
-                logging.warning(f"BigLinks dock not available: {e}")
+            # Add standard dock toggles
+            standard_docks = [
+                "File Explorer",
+                "Code Editor", 
+                "Terminal",
+                "Process Manager",
+                "Big Links",
+                "Risk Manager",
+                "Vaults Manager"
+            ]
             
-            # Add Device Manager to View menu for consistency
-            device_view = self.view_menu.addAction("Device Manager")
-            device_view.triggered.connect(self.show_device_manager)
-            if self.device_manager_dock:
-                device_view.setChecked(self.device_manager_dock.isVisible())
-                self.device_manager_dock.visibilityChanged.connect(device_view.setChecked)
-            
-            # Add Many Projects Manager toggle
-            try:
-                many_projects_dock = self.cccore.widget_manager.many_projects_manager
-                if many_projects_dock:
-                    action = many_projects_dock.toggleViewAction()
-                    self.view_menu.addAction(action)
-            except AttributeError:
-                logging.warning("Many Projects Manager not found, skipping addition of toggle action.")
-            
-            # Add Risk Manager action
-            risk_manager_action = QAction('Risk Manager', self.main_window)
-            risk_manager_action.setStatusTip('Show Risk Manager')
-            risk_manager_action.triggered.connect(lambda: self.cccore.widget_manager.show_dock_widget('Risk Manager'))
-            self.view_menu.addAction(risk_manager_action)
-            
-            # Add other existing dock widget toggles
-            for dock_name, dock_widget in self.cccore.widget_manager.dock_widgets.items():
-                action = self.create_action(dock_name, lambda checked, w=dock_widget: self.toggle_dock_visibility(w, checked))
+            for dock_name in standard_docks:
+                action = QAction(dock_name, self.main_window)
                 action.setCheckable(True)
-                action.setChecked(dock_widget.isVisible() if dock_widget else False)
-                self.view_menu.addAction(action)
+                action.setChecked(True)
+                action.triggered.connect(lambda checked, name=dock_name: 
+                    self.toggle_dock_visibility(name, checked))
+                docks_menu.addAction(action)
             
             return self.view_menu
             
         except Exception as e:
             logging.error(f"Error creating view menu: {e}")
-            return menubar.addMenu('&View')  # Return empty menu instead of None
+            return None
 
     
     def create_tools_menu(self, menubar):

@@ -25,6 +25,42 @@ class AIConfig:
     model_path: Optional[str] = None
 
 class AIBackend(ABC):
+    def __init__(self, config: AIConfig):
+        self.config = config
+        self.context_manager = None
+        self.memory_manager = None
+        
+    def setup_context(self, context_manager, memory_manager):
+        """Set up context and memory management"""
+        self.context_manager = context_manager
+        self.memory_manager = memory_manager
+        
+    async def preprocess_prompt(self, prompt: str) -> tuple[str, list]:
+        """Unified preprocessing pipeline"""
+        if not self.context_manager:
+            return prompt, []
+
+        # Get relevant context and references
+        context = self.context_manager.get_relevant_context(prompt)
+        references = self.get_context(prompt)
+        
+        # Format the prompt with context
+        processed_prompt = self._format_prompt_with_context(prompt, context, references)
+        
+        return processed_prompt, references
+
+    async def generate_with_context(self, prompt: str, **kwargs) -> str:
+        """Generate response with context"""
+        processed_prompt, references = await self.preprocess_prompt(prompt)
+        response = await self.generate(processed_prompt, **kwargs)
+        
+        # Store the interaction in memory
+        if self.memory_manager:
+            self.memory_manager.add_conversation("user", prompt, references)
+            self.memory_manager.add_conversation("assistant", response)
+            
+        return response
+
     @abstractmethod
     async def generate(self, prompt: str, **kwargs) -> str:
         pass
@@ -32,6 +68,28 @@ class AIBackend(ABC):
     @abstractmethod
     async def stream(self, prompt: str, callback, **kwargs):
         pass
+
+    def get_context(self, prompt: str, n_messages: int = 5) -> List[Dict]:
+        """Get relevant context for generation"""
+        if self.memory_manager:
+            return self.memory_manager.get_relevant_memories(prompt, n_messages)
+        return []
+
+    def _format_prompt_with_context(self, prompt: str, context: str, references: list) -> str:
+        """Format the prompt with context and references"""
+        parts = []
+        
+        if context:
+            parts.append(f"Context:\n{context}")
+            
+        if references:
+            parts.append("Related Information:")
+            for ref in references:
+                parts.append(f"- {ref['content']}")
+                
+        parts.append(f"User: {prompt}")
+        
+        return "\n\n".join(parts)
 
 class LlamaBackend(AIBackend):
     def __init__(self, config: AIConfig):

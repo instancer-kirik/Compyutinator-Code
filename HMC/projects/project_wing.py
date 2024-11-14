@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 from pathlib import Path
 from riskkit.enums import WingType, WingStatus
+from .wing_config import WingConfig
 
 @dataclass
 class Wing:
@@ -14,24 +15,21 @@ class Wing:
     description: str = ""
     version: str = "0.1.0"
     status: WingStatus = WingStatus.DEVELOPMENT
-    
-    # Wing Structure
-    entry_points: Dict[str, str] = field(default_factory=dict)
-    components: Dict[str, Any] = field(default_factory=dict)
-    config: Dict[str, Any] = field(default_factory=dict)
-    
-    # Dependencies
-    dependencies: List[str] = field(default_factory=list)
-    conflicts: List[str] = field(default_factory=list)
-    requirements: List[str] = field(default_factory=list)
-    
-    # Metadata
+    config: WingConfig = field(default_factory=WingConfig)
     path: Optional[Path] = None
-    created_at: datetime = field(default_factory=datetime.now)
-    updated_at: datetime = field(default_factory=datetime.now)
-    author: str = ""
-    tags: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    def __post_init__(self):
+        if self.path:
+            # Load existing config if available
+            loaded_config = WingConfig.load(self.path)
+            if loaded_config:
+                self.config = loaded_config
+                
+    def save_config(self) -> bool:
+        """Save wing configuration"""
+        if not self.path:
+            return False
+        return self.config.save(self.path)
 
     def to_dict(self) -> dict:
         """Convert wing to dictionary"""
@@ -45,7 +43,7 @@ class Wing:
             "dependencies": self.dependencies,
             "conflicts": self.conflicts,
             "entry_points": self.entry_points,
-            "config": self.config,
+            "config": self.config.to_dict(),
             "path": str(self.path) if self.path else None,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),

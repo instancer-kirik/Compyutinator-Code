@@ -7,12 +7,12 @@ import logging
 from pathlib import Path
 from enum import Enum
 from dataclasses import field
-from riskkit.enums import ProjectType
+from .projects.project_types import ProjectType
 from .system_analyzer import SystemInfo
 from .projects.project_generators.existing_project import ExistingProjectGenerator
 from .wings_manager import WingType, WingStatus, Wing
 from .projects.project_structure import PROJECT_DIRECTORIES
-from .code_manager import CodeSymbol
+from .symbol_manager import CodeSymbol
 
 @dataclass
 class ProjectConfig:

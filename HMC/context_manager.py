@@ -6,18 +6,23 @@ import os
 from transformers import AutoTokenizer, BasicTokenizer
 import logging
 import re
-from typing import Dict
-from .symbol_manager import SymbolManager, CodeSymbol
+from typing import Dict, List
+from .symbol_manager import SymbolManager, CodeSymbol, SymbolReference
+from pathlib import Path
 
 class ContextManager:
-    def __init__(self, cccore, max_tokens=4000, max_file_size=1024*1024, model_name="arcee-ai/Llama-3.1-SuperNova-Lite"):
+    def __init__(self, cccore, max_tokens=4000):
         self.cccore = cccore
         self.max_tokens = max_tokens
-        self.max_file_size = max_file_size
-        self.tokenizer = self.load_tokenizer(model_name)
-        self.memory_manager = cccore.model_manager.memory_manager #this is after the model manager is initialized
-        self.contexts = []  # Keep this for backward compatibility
-        self.symbol_manager = SymbolManager(cccore)
+        self.tokenizer = self.load_tokenizer("arcee-ai/Llama-3.1-SuperNova-Lite")
+        self.memory_manager = None
+        self.code_manager = cccore.code_manager
+        self.symbol_manager = self.code_manager.symbol_manager
+        self.contexts = []
+
+    def setup_memory_manager(self, memory_manager):
+        """Set up memory manager after initialization"""
+        self.memory_manager = memory_manager
 
     def load_tokenizer(self, model_name):
         try:
@@ -103,61 +108,122 @@ class ContextManager:
         else:
             return diff_content  # Return original content if no file path found
 
-    def get_most_relevant_context(self, query, top_n=3):
-        # Get relevant memories from the memory manager
-        relevant_memories = self.memory_manager.get_relevant_memories(query, top_n)
+    def get_relevant_context(self, prompt: str) -> str:
+        """Get relevant context based on prompt"""
+        relevant_contexts = []
         
-        # Get contexts from selected files
-        file_contexts = [(desc, content) for desc, content in self.contexts if desc.startswith("File:")]
-        
-        # Combine memories and file contexts
-        all_contexts = relevant_memories + file_contexts
-        
-        # Sort contexts by relevance (assuming memories are already sorted)
-        sorted_contexts = sorted(all_contexts, key=lambda x: x[2] if len(x) > 2 else 0, reverse=True)
-        
-        # Take top_n contexts
-        top_contexts = sorted_contexts[:top_n]
-        
-        logging.debug(f"Top contexts: {top_contexts}")
-        return top_contexts
-
-    def preprocess_message(self, message):
-        code_blocks = self.extract_code_blocks(message)
-        processed_blocks = self.process_code_blocks(code_blocks)
-        
-        # Replace original code blocks with processed ones
-        for (lang, original), (_, processed) in zip(code_blocks, processed_blocks):
-            original_block = f"```{lang}\n{original}\n```"
-            processed_block = f"```{lang}\n{processed}\n```"
-            message = message.replace(original_block, processed_block)
-
-        relevant_contexts = self.get_most_relevant_context(message)
-        logging.warning(f"Relevant contexts: {relevant_contexts}")
-        processed_contexts = self.process_contexts(relevant_contexts)
-        
-        context_info = ""
-        for context in processed_contexts:
-            if len(context) == 2:
-                desc, content = context
-            elif len(context) == 3:
-                desc, content, _ = context
-            else:
-                logging.warning(f"Unexpected context format: {context}")
-                continue
+        # Get code contexts
+        code_contexts = self._get_relevant_code_contexts(prompt)
+        if code_contexts:
+            relevant_contexts.extend(code_contexts)
             
-            if desc.startswith("File:"):
-                file_path = desc.split("File: ", 1)[1]
-                context_info += f"File: {file_path}\n\n{content}\n\n"
-            else:
-                context_info += f"{desc}:\n{content}\n\n"
+        # Get project contexts
+        project_contexts = self._get_relevant_project_contexts(prompt)
+        if project_contexts:
+            relevant_contexts.extend(project_contexts)
+            
+        return "\n\n".join(relevant_contexts) if relevant_contexts else ""
+
+    def _get_relevant_code_contexts(self, prompt: str) -> list:
+        """Get relevant code contexts using both symbol and code analysis"""
+        contexts = []
         
-        # Prepend context information to the message
-        message = f"{context_info}\n{message}"
+        # Get symbol-based contexts
+        symbols = self.symbol_manager.get_relevant_symbols(prompt)
+        for symbol in symbols:
+            # Get symbol references
+            references = self.symbol_manager.get_symbol_references(symbol.name)
+            context = self._format_symbol_context(symbol, references)
+            contexts.append(context)
         
-        logging.warning(f"Preprocessed message with context (first 1000 chars): {message[:1000]}...")
-        logging.debug(f"Full preprocessed message: {message}")
-        return message, processed_contexts
+        # Get file-based contexts
+        for file_path in self.code_manager.get_relevant_files(prompt):
+            file_symbols = self.code_manager.get_file_symbols(file_path)
+            file_refs = self.symbol_manager.get_file_references(file_path)
+            context = self._format_file_context(file_path, file_symbols, file_refs)
+            contexts.append(context)
+            
+        return contexts
+
+    def _format_symbol_context(self, symbol: CodeSymbol, references: List[SymbolReference]) -> str:
+        """Format symbol and its references into readable context"""
+        parts = [f"Symbol: {symbol.name} ({symbol.type})"]
+        parts.append(f"Defined in: {symbol.file_path}:{symbol.line}")
+        
+        if references:
+            parts.append("\nReferences:")
+            for ref in references:
+                parts.append(f"- {ref.reference_type} in {ref.file_path}:{ref.line}")
+                parts.append(f"  Context: {ref.context}")
+                
+        return "\n".join(parts)
+
+    def _format_file_context(self, file_path: Path, symbols: List[CodeSymbol], references: Dict[str, List[SymbolReference]]) -> str:
+        """Format file symbols and references into readable context"""
+        parts = [f"File: {file_path}"]
+        
+        if symbols:
+            parts.append("\nSymbols:")
+            for symbol in symbols:
+                parts.append(f"- {symbol.type}: {symbol.name} (line {symbol.line})")
+                if symbol.children:
+                    for child in symbol.children:
+                        parts.append(f"  └─ {child.type}: {child.name}")
+                        
+        if references:
+            parts.append("\nReferences:")
+            for symbol_name, refs in references.items():
+                parts.append(f"- {symbol_name}:")
+                for ref in refs:
+                    parts.append(f"  └─ {ref.reference_type} at line {ref.line}")
+                    
+        return "\n".join(parts)
+
+    def _get_relevant_project_contexts(self, prompt: str) -> list:
+        """Get relevant project-level contexts"""
+        return [ctx for ctx in self.contexts if self._is_context_relevant(prompt, ctx[1])]
+
+    def _is_context_relevant(self, prompt: str, context: str) -> bool:
+        """Check if the context is relevant to the prompt"""
+        # Implement your relevance logic here
+        return True
+
+    # def preprocess_message(self, message):
+    #     code_blocks = self.extract_code_blocks(message)
+    #     processed_blocks = self.process_code_blocks(code_blocks)
+        
+    #     # Replace original code blocks with processed ones
+    #     for (lang, original), (_, processed) in zip(code_blocks, processed_blocks):
+    #         original_block = f"```{lang}\n{original}\n```"
+    #         processed_block = f"```{lang}\n{processed}\n```"
+    #         message = message.replace(original_block, processed_block)
+
+    #     relevant_contexts = self.get_most_relevant_context(message)
+    #     logging.warning(f"Relevant contexts: {relevant_contexts}")
+    #     processed_contexts = self.process_contexts(relevant_contexts)
+        
+    #     context_info = ""
+    #     for context in processed_contexts:
+    #         if len(context) == 2:
+    #             desc, content = context
+    #         elif len(context) == 3:
+    #             desc, content, _ = context
+    #         else:
+    #             logging.warning(f"Unexpected context format: {context}")
+    #             continue
+            
+    #         if desc.startswith("File:"):
+    #             file_path = desc.split("File: ", 1)[1]
+    #             context_info += f"File: {file_path}\n\n{content}\n\n"
+    #         else:
+    #             context_info += f"{desc}:\n{content}\n\n"
+        
+    #     # Prepend context information to the message
+    #     message = f"{context_info}\n{message}"
+        
+    #     logging.warning(f"Preprocessed message with context (first 1000 chars): {message[:1000]}...")
+    #     logging.debug(f"Full preprocessed message: {message}")
+    #     return message, processed_contexts
 
     def process_contexts(self, contexts):
         processed_contexts = []

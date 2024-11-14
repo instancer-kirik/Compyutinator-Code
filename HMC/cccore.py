@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import QDockWidget
 from PyQt6.QtCore import Qt
 from .workspace_manager import WorkspaceManager
 from GUX.fileset_manager_widget import FilesetManagerWidget
-from .project_manager import ProjectManager
+from HMC.projects.project_manager import ProjectManager
 from .build_manager import BuildManager
 from GUX.radial_menu import RadialMenu
 from HMC.config_manager import ConfigManager
@@ -45,7 +45,8 @@ from .menu_manager import MenuManager
 from .notification_manager import NotificationManager
 import transformers
 import warnings
-
+from .code_manager import CodeManager
+from .ai_model_manager import ModelManager
 
 class CCCore(QObject):  # referred to as mm in other files (auratext)
     lsp_manager_initialized = pyqtSignal()
@@ -59,11 +60,12 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         
         # Initialize core configuration
         self.config_manager = config_manager
+        self.settings_manager = config_manager  # Add this line - use config_manager as settings_manager
         
         # Initialize managers that depend on configuration
         self.notification_manager = NotificationManager()
         self.vault_manager = VaultManager(self)
-        self.env_manager = EnvironmentManager(self.config_manager.get('environments_path', './environments'))
+        self.env_manager = EnvironmentManager(self.config_manager.get_value('environments_path', './environments'))
         self.project_manager = None  # Will be initialized later
         self.secrets_manager = None  # Will be initialized later
         
@@ -82,7 +84,7 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         self.project_manager = None
         self.secrets_manager = None
         self.macro_manager = MacroManager(self)
-        self.vault_manager = VaultManager(self.config_manager, cccore=self)
+        self.vault_manager = VaultManager(self)
         self.ai_memory_manager = AIMemoryManager()
         # Add debug logging
         logging.debug(f"Initializing CCCore. Default vault path: {self.config_manager.get_value('app_data_dir')}")
@@ -107,6 +109,7 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         self.late_init_done = False
         self.vault_windows = {}  # Dictionary to store vault paths and their corresponding windows
         self.main_vault = None
+        logging.info(f"CCCore initialized with main vault: {self.main_vault}")
         self.notification_manager = NotificationManager()
         self.init_managers()
         logging.info("CCCore initialization complete")
@@ -122,10 +125,43 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         self.late_init()
         
     def init_managers(self):
+        """Initialize all managers in correct order"""
+        try:
+            logging.info("Initializing managers")
+            
+            # Core managers first
+            self.code_manager = CodeManager(self)
+            logging.info("Code manager initialized")
+            
+            self.file_manager = FileManager(self)
+            logging.info("File manager initialized")
+            
+            # Model and context managers
+            self.model_manager = ModelManager(self)
+            self.context_manager = ContextManager(self, max_tokens=4000)
+            logging.info(f"Context manager initialized with max tokens: {self.context_manager.max_tokens}")
+            # Set up cross-references
+            self.model_manager.setup_context_manager(self.context_manager)
+            self.context_manager.setup_memory_manager(self.model_manager.memory_manager)
+            
+            self.project_manager = ProjectManager(self)
+            
+            # Build manager depends on project manager
+            self.build_manager = BuildManager(self)
+            
+            # Font manager initialization
+            self.font_manager = FontManager()
+            
+            # Thread controller
+            self.thread_controller = ThreadController()
+            logging.debug("All managers initialized successfully")
+            
+        except Exception as e:
+            logging.error(f"Error initializing managers: {e}")
+            raise
+     
         self.action_handlers = ActionHandlers(window=self.main_window, cccore=self)
         self.db_manager = DatabaseManager('local')
-        from HMC.ai_model_manager import ModelManager
-        self.model_manager = ModelManager(self.config_manager)
         self.download_manager = DownloadManager(self)
         self.theme_manager = ThemeManager(self)
         self.lexer_manager = LexerManager(self)
@@ -139,11 +175,8 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
        
         self.env_manager = EnvironmentManager(self.config_manager.get_value("environments_path", "./environments"))
         self.secrets_manager = SecretsManager(self.config_manager)
-        self.project_manager = ProjectManager(self)
-        self.build_manager = BuildManager(self)
-        self.context_manager = ContextManager(self)
-        self.file_manager = FileManager(self)
         
+        self.build_manager = BuildManager(self)
         self.workspace_manager = WorkspaceManager(self)
         # Initialize FontManagerWidget
         self.font_manager = FontManager()
@@ -477,7 +510,7 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         try:
             if isinstance(project_data, dict):
                 # Convert dict to Project object
-                from .project_manager import Project
+                from HMC.projects.project_manager import Project
                 project = Project(
                     name=project_data['name'],
                     path=project_data['path'],

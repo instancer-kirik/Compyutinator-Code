@@ -23,6 +23,7 @@ import humanize
 from GUX.selectable_mexageboss import SelectableMessageBox
 from PyQt6.QtCore import QTimer
 import time
+import asyncio
 import subprocess
 from PyQt6.QtCore import QObject
 from HMC.ai_model_manager import ModelManager
@@ -208,7 +209,7 @@ class AIChatWidget(QWidget):
     file_clicked = pyqtSignal(str)
     merge_requested = pyqtSignal(str, str)
 
-    def __init__(self, parent=None, context_manager=None, editor_manager=None, model_manager=None, download_manager=None, settings_manager=None, vault_manager=None, project_manager=None):
+    def __init__(self, parent=None, context_manager=None, editor_manager=None, model_manager=None, download_manager=None, config_manager=None, vault_manager=None, project_manager=None):
         super().__init__(parent)
         logging.info("Initializing AIChatWidget")
         self.code_block_pattern = re.compile(r'```(\w+)?:?(.*?)\n(.*?)\n```', re.DOTALL)
@@ -217,11 +218,11 @@ class AIChatWidget(QWidget):
             self.local_chat_widget = None
             self.remote_chat_widget = None
             self.current_model = None    
-            self.settings = settings_manager.settings if settings_manager else QSettings("NEWCOMPANY", "OTHERAPPLICATION")
+            self.settings = config_manager.settings if config_manager else QSettings("NEWCOMPANY", "OTHERAPPLICATION")
             self.download_manager = download_manager if download_manager else DownloadManager(self.settings)
             self.model_manager = model_manager if model_manager else ModelManager(self.settings)
             self.editor_manager = editor_manager    
-            self.settings_manager = settings_manager
+            self.config_manager = config_manager
             self.context_manager = context_manager if context_manager else ContextManager()
             self.vault_manager = vault_manager
             self.project_manager = project_manager  
@@ -255,6 +256,23 @@ class AIChatWidget(QWidget):
         self.model_path = None
         self.partial_response_buffer = ""
         self.cursor_manager = CursorManager(self)
+
+        # Separate configs for local and remote
+        self.local_config = AIConfig(
+            model_type=ModelType.LOCAL,
+            model_name="Llama-3.1-SuperNova-Lite-8.0B-OF32.EF32.IQ4_K_M",
+            model_path=self.model_manager.get_model_path()
+        )
+        
+        self.remote_config = AIConfig(
+            model_type=ModelType.OPENAI,  # Default to OpenAI
+            model_name="gpt-3.5-turbo",
+            api_key=self.model_manager.get_api_key()
+        )
+        
+        # Create separate backends
+        self.local_backend = None
+        self.remote_backend = None
 
     def set_default_instructions(self):
         return """
@@ -433,9 +451,10 @@ class AIChatWidget(QWidget):
         partial_buffer = getattr(self, f"{chat_type}_partial_buffer")
         partial_buffer.clear()
 
-    def on_partial_response(self, partial_response, chat_type):
+    def on_partial_response(self, text, chat_type):
+        """Handle streaming response"""
         partial_buffer = getattr(self, f"{chat_type}_partial_buffer")
-        partial_buffer.appendPlainText(partial_response)
+        partial_buffer.insertPlainText(text)
         partial_buffer.moveCursor(QTextCursor.MoveOperation.End)
         partial_buffer.ensureCursorVisible()
 
@@ -500,34 +519,34 @@ class AIChatWidget(QWidget):
             self.progress_display.setValue(0)
 
     
-    def send_message(self, chat_type):
-        user_message = self.input_field.toPlainText()
+    def send_message(self, chat_type='local'):
+        message = self.input_field.toPlainText().strip()
+        if not message:
+            return
+            
+        backend = self.local_backend if chat_type == 'local' else self.remote_backend
+        if not backend:
+            self.display_message("Error: Model not loaded", chat_type=chat_type)
+            return
+            
+        # Add message to appropriate chat display
+        chat_display = getattr(self, f"{chat_type}_chat_display")
+        chat_display.append(f"User: {message}")
         self.input_field.clear()
         
-        if chat_type == 'local':
-            model_name = self.local_model_dropdown.currentText()
-            messages = self.local_messages
-            self.loading_spinner.setVisible(True)
-        else:
-            model_name = self.remote_model_dropdown.currentText()
-            messages = self.remote_messages
-        
-        self.display_message(user_message, is_user=True, chat_type=chat_type)
-        context = ""
-        if len(messages) == 0 or messages[0]["role"] != "system":
-            instructions = self.set_default_instructions()
-            context = instructions
-        # Ensure the context is included
-        context += self.context_reference_widget.get_context_text()
-        logging.warning(f"Context: {context}")
-        messages.insert(0, {"role": "system", "content": context})
-    
-        messages.append({"role": "user", "content": user_message})
-        
-        self.model_manager.generate(messages, chat_type, model_name)
-        
-        self.add_message_to_references(user_message)
-           
+        try:
+            if chat_type == 'local':
+                self.local_messages.append({"role": "user", "content": message})
+            else:
+                self.remote_messages.append({"role": "user", "content": message})
+                
+            asyncio.create_task(backend.stream(
+                message,
+                lambda x: self.on_partial_response(x, chat_type)
+            ))
+        except Exception as e:
+            self.display_message(f"Error: {str(e)}", chat_type=chat_type)
+
     def show_loading_spinner(self):
         movie = QMovie("resources/loading.gif")
         self.loading_spinner.setMovie(movie)
@@ -543,27 +562,50 @@ class AIChatWidget(QWidget):
 
     def on_local_model_changed(self, new_model):
         self.load_local_button.setEnabled(True)
-        self.model_manager.change_model('local', new_model)
-    def on_remote_model_changed(self, new_model):
-        self.model_manager.change_model('remote', new_model)
+        self.local_config.model_name = new_model
+        self.load_model('local')
 
-    def load_model(self):
-        self.progress_display.setVisible(True)
-        model_type = 'local'
-        model_name = self.local_model_dropdown.currentText()
-                
-        self.update_status(f"Loading {model_type} model: {model_name}")
-        self.show_loading_spinner()
-        self.load_local_button.setEnabled(False)
-        
-        if model_type == 'local':
-            repo_id = "Joseph717171/Llama-3.1-SuperNova-Lite-8.0B-OQ8_0.EF32.IQ4_K-Q8_0-GGUF"
-            filename = model_name
+    def on_remote_model_changed(self, new_model):
+        # Determine model type from name
+        if 'gpt' in new_model.lower():
+            model_type = ModelType.OPENAI
+        elif 'claude' in new_model.lower():
+            model_type = ModelType.ANTHROPIC
         else:
-            repo_id = None
-            filename = model_name
+            return  # Invalid remote model
+            
+        self.remote_config.model_type = model_type
+        self.remote_config.model_name = new_model
+        self.load_model('remote')
+
+    def load_model(self, chat_type='local'):
+        """Load model with appropriate configuration"""
+        config = self.local_config if chat_type == 'local' else self.remote_config
+        model_name = (self.local_model_dropdown.currentText() if chat_type == 'local' 
+                     else self.remote_model_dropdown.currentText())
         
-        self.model_manager.load_model(model_type, filename, repo_id)
+        # Update config for loading
+        config.model_name = model_name
+        if chat_type == 'local':
+            config.model_path = os.path.join(
+                self.model_manager.get_model_path(),
+                model_name
+            )
+                
+        self.update_status(f"Loading {config.model_type.value} model: {model_name}")
+        self.show_loading_spinner()
+        
+        try:
+            backend = create_ai_backend(config)
+            if chat_type == 'local':
+                self.local_backend = backend
+                self.load_local_button.setEnabled(False)
+            else:
+                self.remote_backend = backend
+            self.on_model_loaded(f"{chat_type.capitalize()}: {model_name}")
+        except Exception as e:
+            self.on_model_error(str(e))
+
     def on_model_loaded(self, filename):
         self.context_manager.load_tokenizer(filename)
         self.progress_display.setVisible(False)
@@ -616,6 +658,7 @@ class AIChatWidget(QWidget):
             ai_models_dir = os.path.join(models_dir, "AI")
             os.makedirs(ai_models_dir, exist_ok=True)
             try:
+                self.current_config.model_path = ai_models_dir
                 self.model_manager.set_model_path(ai_models_dir)
                 self.status_label.setText(f"Models directory changed to: {ai_models_dir}")
             except ValueError as e:

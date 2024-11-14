@@ -14,14 +14,13 @@ from PyQt6.QtGui import QPen, QPainterPath
 from HMC.symbol_manager import CodeSymbol, SymbolManager
 from pathlib import Path
 from typing import Dict, List
-from GUX.dialogs.project_dialogs import ProjectConfig
-from GUX.widgets.project_src_widget import ProjectSourceWidget
+
+
 import logging
 
 from typing import Optional
 from HMC.projects.project import Project  # Updated import
-from HMC.projects.project_config import ProjectConfig
-from riskkit.enums import ProjectType
+
     
 class ProjectDashboard(QWidget):
     def __init__(self, cccore, project_name: str):
@@ -322,7 +321,7 @@ class ProjectDashboard(QWidget):
     def update_dashboard(self, project_data):
         """Update dashboard with project information"""
         try:
-            from HMC.project_manager import Project
+            from HMC.projects.project import Project
             
             if isinstance(project_data, dict):
                 self.project = Project(

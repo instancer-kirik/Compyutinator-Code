@@ -5,8 +5,7 @@ import jinja2
 import yaml
 import logging
 from HMC.projects.wings_manager import WingType, WingStatus
-from HMC.projects.project import Project
-from HMC.projects.project_config import ProjectConfig
+
 import json
 class TemplateError(Exception):
     """Base class for template errors"""
