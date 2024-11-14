@@ -263,6 +263,27 @@ class MarkdownViewer(QTextBrowser):
         if self.vault_path:
             self.index_vault()
 
+class IntegrationCheckItem:
+    """Data class for integration test items"""
+    name: str
+    description: str = ""
+    status: str = "Not Started"  # Not Started, In Progress, Failed, Passed
+    priority: RiskPriority = RiskPriority.MEDIUM
+    risk_level: RiskProbability = RiskProbability.POSSIBLE
+    impact: ImpactSeverity = ImpactSeverity.MEDIUM
+    impact_area: ImpactArea = ImpactArea.FUNCTIONALITY
+    timeframe: ImpactTimeframe = ImpactTimeframe.SHORT_TERM
+    assigned_to: str = ""
+    due_date: Optional[datetime] = None
+    dependencies: List[str] = field(default_factory=list)
+    related_tests: List[str] = field(default_factory=list)
+    related_risks: List[int] = field(default_factory=list)
+    notes: str = ""
+    created_at: datetime = field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now)
+    test_results: Dict = field(default_factory=dict)
+    metadata: Dict = field(default_factory=dict)
+
 class IntegrationTestingManager(QWidget):
     def __init__(self, project_manager=None, risk_manager=None):
         super().__init__()

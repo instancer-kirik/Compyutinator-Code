@@ -67,6 +67,7 @@ opencv-python = "^4.10.0.84"
 pygobject = "^3.50.0"
 pycamera = "^0.3.2"
 networkx = "<3.0"
+pyudev = "^0.24.3"
 
 
 [build-system]

@@ -5,7 +5,7 @@ import os
 auratext_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'AuraText')
 sys.path.append(auratext_dir)
 
-from PyQt6.QtWidgets import  QVBoxLayout, QDockWidget, QWidget, QSlider, QComboBox, QLabel, QTabWidget, QSizePolicy, QToolBar
+from PyQt6.QtWidgets import  QVBoxLayout, QDockWidget, QWidget, QSlider, QComboBox, QLabel, QTabWidget, QSizePolicy, QToolBar, QDialog
 import json
 from PyQt6.QtGui import QAction
 from PyQt6.QtCore import Qt, QSettings, QByteArray, QTimer
@@ -21,27 +21,32 @@ from GUX.ai_chat import AIChatWidget
 from GUX.media_player import MediaPlayer
 from GUX.diff_merger import DiffMergerWidget
 from HMC.sticky_note_manager import StickyNoteManager
+
 from HMC.download_manager import DownloadManager, DownloadManagerUI
 from NITTY_GRITTY.object_tree import ObjectTreeModel
 from GUX.debuuginator import CoolWidget
 from GUX.theme_builder import ThemeBuilderWidget
 import serial
 import serial.tools.list_ports
-from HMC.project_manager import ProjectManagerWidget, ManyProjectsManagerWidget
+from HMC.project_manager import ProjectManagerWidget
+from GUX.widgets.many_project_manager_widget import ManyProjectsManagerWidget
 from GUX.merge_widget import MergeWidget
 from AuraText.auratext.Core.window import AuraTextWindow
 from AuraText.auratext.Core.TabWidget import TabWidget
 import logging
 import traceback
 from GUX.file_search_widget import FileSearchWidget
-from HMC.project_manager import ManyProjectsManagerWidget
+from GUX.widgets.many_project_manager_widget import ManyProjectsManagerWidget
 from GUX.widget_vault import VaultWidget, VaultsManagerWidget,  AdvancedDataViewerWidget, StateInspectorWidget
-from GUX.risk_manager import RiskManager
+from HMC.risk_manager import RiskManager
 from GUX.log_viewer_widget import LogViewerWidget
 from HMC.transcriptor_live_widget import VoiceTypingWidget
 from datetime import datetime
 from GUX.widgets.ram_monitor import RAMMonitor
 from GUX.device_manager_view import DeviceManagerView
+from HMC.dashboard import Dashboard
+from GUX.radial_menu import RadialMenu
+
 class WidgetReference:
     def __init__(self, widget, parent=None):
         self.widget = widget
@@ -82,13 +87,16 @@ class WidgetManager:
                 'Terminal': lambda parent: TerminalWidget(parent=parent, cccore=self.cccore),
                 'AI Chat': lambda parent: AIChatWidget(parent=parent, cccore=self.cccore),
                 'Big Links': lambda parent: SymbolicLinkerWidget(parent=parent, cccore=self.cccore),
+                'Symbolic Linker': lambda parent: SymbolicLinkerWidget(parent=parent, cccore=self.cccore),
                 'Sticky Notes': lambda parent: StickyNoteManager(parent=parent, cccore=self.cccore),
                 'Process Manager': lambda parent: ProcessManagerWidget(parent=parent, cccore=self.cccore),
                 'Vaults Manager': lambda parent: VaultsManagerWidget(parent=parent, cccore=self.cccore),
                 'Projects Manager': lambda parent: ManyProjectsManagerWidget(cccore=self.cccore),
+                'Many Projects Manager': lambda parent: ManyProjectsManagerWidget(cccore=self.cccore),
                 'Risk Manager': lambda parent: RiskManager(parent=parent, cccore=self.cccore),
-                'Device Manager': lambda parent: DeviceManagerView(parent),
+                'Device Manager': lambda parent: self.get_device_manager(),
                 'Log Viewer': lambda parent: LogViewerWidget(self.cccore, parent),
+                'Nix Browser': lambda parent: self.get_nix_browser(),
             }
             logging.info("Widget methods initialized successfully")
         except Exception as e:
@@ -120,6 +128,8 @@ class WidgetManager:
         self.setup_widget_methods()
         # Initialize workspace selector
         self.workspace_selector = None
+       
+        self.device_manager_dock = None
 
     def set_tab_widget(self, tab_widget):
         """Set the tab widget reference"""
@@ -195,14 +205,17 @@ class WidgetManager:
                 'Terminal': lambda parent: TerminalWidget(parent=parent, cccore=self.cccore),
                 'AI Chat': lambda parent: AIChatWidget(parent=parent, cccore=self.cccore),
                 'Big Links': lambda parent: SymbolicLinkerWidget(parent=parent, cccore=self.cccore),
+                'Symbolic Linker': lambda parent: SymbolicLinkerWidget(parent=parent, cccore=self.cccore),
                 'Sticky Notes': lambda parent: StickyNoteManager(parent=parent, cccore=self.cccore),
                 'Process Manager': lambda parent: ProcessManagerWidget(parent=parent, cccore=self.cccore),
                 'Vaults Manager': lambda parent: VaultsManagerWidget(parent=parent, cccore=self.cccore),
                 'Projects Manager': lambda parent: ManyProjectsManagerWidget(cccore=self.cccore),
+                'Many Projects Manager': lambda parent: ManyProjectsManagerWidget(cccore=self.cccore),
                 'Risk Manager': lambda parent: RiskManager(parent=parent, cccore=self.cccore),
-                'Device Manager': lambda parent: DeviceManagerView(parent),
+                'Device Manager': lambda parent: self.get_device_manager(),
                 'Transcriptor': lambda parent: VoiceTypingWidget(self.cccore.input_manager, parent=parent),
                 'Log Viewer': lambda parent: LogViewerWidget(self.cccore, parent),
+                'Nix Browser': lambda parent: self.get_nix_browser(),
             }
             logging.info("Widget methods initialized successfully")
         except Exception as e:
@@ -957,7 +970,8 @@ class WidgetManager:
                 'Open File': ('Ctrl+O', self.main_window.on_open_file),
                 'Save': ('Ctrl+S', self.main_window.on_save_file),
                 'Toggle File Explorer': ('Ctrl+B', self.main_window.toggle_file_explorer),
-                'Toggle Terminal': ('Ctrl+`', self.main_window.toggle_terminal)
+                'Toggle Terminal': ('Ctrl+`', self.main_window.toggle_terminal),
+                'Toggle Many Projects Manager': ('Ctrl+M', self.cccore.widget_manager.many_projects_manager.toggleView)
             }
             
             for name, (shortcut, handler) in actions.items():
@@ -1132,4 +1146,222 @@ class WidgetManager:
                 logging.error(f"Failed to show dock widget: {widget_name}")
         except Exception as e:
             logging.error(f"Error showing dock widget {widget_name}: {e}")
+
+    def initialize_docks(self):
+        """Initialize dock widgets once window is ready"""
+        if not self.main_window or not self.main_window.isVisible():
+            # Retry after a short delay if window isn't ready
+            QTimer.singleShot(100, self.initialize_docks)
+            return
+
+        try:
+            # Ensure all necessary docks are initialized
+            if not hasattr(self, 'device_manager_dock'):
+                self.device_manager_dock = self.create_device_manager_dock()
+            # Ensure ManyProjectsManager is initialized
+            if not hasattr(self, 'many_projects_manager'):
+                self.many_projects_manager = ManyProjectsManagerWidget(self.main_window, self.cccore)
+                self.add_dock_widget(self.many_projects_manager, "Many Projects Manager", Qt.DockWidgetArea.LeftDockWidgetArea)
+                self.many_projects_manager.hide()  # Initially hidden
+        except Exception as e:
+            logging.error(f"Error initializing Many Projects Manager: {e}")
+
+    def DashboardWidget(self, cccore):
+        """Create or return the Dashboard widget"""
+        try:
+            if 'dashboard' not in self.widgets:
+                from HMC.dashboard import Dashboard  # Import here to avoid circular imports
+                dashboard = Dashboard(cccore)
+                self.widgets['dashboard'] = dashboard
+                logging.info("Dashboard widget created successfully")
+                return dashboard
+            return self.widgets['dashboard']
+        except Exception as e:
+            logging.error(f"Error creating Dashboard widget: {e}")
+            return None
+
+    def show_dashboard(self, project_name=None):
+        """Show the project dashboard as a dialog"""
+        try:
+            # Create dialog first
+            dialog = QDialog(self.cccore.main_window)
+            dialog.setWindowTitle("Project Dashboard")
+            dialog.setMinimumSize(800, 600)
+            
+            # Create dashboard with dialog as parent
+            dashboard = Dashboard(self.cccore, parent=dialog)  # Add parent parameter
+            
+            # Create layout
+            layout = QVBoxLayout(dialog)
+            layout.addWidget(dashboard)
+            
+            # Set project if provided
+            if project_name:
+                dashboard.set_project(project_name)
+            else:
+                # Try to get current project
+                current_project = self.cccore.project_manager.get_current_project()
+                if current_project:
+                    dashboard.set_project(current_project)
+                
+            # Refresh dashboard
+            dashboard.refresh_dashboard()
+            
+            # Show dialog
+            dialog.exec()
+            logging.info(f"Dashboard dialog shown for project: {project_name or current_project}")
+            
+        except Exception as e:
+            logging.error(f"Error showing dashboard dialog: {e}")
+            traceback.print_exc()
+
+    def DeviceManagerWidget(self, cccore):
+        """Create or return the Device Manager widget"""
+        if 'device_manager' not in self.widgets:
+            try:
+                from GUX.device_manager_view import DeviceManagerView
+                widget = DeviceManagerView(parent=self.main_window)
+                widget.cccore = cccore
+                self.widgets['device_manager'] = widget
+                logging.info("Device Manager widget created successfully")
+            except Exception as e:
+                logging.error(f"Error creating Device Manager widget: {e}")
+                logging.error(traceback.format_exc())
+                return None
+        return self.widgets['device_manager']
+
+    def add_device_manager_dock(self):
+        """Create and add the Device Manager dock widget"""
+        if 'device_manager_dock' not in self.docks:
+            try:
+                device_manager = self.DeviceManagerWidget(self.cccore)
+                if device_manager:
+                    self.docks['device_manager_dock'] = self.add_dock_widget(
+                        device_manager,
+                        "Device Manager",
+                        Qt.DockWidgetArea.RightDockWidgetArea,
+                        hidden=False
+                    )
+                    logging.info("Device Manager dock created successfully")
+                    
+                    # Create an action to toggle the dock's visibility
+                    action = QAction("Device Manager", self.cccore.main_window)
+                    action.setCheckable(True)
+                    action.setChecked(self.docks['device_manager_dock'].isVisible())
+                    action.triggered.connect(self.docks['device_manager_dock'].toggleViewAction().trigger)
+                    
+                    return self.docks['device_manager_dock'], action
+            except Exception as e:
+                logging.error(f"Error creating Device Manager dock: {e}")
+                logging.error(traceback.format_exc())
+                return None, None
+                
+        return self.docks['device_manager_dock'], self.docks['device_manager_dock'].toggleViewAction()
+
+    def init_device_manager(self):
+        """Initialize the device manager"""
+        try:
+            # Create device manager instance if it doesn't exist
+            if not hasattr(self, 'device_manager'):
+                from GUX.device_manager_view import DeviceManagerView
+                from HMC.device_manager import DeviceManager
+                
+                # Create the backend manager first
+                self.device_manager_backend = DeviceManager()
+                
+                # Create the view and connect it to the backend
+                self.device_manager = DeviceManagerView(parent=self.main_window)
+                self.device_manager.device_manager = self.device_manager_backend
+                self.device_manager.cccore = self.cccore
+                logging.info("Device Manager widget created successfully")
+
+            # Create dock if it doesn't exist
+            if not hasattr(self, 'device_manager_dock'):
+                self.device_manager_dock = self.add_dock_widget(
+                    self.device_manager,
+                    "Device Manager",
+                    Qt.DockWidgetArea.RightDockWidgetArea
+                )
+                logging.info("Device Manager dock created successfully")
+
+            return self.device_manager_dock
+        except Exception as e:
+            logging.error(f"Error initializing device manager: {e}")
+            logging.error(traceback.format_exc())
+            return None
+
+    def show_device_manager(self):
+        """Show the device manager dock"""
+        try:
+            dock = self.init_device_manager()
+            if dock:
+                dock.show()
+                dock.raise_()
+            else:
+                logging.error("Device manager dock not initialized")
+                
+        except Exception as e:
+            logging.error(f"Error showing device manager: {e}")
+            logging.error(traceback.format_exc())
+
+    def get_device_manager(self):
+        """Get or create the device manager instance"""
+        try:
+            if not hasattr(self, 'device_manager'):
+                self.init_device_manager()
+            return self.device_manager
+        except Exception as e:
+            logging.error(f"Error getting device manager: {e}")
+            return None
+
+    def init_nix_browser(self):
+        """Initialize the Nix Store Browser"""
+        try:
+            if not hasattr(self, 'nix_browser'):
+                from GUX.nix_store_browser import NixStoreBrowser
+                self.nix_browser = NixStoreBrowser(parent=self.main_window)
+                logging.info("Nix Store Browser created successfully")
+
+            if not hasattr(self, 'nix_browser_dock'):
+                self.nix_browser_dock = self.add_dock_widget(
+                    self.nix_browser,
+                    "Nix Store Browser",
+                    Qt.DockWidgetArea.RightDockWidgetArea
+                )
+                logging.info("Nix Store Browser dock created successfully")
+
+            return self.nix_browser_dock
+        except Exception as e:
+            logging.error(f"Error initializing Nix Store Browser: {e}")
+            logging.error(traceback.format_exc())
+            return None
+  
+    def show_nix_browser(self):
+        """Show the Nix Store Browser dock"""
+        try:
+            dock = self.init_nix_browser()
+            if dock:
+                dock.show()
+                dock.raise_()
+        except Exception as e:
+            logging.error(f"Error showing Nix Store Browser: {e}")
+  
+    def show_radial_menu(self, position):
+        """Show radial menu with registered hotkeys"""
+        # Get registered hotkeys from your hotkey manager
+        hotkey_mappings = {
+            "New File": "Ctrl+N",
+            "Open": "Ctrl+O",
+            "Save": "Ctrl+S",
+            "Find": "Ctrl+F",
+            "Replace": "Ctrl+H",
+            "Terminal": "Ctrl+`",
+            "Build": "F5",
+            "Debug": "F9"
+        }  # Replace with actual hotkey mappings
+
+        menu = RadialMenu(self.main_window)
+        menu.set_options_with_hotkeys(hotkey_mappings)
+        menu.optionSelected.connect(self.handle_radial_menu_selection)
+        menu.show_at(position)
   

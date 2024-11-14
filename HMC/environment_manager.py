@@ -6,12 +6,15 @@ import shutil
 import os
 import platform
 import logging
-
+from typing import Dict, Any, List
+import time
+from .system_analyzer import SystemInfo
 class EnvironmentManager:
     def __init__(self, base_path):
         self.base_path = Path(base_path)
         self.nix_portable_path = self.base_path / "nix-portable"
         self.environments_file = self.base_path / "environments.json"
+        self.system_info = SystemInfo(name="Development Environment")
         self.load_environments()
         self.ensure_nix_portable()
 
@@ -105,6 +108,90 @@ class EnvironmentManager:
         # This is not needed with nix-portable
         pass
 
+    def get_environment_info(self, env_name: str) -> Dict[str, Any]:
+        """Get detailed environment information"""
+        if env_name not in self.environments:
+            return {}
+            
+        env_data = self.environments[env_name]
+        env_path = Path(env_data["path"])
+        
+        # Update system info
+        self.system_info.name = f"Environment: {env_name}"
+        self.system_info.root_path = env_path
+        self.system_info.technical_stack = [env_data["language"]]
+        self.system_info.environment_variables = self._get_env_variables(env_name)
+        
+        return {
+            "environment": env_data,
+            "system": self.system_info.to_json(),
+            "packages": self._get_installed_packages(env_name)
+        }
+
+    def _get_env_variables(self, env_name: str) -> Dict[str, str]:
+        """Get environment variables for the environment"""
+        try:
+            env_path = self.get_environment_path(env_name)
+            if not env_path:
+                return {}
+                
+            result = self.run_nix_command(f"printenv")
+            env_vars = {}
+            for line in result.stdout.split('\n'):
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    env_vars[key] = value
+            return env_vars
+            
+        except Exception as e:
+            logging.error(f"Error getting environment variables: {e}")
+            return {}
+
+    def _get_installed_packages(self, env_name: str) -> List[str]:
+        """Get list of installed packages"""
+        try:
+            result = self.run_nix_command("nix-env -q")
+            return [line.strip() for line in result.stdout.split('\n') if line.strip()]
+        except Exception as e:
+            logging.error(f"Error getting installed packages: {e}")
+            return []
+
+    def export_environment_info(self, env_name: str, format: str = 'md') -> bool:
+        """Export environment information"""
+        try:
+            env_info = self.get_environment_info(env_name)
+            output_path = self.base_path / env_name / 'environment_info'
+            output_path.mkdir(parents=True, exist_ok=True)
+            
+            if format == 'md':
+                with open(output_path / 'overview.md', 'w') as f:
+                    f.write(self.system_info.to_markdown())
+            elif format == 'json':
+                with open(output_path / 'overview.json', 'w') as f:
+                    json.dump(env_info, f, indent=2)
+                    
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error exporting environment info: {e}")
+            return False
+
+class EnvironmentMonitor:
+    def __init__(self, env_manager):
+        self.env_manager = env_manager
+        self.update_interval = 300  # 5 minutes
+        
+    def start_monitoring(self):
+        """Start periodic monitoring"""
+        while True:
+            self.update_environments()
+            time.sleep(self.update_interval)
+            
+    def update_environments(self):
+        """Update all environment information"""
+        for env_name in self.env_manager.environments:
+            self.env_manager.update_environment_info(env_name)
+
 @click.group()
 @click.option('--base-path', default='./environments', help='Base path for environments')
 @click.pass_context
@@ -132,6 +219,17 @@ def delete(env_manager, name):
 def list(env_manager):
     """List all environments"""
     env_manager.list_environments()
+
+@cli.command()
+@click.argument('name')
+@click.option('--format', type=click.Choice(['md', 'json']), default='md')
+@click.pass_obj
+def info(env_manager, name, format):
+    """Get detailed environment information"""
+    if env_manager.export_environment_info(name, format):
+        click.echo(f"Environment info exported to {name}/environment_info")
+    else:
+        click.echo("Failed to export environment info")
 
 if __name__ == '__main__':
     cli()

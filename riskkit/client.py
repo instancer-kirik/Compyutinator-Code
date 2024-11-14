@@ -5,10 +5,11 @@ from pathlib import Path
 from datetime import datetime
 from .schemas import RiskCreate, RiskUpdate
 from .conflict import ConflictResolver
-from .config import ApiConfig
+from HMC.config.types import ApiConfig
 from .cache import Cache
 from .offline import OfflineQueue
 from pydantic import ValidationError
+from HMC.secrets_manager import SecretsManager
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from DEV.websocket_client import WebSocketClient
@@ -16,25 +17,39 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 class RiskkitClient:
-    def __init__(self, config: ApiConfig):
+    def __init__(self, config: ApiConfig, secrets_manager: SecretsManager):
         from DEV.websocket_client import WebSocketClient
         
         self.config = config
+        self.secrets_manager = secrets_manager
+        
+        # Retrieve the API key from SecretsManager
+        self.api_key = self.secrets_manager.get_secret("riskkit", "api_key") or config.api_key
+        
         self.headers = {
-            "Authorization": f"Bearer {config.api_key}",
+            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
         self.client = httpx.AsyncClient()
+        
+        # Initialize WebSocketClient with the token from SecretsManager
         self.socket = WebSocketClient(
             base_url=config.socket_url,
-            token=config.api_key,
+            secrets_manager=secrets_manager,  # Pass the secrets manager
             event_manager=None
         )
+        
         self.cache = Cache(config.cache_dir)
         self.offline_queue = OfflineQueue(config.cache_dir)
         self._connected = False
         self.conflict_resolver = ConflictResolver()
         
+    def set_api_key(self, api_key: str):
+        """Set the API key and save it to the secrets manager"""
+        self.secrets_manager.set_secret("riskkit", "api_key", api_key)
+        self.api_key = api_key  # Update the local variable
+        self.headers["Authorization"] = f"Bearer {self.api_key}"  # Update headers
+
     def subscribe_to_project(self, project_id: int):
         """Subscribe to project-specific events"""
         self.socket.subscribe_to_project(project_id)

@@ -45,3 +45,4 @@ class BaseReward:
         reward.value = data.get('value', 0.0)
         reward.status = RewardStatus(data.get('status', 'pending'))
         return reward
+    

@@ -14,7 +14,7 @@ from HMC.context_manager import ContextManager
 from GUX.context_picker_dialog import ContextPickerDialog
 from GUX.diff_merger import DiffMergerWidget
 from PyQt6.QtCore import QEvent
-from SPARE_PARTS.aModel import AModel
+import logging
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QFrame
 from GUX.status_dialog import StatusDialog
 from PyQt6.QtCore import Qt
@@ -40,6 +40,7 @@ from PyQt6.QtWidgets import QPlainTextEdit
 from DEV.utils import extract_code_blocks, extract_diff_blocks, apply_diff_to_content
 
 from GUX.diff_merger import DiffMergerWidget, DiffMergerDialog
+from HMC.ai_backend import AIConfig, ModelType, create_ai_backend
 ##maybe implement profiler to track time and memory usage and optimize
 class CollapsibleSection(QWidget):
     def __init__(self, title, parent=None):
@@ -1003,16 +1004,35 @@ class AIChatWidget(QWidget):
 
     
     def on_model_type_changed(self, model_type):
-        if model_type == 'llama':
-            # Populate with Llama models
-            self.update_model_dropdown(['Llama-3.1-SuperNova-Lite-8.0B-OF32.EF32.IQ4_K_M.gguf'])
-        elif model_type == 'anthropic':
-            # Populate with Anthropic models
-            self.update_model_dropdown(['claude-2.1', 'claude-instant-1.2'])
-        elif model_type == 'openai':
-            # Populate with OpenAI models
-            self.update_model_dropdown(['gpt-3.5-turbo', 'gpt-4'])  # Add GPT-4 if you have access
-            
+        config = AIConfig(
+            model_type=ModelType(model_type),
+            model_name=self.get_default_model_name(model_type),
+            api_key=self.secrets_manager.get_secret(model_type, "api_key")
+        )
+        
+        try:
+            self.ai_backend = create_ai_backend(config)
+            self.update_model_dropdown(self.get_available_models(model_type))
+        except Exception as e:
+            logging.error(f"Failed to initialize AI backend: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to initialize AI backend: {str(e)}")
+
+    def get_default_model_name(self, model_type):
+        defaults = {
+            "local": "Llama-3.1-SuperNova-Lite-8.0B-OF32.EF32.IQ4_K_M.gguf",
+            "anthropic": "Claude-3-5-Sonnet-20240620",
+            "openai": "gpt-3.5-turbo"
+        }
+        return defaults.get(model_type, "")
+
+    def get_available_models(self, model_type):
+        models = {
+            "local": ["Llama-3.1-SuperNova-Lite-8.0B-OF32.EF32.IQ4_K_M.gguf"],
+            "anthropic": ["Claude-3-5-Sonnet-20240620"],
+            "openai": ["gpt-3.5-turbo", "gpt-4"]
+        }
+        return models.get(model_type, [])
+
     def add_message_to_references(self, message):
         self.chat_reference_widget.add_reference(f"User: {message[:30]}...", message)
         self.context_reference_widget.add_context_reference(f"User: {message[:30]}...", message)

@@ -10,7 +10,6 @@ from .enums import (
     ImpactSeverity, ImpactArea, ImpactTimeframe, RewardType, 
     ResourceType, RewardStatus, RewardTier
 )
-from .config import ConfigManager
 
 __all__ = [
     'RiskValidator',
@@ -24,7 +23,6 @@ __all__ = [
     'Transition',
     'RiskkitClient',
     'ApiConfig',
-    'ConfigManager',
     'RiskProbability',
     'EventPriority',
     'ImpactSeverity',

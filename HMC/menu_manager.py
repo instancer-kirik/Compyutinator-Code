@@ -6,7 +6,7 @@ import logging
 from PyQt6.QtWidgets import QInputDialog, QMessageBox
 from PyQt6.QtCore import QObject, Qt
 from PyQt6.QtCore import QTimer
-from HMC.project_dashboard import ProjectDashboard
+from GUX.widgets.project_dashboard import ProjectDashboard
 
 class MenuManager:
     def __init__(self, main_window, cccore):
@@ -42,7 +42,7 @@ class MenuManager:
         
         try:
             if not self.device_manager_dock:
-                from DEV.devices.device_manager import DeviceManagerView
+                from GUX.device_manager_view import DeviceManagerView
                 device_manager = DeviceManagerView(self.main_window)
                 self.device_manager_dock = self.cccore.widget_manager.add_dock_widget(
                     device_manager,
@@ -80,14 +80,24 @@ class MenuManager:
             return None
 
     def create_file_menu(self, menubar):
-        file_menu = menubar.addMenu('&File')
-        file_menu.addAction('&New', self.action_handlers.new_file)
-        file_menu.addAction('&Open', self.action_handlers.open_file)
-        file_menu.addAction('&Save', self.action_handlers.save_file)
-        file_menu.addAction('Save &As', self.action_handlers.save_file_as)
-        file_menu.addSeparator()
-        file_menu.addAction('&Exit', self.main_window.close)
-        return file_menu
+        self.file_menu = menubar.addMenu('&File')
+
+        # Add Open Project by Folder action
+        open_project_action = QAction("Open Project by Folder", self.main_window)
+        open_project_action.triggered.connect(self.cccore.project_manager.open_project_by_folder)
+        self.file_menu.addAction(open_project_action)
+
+        self.file_menu.addAction('&New', self.action_handlers.new_file)
+        self.file_menu.addAction('&Open', self.action_handlers.open_file)
+        self.file_menu.addAction('&Save', self.action_handlers.save_file)
+        self.file_menu.addAction('Save &As', self.action_handlers.save_file_as)
+        
+        # Add a new action for creating a new AuraText window
+        self.file_menu.addAction('New AuraText Window', self.cccore.create_auratext_window)  # Connect to the method that creates a new window
+        
+        self.file_menu.addSeparator()
+        self.file_menu.addAction('&Exit', self.main_window.close)
+        return self.file_menu
 
     def create_edit_menu(self, menubar):
         self.edit_menu = menubar.addMenu('&Edit')
@@ -102,97 +112,93 @@ class MenuManager:
         return self.edit_menu
 
     def create_view_menu(self, menubar):
-        self.view_menu = menubar.addMenu('&View')
-        
-        # Add BigLinks toggle
+        """Create the view menu"""
         try:
-            biglinks_dock = self.cccore.widget_manager.get_or_create_dock("Big Links")
-            if biglinks_dock:
-                self.view_menu.addAction(biglinks_dock.toggleViewAction())
-        except Exception as e:
-            logging.warning(f"BigLinks dock not available: {e}")
-        
-        # Add Device Manager to View menu for consistency
-        device_view = self.view_menu.addAction("Device Manager")
-        device_view.triggered.connect(self.show_device_manager)
-        if self.device_manager_dock:
-            device_view.setChecked(self.device_manager_dock.isVisible())
-            self.device_manager_dock.visibilityChanged.connect(device_view.setChecked)
-        
-        self.view_menu.addSeparator()
-        
-        # Add existing dock widget toggles
-        for dock_name, dock_widget in self.cccore.widget_manager.dock_widgets.items():
-            action = self.create_action(dock_name, lambda checked, w=dock_widget: self.toggle_dock_visibility(w, checked))
-            action.setCheckable(True)
-            action.setChecked(dock_widget.isVisible() if dock_widget else False)
+            view_menu = menubar.addMenu('&View')
             
+            # Add dashboard action
+            dashboard_action = self.create_action(
+                "Project Dashboard",
+                self.action_handlers.show_project_dashboard,
+                shortcut="Ctrl+Shift+D"
+            )
+            view_menu.addAction(dashboard_action)
+            view_menu.addSeparator()
+            
+            # Dashboard view
+            if hasattr(self.action_handlers, 'show_project_dashboard'):
+                self.view_menu.addAction(self.create_action(
+                    "Dashboard",
+                    self.action_handlers.show_project_dashboard,
+                    shortcut="Ctrl+Shift+D"
+                ))
+                
+                self.view_menu.addSeparator()
+            
+            # Add BigLinks toggle
             try:
-                if dock_widget and isinstance(dock_widget, QObject):
-                    parent = dock_widget.parent()
-                    is_visible = dock_widget.isVisible()
-                    action.setChecked(is_visible)
-                    action.triggered.connect(lambda checked, w=dock_widget: self.toggle_dock_visibility(w, checked))
-                else:
-                    action.setEnabled(False)
-                    logging.warning(f"Dock widget '{dock_name}' is not a valid QObject.")
-            except RuntimeError:
-                action.setEnabled(False)
-                logging.warning(f"Dock widget '{dock_name}' has been deleted or is invalid.")
+                biglinks_dock = self.cccore.widget_manager.get_or_create_dock("Big Links")
+                if biglinks_dock:
+                    self.view_menu.addAction(biglinks_dock.toggleViewAction())
             except Exception as e:
-                action.setEnabled(False)
-                logging.error(f"Unexpected error with dock widget '{dock_name}': {str(e)}")
-                # Add separator before new actions
-            self.view_menu.addAction(action)
-        self.view_menu.addSeparator()
-
-        self.view_menu.addSeparator()
-        self.view_menu.addAction(self.create_action("Show Demo Diff Merger", self.spawn_prefilled_merger))
-         # Add dock widget toggles
-        
-        # Add Risk Manager action
-        risk_manager_action = QAction('Risk Manager', self.main_window)
-        risk_manager_action.setStatusTip('Show Risk Manager')
-        risk_manager_action.triggered.connect(lambda: self.cccore.widget_manager.show_dock_widget('Risk Manager'))
-        self.view_menu.addAction(risk_manager_action)
-        # Add Many Projects Manager toggle
-        # try:
-        #     # Add a toggle action to the View menu
-        #     # Add a toggle action to the View menu
-        #     self.view_menu.addAction(self.cccore.widget_manager.many_projects_manager.toggleViewAction())
-
-        #     #self.add_toggle_view_action(view_menu, "Many Projects Manager", self.cccore.widget_manager.many_projects_manager)
-        # except AttributeError:
-        #     logging.warning("Many Projects Manager not found, skipping addition of toggle action.")
-        
-        # Add Advanced Data Viewer action
-        try:
-            _, advanced_data_viewer_action = self.cccore.widget_manager.add_advanced_data_viewer_dock()
-            self.view_menu.addAction(advanced_data_viewer_action)
+                logging.warning(f"BigLinks dock not available: {e}")
             
-        except AttributeError:
-            logging.warning("Advanced Data Viewer not found, skipping addition of toggle action.")
-        
-        # Add Risk Manager action
-        risk_manager_action = QAction('Risk Manager', self.main_window)
-        risk_manager_action.setStatusTip('Show Risk Manager')
-        risk_manager_action.triggered.connect(lambda: self.cccore.widget_manager.show_dock_widget('Risk Manager'))
-        self.view_menu.addAction(risk_manager_action)
-        self.view_menu.addAction(self.create_action('Log Viewer', lambda: self.cccore.widget_manager.show_dock_widget('Log Viewer')))
-        return self.view_menu
+            # Add Device Manager to View menu for consistency
+            device_view = self.view_menu.addAction("Device Manager")
+            device_view.triggered.connect(self.show_device_manager)
+            if self.device_manager_dock:
+                device_view.setChecked(self.device_manager_dock.isVisible())
+                self.device_manager_dock.visibilityChanged.connect(device_view.setChecked)
+            
+            # Add Many Projects Manager toggle
+            try:
+                many_projects_dock = self.cccore.widget_manager.many_projects_manager
+                if many_projects_dock:
+                    action = many_projects_dock.toggleViewAction()
+                    self.view_menu.addAction(action)
+            except AttributeError:
+                logging.warning("Many Projects Manager not found, skipping addition of toggle action.")
+            
+            # Add Risk Manager action
+            risk_manager_action = QAction('Risk Manager', self.main_window)
+            risk_manager_action.setStatusTip('Show Risk Manager')
+            risk_manager_action.triggered.connect(lambda: self.cccore.widget_manager.show_dock_widget('Risk Manager'))
+            self.view_menu.addAction(risk_manager_action)
+            
+            # Add other existing dock widget toggles
+            for dock_name, dock_widget in self.cccore.widget_manager.dock_widgets.items():
+                action = self.create_action(dock_name, lambda checked, w=dock_widget: self.toggle_dock_visibility(w, checked))
+                action.setCheckable(True)
+                action.setChecked(dock_widget.isVisible() if dock_widget else False)
+                self.view_menu.addAction(action)
+            
+            return self.view_menu
+            
+        except Exception as e:
+            logging.error(f"Error creating view menu: {e}")
+            return menubar.addMenu('&View')  # Return empty menu instead of None
 
     
     def create_tools_menu(self, menubar):
         """Create tools menu"""
         tools_menu = menubar.addMenu('&Tools')
         
-        # Add Big Links action
-        big_links_action = QAction('Big Links', self.main_window)
-        big_links_action.setShortcut("Ctrl+B")
-        big_links_action.triggered.connect(
-            lambda: self.cccore.widget_manager.show_dock_widget("Big Links")
-        )
-        tools_menu.addAction(big_links_action)
+        # Add Device Management submenu
+        device_menu = tools_menu.addMenu("Device Management")
+        
+        show_device_manager = device_menu.addAction("Device Manager")
+        show_device_manager.triggered.connect(self.cccore.widget_manager.show_device_manager)
+        
+        show_nix_browser = device_menu.addAction("Nix Store Browser")
+        show_nix_browser.triggered.connect(self.cccore.widget_manager.show_nix_browser)
+        
+        manage_flows = device_menu.addAction("Manage Device Flows")
+        manage_flows.triggered.connect(self.show_flow_manager)
+        
+        device_menu.addSeparator()
+        
+        refresh_devices = device_menu.addAction("Refresh Devices")
+        refresh_devices.triggered.connect(self.refresh_devices)
         
         tools_menu.addAction(self.create_action("Plugin Manager", self.action_handlers.show_plugin_manager))
         tools_menu.addAction(self.create_action("Theme Manager", self.action_handlers.show_theme_manager))
@@ -205,21 +211,13 @@ class MenuManager:
             tools_menu.addAction(self.create_action("CodeToolWidget", self.cccore.widget_manager.show_cool_dock))
         except Exception as e:
             logging.error(f"Error adding CodeToolWidget action: {str(e)}")
-            
-        # Add Device Manager submenu
-        device_menu = tools_menu.addMenu("Device Manager")
-        
-        show_device_manager = device_menu.addAction("Show Device Manager")
-        show_device_manager.triggered.connect(self.show_device_manager)
-        
-        manage_flows = device_menu.addAction("Manage Device Flows")
-        manage_flows.triggered.connect(self.show_flow_manager)
-        
-        device_menu.addSeparator()
-        
-        refresh_devices = device_menu.addAction("Refresh Devices")
-        refresh_devices.triggered.connect(self.refresh_devices)
-        
+        # Add Big Links action
+        big_links_action = QAction('Big Links', self.main_window)
+        big_links_action.setShortcut("Ctrl+B")
+        big_links_action.triggered.connect(
+            lambda: self.cccore.widget_manager.show_dock_widget("Big Links")
+        )
+        tools_menu.addAction(big_links_action) 
         return tools_menu
 
     def create_vault_menu(self, menubar):
@@ -242,37 +240,44 @@ class MenuManager:
         return self.graph_menu
 
     def create_workspace_menu(self, menubar):
-        self.workspace_menu = menubar.addMenu('&Workspace')
-        
-        # Project management actions
-        self.workspace_menu.addAction(self.create_action("Create Workspace", self.main_window.create_workspace))
-        self.workspace_menu.addAction(self.create_action("Switch Workspace", self.main_window.switch_workspace))
-        self.workspace_menu.addAction(self.create_action("Manage Workspaces", self.action_handlers.manage_workspaces))
-        
-        # Add project dashboard actions
-        self.workspace_menu.addSeparator()
-        self.workspace_menu.addAction(self.create_action("Project Dashboard", self.show_project_dashboard))
-        self.workspace_menu.addAction(self.create_action("Project Settings", self.action_handlers.show_project_settings))
-        
-        return self.workspace_menu
+        """Create the workspace menu"""
+        try:
+            self.workspace_menu = menubar.addMenu('&Workspace')
+            
+            # Add workspace management items
+            if hasattr(self.action_handlers, 'manage_workspaces'):
+                self.workspace_menu.addAction(self.create_action(
+                    "Manage Workspaces",
+                    self.action_handlers.manage_workspaces
+                ))
+                
+            if hasattr(self.action_handlers, 'show_project_dashboard'):
+                self.workspace_menu.addAction(self.create_action(
+                    "Project Dashboard",
+                    self.action_handlers.show_project_dashboard,
+                    shortcut="Ctrl+Alt+D"
+                ))
+            
+            return self.workspace_menu
+            
+        except Exception as e:
+            logging.error(f"Error creating workspace menu: {e}")
+            return menubar.addMenu('&Workspace')  # Return empty menu instead of None
 
     def show_project_dashboard(self):
         """Show the project dashboard for the current project"""
         try:
             current_project = self.cccore.project_manager.get_current_project()
             if current_project:
-                dashboard = ProjectDashboard(self.main_window, self.cccore)
-                dashboard.update_project_info(current_project)
-                
-                # Add to tab widget
-                tab_widget = self.main_window.tab_widget
-                tab_widget.addTab(dashboard, f"Dashboard - {current_project}")
-                tab_widget.setCurrentWidget(dashboard)
+                # Use the widget manager to show the dashboard
+                self.cccore.widget_manager.show_dashboard(current_project.name)
             else:
                 QMessageBox.warning(self.main_window, "No Project", 
                                   "Please select or create a project first.")
         except Exception as e:
             logging.error(f"Error showing project dashboard: {e}")
+            QMessageBox.warning(self.main_window, "Error",
+                              f"Could not show project dashboard: {str(e)}")
 
     def create_help_menu(self, menubar):
         self.help_menu = menubar.addMenu('&Help')
@@ -297,8 +302,14 @@ class MenuManager:
             action = QAction(text, self.main_window)
             if icon:
                 action.setIcon(QIcon(icon))
-            if shortcut:
+            
+            # Use configured hotkey if available
+            configured_shortcut = self.cccore.settings_manager.get_hotkey(text)
+            if configured_shortcut:
+                action.setShortcut(configured_shortcut)
+            elif shortcut:  # Fall back to provided shortcut
                 action.setShortcut(shortcut)
+            
             action.triggered.connect(slot)
             return action
         except Exception as e:
@@ -382,22 +393,10 @@ if __name__ == "__main__":
             self.cccore.macro_manager.play_macro(name)
             
     def show_device_manager(self):
-        """Show the device manager dock"""
-        try:
-            if not self.device_manager_dock:
-                self.initialize_docks()
-                
-            if self.device_manager_dock:
-                self.device_manager_dock.show()
-                self.device_manager_dock.raise_()
-            else:
-                raise RuntimeError("Device manager dock not initialized")
-                
-        except Exception as e:
-            logging.error(f"Error showing device manager: {e}")
-            QMessageBox.warning(self.main_window, "Error", 
-                              f"Could not show device manager: {str(e)}")
-            
+        """Show device manager dock"""
+        if self.cccore.widget_manager:
+            self.cccore.widget_manager.show_device_manager()
+
     def show_flow_manager(self):
         """Show the device flow manager dialog"""
         try:
@@ -431,3 +430,21 @@ if __name__ == "__main__":
             logging.error(f"Error refreshing devices: {e}")
             QMessageBox.warning(self.main_window, "Error", 
                               f"Could not refresh devices: {str(e)}")
+
+    def init_menu_bar(self):
+        """Initialize the menu bar"""
+        try:
+            self.main_window.menuBar().clear()  # Clear existing menus
+            # Create main menus
+            self.file_menu = self.create_file_menu(self.main_window.menuBar())
+            self.edit_menu = self.create_edit_menu(self.main_window.menuBar())
+            self.view_menu = self.create_view_menu(self.main_window.menuBar())
+            self.tools_menu = self.create_tools_menu(self.main_window.menuBar())
+            self.vault_menu = self.create_vault_menu(self.main_window.menuBar())
+            self.graph_menu = self.create_graph_menu(self.main_window.menuBar())
+            self.workspace_menu = self.create_workspace_menu(self.main_window.menuBar())
+            self.help_menu = self.create_help_menu(self.main_window.menuBar())
+            
+            logging.info("Menu bar initialized successfully")
+        except Exception as e:
+            logging.error(f"Error initializing menu bar: {str(e)}")

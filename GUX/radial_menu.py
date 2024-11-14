@@ -9,6 +9,7 @@ class RadialMenu(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint)
         self.options = []
+        self.hotkeys = {}
         self.hover_index = -1
         self.radius = 120
         self.inner_radius = 40
@@ -18,10 +19,13 @@ class RadialMenu(QWidget):
         self.background_color = QColor(240, 240, 240, 200)
         self.hover_color = QColor(200, 200, 255)
         self.text_color = QColor(0, 0, 0)
+        self.hotkey_color = QColor(100, 100, 100)
         self.font = QFont("Arial", 10)
+        self.hotkey_font = QFont("Arial", 8)
 
-    def set_options(self, options):
-        self.options = options
+    def set_options_with_hotkeys(self, options_dict):
+        self.options = list(options_dict.keys())
+        self.hotkeys = options_dict
         self.update()
 
     def show_at(self, pos):
@@ -38,22 +42,44 @@ class RadialMenu(QWidget):
         center_x = self.width() / 2
         center_y = self.height() / 2
 
+        painter.setBrush(self.background_color)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(QPoint(int(center_x), int(center_y)), self.radius, self.radius)
+
         for i, option in enumerate(self.options):
             angle = 2 * math.pi * i / len(self.options)
-            x = center_x + self.radius * math.cos(angle)
-            y = center_y + self.radius * math.sin(angle)
+            x = center_x + self.radius * 0.7 * math.cos(angle)
+            y = center_y + self.radius * 0.7 * math.sin(angle)
 
-            # Convert to integers
-            x_int = int(x)
-            y_int = int(y)
-            option_radius_int = int(self.option_radius)
+            circle_rect = QRect(
+                int(x - self.option_radius),
+                int(y - self.option_radius),
+                self.option_radius * 2,
+                self.option_radius * 2
+            )
 
-            # Use integer values for QRect
-            text_rect = QRect(x_int - option_radius_int, y_int - option_radius_int,
-                              2 * option_radius_int, 2 * option_radius_int)
+            if i == self.hover_index:
+                painter.setBrush(self.hover_color)
+            else:
+                painter.setBrush(self.background_color)
 
-            painter.drawEllipse(text_rect)
-            painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, option)
+            painter.setPen(QPen(self.text_color))
+            painter.drawEllipse(circle_rect)
+
+            painter.setFont(self.font)
+            painter.drawText(circle_rect, Qt.AlignmentFlag.AlignCenter, option)
+
+            if option in self.hotkeys:
+                hotkey_rect = QRect(
+                    circle_rect.left(),
+                    circle_rect.bottom() + 5,
+                    circle_rect.width(),
+                    20
+                )
+                painter.setFont(self.hotkey_font)
+                painter.setPen(QPen(self.hotkey_color))
+                painter.drawText(hotkey_rect, Qt.AlignmentFlag.AlignCenter, 
+                               f"[{self.hotkeys[option]}]")
 
         painter.end()
 

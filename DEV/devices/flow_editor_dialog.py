@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QLineEdit, QListWidget, QLabel, QMessageBox
 )
 from .device_flows import DeviceFlow
-from .device_manager import DeviceCommand
+from .device_command import DeviceCommand
 
 class FlowEditorDialog(QDialog):
     def __init__(self, parent=None, flow=None):

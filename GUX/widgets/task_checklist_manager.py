@@ -2,10 +2,10 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTreeView, QLabel,
     QLineEdit, QMessageBox, QFileDialog, QTextBrowser, QMenu, QMenuBar,
     QDialog, QFormLayout, QDateTimeEdit, QComboBox, QSpinBox, QGroupBox,
-    QDialogButtonBox, QTextEdit, QWidget, QGridLayout
+    QDialogButtonBox, QTextEdit, QWidget, QGridLayout, QToolBar
 )
 from PyQt6.QtCore import Qt, QTimer, QDateTime
-from PyQt6.QtGui import QStandardItemModel, QStandardItem, QKeySequence, QShortcut
+from PyQt6.QtGui import QStandardItemModel, QStandardItem, QKeySequence, QShortcut, QAction
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Dict, Optional, Any, Tuple
@@ -52,7 +52,7 @@ class TaskChecklistManager(TaskManagerBase):
         self.risk_manager = risk_manager
         self.event_manager = EventManager()
         self.data_mux = DataMux()
-        
+        self.tree_model = QStandardItemModel()
         self.setup_ui()
         self.setup_auto_save()
 
@@ -60,48 +60,114 @@ class TaskChecklistManager(TaskManagerBase):
         """Setup the UI components"""
         self.setWindowTitle("Task Checklist Manager")
         self.setGeometry(100, 100, 1000, 800)
+        
+        # Create main layout
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
         
-        self.setup_tree_view()
-        self.setup_menu()
-        self.setup_toolbar()
-        self.setup_status_panel()
+        # Initialize UI components in order
+        self._init_toolbar()
         self.setup_filter_panel()
+        self.setup_tree_view()
+        self.setup_status_panel()
+        
+        # Setup additional functionality
+        self.setup_keyboard_shortcuts()
+        self.setup_drag_drop()
+        self.setup_user_preferences()
+        self.setup_task_templates()
+        self.setup_auto_save()
 
-    def setup_filter_panel(self):
-        filter_group = QGroupBox("Filters")
-        filter_layout = QHBoxLayout()
+    def _init_toolbar(self):
+        """Initialize the toolbar with common actions"""
+        toolbar = QToolBar()
+        
+        # Add task action
+        add_action = QAction("Add Task", self)
+        add_action.setShortcut("Ctrl+N")
+        add_action.triggered.connect(self.add_task)
+        toolbar.addAction(add_action)
+        
+        # Save action
+        save_action = QAction("Save", self)
+        save_action.setShortcut("Ctrl+S")
+        save_action.triggered.connect(self.save_checklist)
+        toolbar.addAction(save_action)
+        
+        # Refresh action
+        refresh_action = QAction("Refresh", self)
+        refresh_action.setShortcut("F5")
+        refresh_action.triggered.connect(self.refresh_view)
+        toolbar.addAction(refresh_action)
+        
+        self.layout.addWidget(toolbar)
 
-        # Category filter
-        self.category_filter = QComboBox()
-        self.category_filter.addItems(["All", "Integration", "Development", "Security", "Documentation"])
-        self.category_filter.currentTextChanged.connect(self.apply_filters)
-        filter_layout.addWidget(QLabel("Category:"))
-        filter_layout.addWidget(self.category_filter)
+    def setup_auto_save(self):
+        """Setup auto-save functionality"""
+        self.auto_save_timer = QTimer()
+        self.auto_save_timer.timeout.connect(self.save_checklist)
+        interval = self.preferences.get('auto_save_interval', 300) * 1000  # Convert to milliseconds
+        self.auto_save_timer.start(interval)
 
-        # Priority filter
-        self.priority_filter = QComboBox()
-        self.priority_filter.addItems(["All"] + [p.name for p in RiskPriority])
-        self.priority_filter.currentTextChanged.connect(self.apply_filters)
-        filter_layout.addWidget(QLabel("Priority:"))
-        filter_layout.addWidget(self.priority_filter)
+    def refresh_view(self):
+        """Refresh the task view and update all UI elements"""
+        try:
+            if self.project_manager:
+                current_project = self.project_manager.get_current_project()
+                if current_project:
+                    self.load_tasks(current_project)
+                    self.update_status_panel()
+                    self.apply_filters()
+        except Exception as e:
+            logging.error(f"Error refreshing view: {e}")
 
-        # Status filter
-        self.status_filter = QComboBox()
-        self.status_filter.addItems(["All", "Pending", "In Progress", "Completed"])
-        self.status_filter.currentTextChanged.connect(self.apply_filters)
-        filter_layout.addWidget(QLabel("Status:"))
-        filter_layout.addWidget(self.status_filter)
+    def load_tasks(self, project):
+        """Load tasks from project"""
+        try:
+            self.tree_model.clear()
+            self.tree_model.setHorizontalHeaderLabels([
+                "Task", "Category", "Status", "Priority", 
+                "Risk Level", "Impact", "Area", "Due Date"
+            ])
+            
+            tasks = project.get_tasks()
+            for task in tasks:
+                self.add_task_to_tree(task)
+                
+        except Exception as e:
+            logging.error(f"Error loading tasks: {e}")
 
-        # Search box
-        self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("Search tasks...")
-        self.search_box.textChanged.connect(self.apply_filters)
-        filter_layout.addWidget(self.search_box)
+    def new_checklist(self):
+        """Create a new empty checklist"""
+        try:
+            self.tree_model.clear()
+            self.tree_model.setHorizontalHeaderLabels([
+                "Task", "Category", "Status", "Priority",
+                "Risk Level", "Impact", "Area", "Due Date"
+            ])
+            self.current_file = None
+            self.unsaved_changes = False
+            self.update_status_panel()
+            return True
+        except Exception as e:
+            self.event_manager.broadcast_news(
+                "Checklist Error",
+                f"Failed to create new checklist: {e}",
+                EventPriority.HIGH
+            )
+            return False
 
-        filter_group.setLayout(filter_layout)
-        self.layout.addWidget(filter_group)
+    def add_task(self, parent_index=None):
+        """Add a new task to the checklist"""
+        dialog = TaskDialog(self)
+        if dialog.exec():
+            task_data = dialog.get_task_data()
+            success = self.add_task_to_tree(task_data, parent_index)
+            if success:
+                self.unsaved_changes = True
+                self.update_status_panel()
+            return success
+        return False
 
     def setup_tree_view(self):
         self.tree_model = QStandardItemModel()
@@ -280,15 +346,33 @@ class TaskChecklistManager(TaskManagerBase):
             self.apply_theme(self.preferences['theme'])
 
     def setup_task_templates(self):
-        """Setup predefined task templates"""
-        self.templates = {
-            'Integration Testing': self.load_template('integration_testing'),
-            'Security Audit': self.load_template('security_audit'),
-            'Documentation': self.load_template('documentation'),
-            'Release Checklist': self.load_template('release'),
-            'Code Review': self.load_template('code_review'),
-            'Custom': []  # User-defined templates
-        }
+        """Setup task templates"""
+        try:
+            self.templates = {}
+            template_dir = os.path.join(os.path.dirname(__file__), 'templates')
+            
+            if not os.path.exists(template_dir):
+                os.makedirs(template_dir)
+                
+            # Default templates
+            default_templates = {
+                'integration_testing': 'templates/integration_testing.md',
+                'security_audit': 'templates/security_audit.md',
+                'documentation': 'templates/documentation.md',
+                'release': 'templates/release.md',
+                'code_review': 'templates/code_review.md'
+            }
+            
+            for name, path in default_templates.items():
+                template_path = os.path.join(template_dir, path)
+                if os.path.exists(template_path):
+                    with open(template_path, 'r') as f:
+                        self.templates[name] = f.read()
+                else:
+                    logging.warning(f"Template not found: {name}")
+                
+        except Exception as e:
+            logging.error(f"Error setting up task templates: {e}")
 
     def load_template(self, template_name: str) -> List[TaskCheckItem]:
         """Load a task template from file or resources"""
@@ -444,183 +528,86 @@ class TaskChecklistManager(TaskManagerBase):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to save checklist: {e}")
 
-    def setup_menu(self):
-        """Setup main menu bar"""
-        menubar = QMenuBar()
-        self.layout.setMenuBar(menubar)
-
-        # File Menu
-        file_menu = menubar.addMenu("File")
-        file_menu.addAction("New Checklist", self.new_checklist, QKeySequence.StandardKey.New)
-        file_menu.addAction("Open...", self.open_checklist, QKeySequence.StandardKey.Open)
-        file_menu.addAction("Save", self.save_checklist, QKeySequence.StandardKey.Save)
-        file_menu.addAction("Save As...", lambda: self.save_checklist(None), QKeySequence.StandardKey.SaveAs)
-        file_menu.addSeparator()
-        file_menu.addAction("Export...", self.export_checklist)
-        file_menu.addAction("Import...", self.import_checklist)
-        file_menu.addSeparator()
-        file_menu.addAction("Exit", self.close, QKeySequence.StandardKey.Quit)
-
-        # Edit Menu
-        edit_menu = menubar.addMenu("Edit")
-        edit_menu.addAction("Add Task", self.add_task, QKeySequence("Ctrl+T"))
-        edit_menu.addAction("Delete Task", lambda: self.remove_task(self.tree_view.currentIndex()), QKeySequence.StandardKey.Delete)
-        edit_menu.addSeparator()
-        edit_menu.addAction("Find...", lambda: self.search_box.setFocus(), QKeySequence.StandardKey.Find)
-
-        # View Menu
-        view_menu = menubar.addMenu("View")
-        view_menu.addAction("Expand All", self.tree_view.expandAll)
-        view_menu.addAction("Collapse All", self.tree_view.collapseAll)
-        view_menu.addSeparator()
-        view_menu.addAction("Refresh", self.refresh_view, QKeySequence.StandardKey.Refresh)
-
-    def setup_toolbar(self):
-        """Setup toolbar with common actions"""
-        toolbar = QHBoxLayout()
+    def setup_filter_panel(self):
+        """Setup the filtering options panel"""
+        filter_group = QGroupBox("Filters")
+        filter_layout = QGridLayout()
         
-        # Add Task Button
-        add_btn = QPushButton("Add Task")
-        add_btn.clicked.connect(self.add_task)
-        toolbar.addWidget(add_btn)
+        # Status filter
+        self.status_filter = QComboBox()
+        self.status_filter.addItems(["All", "Active", "Completed"])
+        self.status_filter.currentTextChanged.connect(self.apply_filters)
+        filter_layout.addWidget(QLabel("Status:"), 0, 0)
+        filter_layout.addWidget(self.status_filter, 0, 1)
         
-        # Import Template Button
-        import_btn = QPushButton("Import Template")
-        import_btn.clicked.connect(self.import_template)
-        toolbar.addWidget(import_btn)
+        # Priority filter
+        self.priority_filter = QComboBox()
+        self.priority_filter.addItems(["All"] + [p.name for p in RiskPriority])
+        self.priority_filter.currentTextChanged.connect(self.apply_filters)
+        filter_layout.addWidget(QLabel("Priority:"), 0, 2)
+        filter_layout.addWidget(self.priority_filter, 0, 3)
         
-        # Refresh Button
-        refresh_btn = QPushButton("Refresh")
-        refresh_btn.clicked.connect(self.refresh_view)
-        toolbar.addWidget(refresh_btn)
+        # Category filter
+        self.category_filter = QComboBox()
+        self.category_filter.addItems(["All", "Development", "Integration", "Security", "Documentation"])
+        self.category_filter.currentTextChanged.connect(self.apply_filters)
+        filter_layout.addWidget(QLabel("Category:"), 1, 0)
+        filter_layout.addWidget(self.category_filter, 1, 1)
         
-        toolbar.addStretch()  # Add spacing
-        self.layout.addLayout(toolbar)
+        # Assigned to filter
+        self.assigned_filter = QComboBox()
+        self.assigned_filter.addItems(["All"])  # Will be populated with team members
+        self.assigned_filter.currentTextChanged.connect(self.apply_filters)
+        filter_layout.addWidget(QLabel("Assigned To:"), 1, 2)
+        filter_layout.addWidget(self.assigned_filter, 1, 3)
+        
+        filter_group.setLayout(filter_layout)
+        self.layout.addWidget(filter_group)
 
-    def is_task_overdue(self, row: int) -> bool:
-        """Check if task is overdue"""
-        task_item = self.tree_model.item(row, 0)
-        if not task_item:
-            return False
-        
-        task_data: TaskCheckItem = task_item.data(Qt.ItemDataRole.UserRole)
-        if not task_data or not task_data.due_date:
-            return False
-            
-        return task_data.due_date < datetime.now() and task_data.completed is False
-
-    def get_task_data(self, row: int) -> Dict[str, Any]:
-        """
-        Get task data as dictionary for saving
-        
-        Args:
-            row: Row index in tree model
-            
-        Returns:
-            Dictionary containing task data
-            
-        Raises:
-            IndexError: If row is invalid
-        """
-        task_item = self.tree_model.item(row, 0)
-        if not task_item:
-            raise IndexError(f"Invalid row index: {row}")
-        
-        task_data: TaskCheckItem = task_item.data(Qt.ItemDataRole.UserRole)
-        if not task_data:
-            return {}
-            
-        return {
-            "text": task_data.text,
-            "completed": task_data.completed,
-            "category": task_data.category,
-            "priority": task_data.priority.name,
-            "risk_level": task_data.risk_level.name,
-            "impact": task_data.impact.name,
-            "impact_area": task_data.impact_area.name,
-            "timeframe": task_data.timeframe.name,
-            "assigned_to": task_data.assigned_to,
-            "due_date": task_data.due_date.isoformat() if task_data.due_date else None,
-            "dependencies": task_data.dependencies,
-            "related_tasks": task_data.related_tasks,
-            "related_risks": task_data.related_risks,
-            "notes": task_data.notes,
-            "created_at": task_data.created_at.isoformat(),
-            "updated_at": task_data.updated_at.isoformat(),
-            "metadata": task_data.metadata
-        }
-
-    def add_task_to_tree(self, task_data: TaskCheckItem, parent_index=None):
-        """Add task to tree model"""
+    def apply_filters(self):
+        """Apply all active filters to the task list"""
         try:
-            items = [
-                QStandardItem(task_data.text),
-                QStandardItem(task_data.category),
-                QStandardItem("Not Started"),
-                QStandardItem(task_data.priority.name),
-                QStandardItem(task_data.risk_level.name),
-                QStandardItem(task_data.impact.name),
-                QStandardItem(task_data.impact_area.name),
-                QStandardItem(task_data.due_date.strftime("%Y-%m-%d") if task_data.due_date else "")
-            ]
+            status_filter = self.status_filter.currentText()
+            priority_filter = self.priority_filter.currentText()
+            category_filter = self.category_filter.currentText()
+            assigned_filter = self.assigned_filter.currentText()
             
-            items[0].setData(task_data, Qt.ItemDataRole.UserRole)
-            
-            if parent_index and parent_index.isValid():
-                parent_item = self.tree_model.itemFromIndex(parent_index)
-                if parent_item:
-                    parent_item.appendRow(items)
-                else:
-                    raise ValueError("Invalid parent item")
-            else:
-                self.tree_model.appendRow(items)
+            for i in range(self.task_list.topLevelItemCount()):
+                item = self.task_list.topLevelItem(i)
+                task_data = self.get_task_data_from_item(item)
                 
-            return True
+                # Check each filter condition
+                show = True
+                if status_filter != "All":
+                    show = show and (
+                        (status_filter == "Completed" and task_data.completed) or
+                        (status_filter == "Active" and not task_data.completed)
+                    )
+                
+                if priority_filter != "All":
+                    show = show and (task_data.priority.name == priority_filter)
+                    
+                if category_filter != "All":
+                    show = show and (task_data.category == category_filter)
+                    
+                if assigned_filter != "All":
+                    show = show and (task_data.assigned_to == assigned_filter)
+                    
+                item.setHidden(not show)
+                
         except Exception as e:
-            self.event_manager.broadcast_news(
-                "Task Error",
-                f"Failed to add task: {e}",
-                EventPriority.HIGH
-            )
-            return False
+            logging.error(f"Error applying filters: {e}")
 
-    def add_task_from_template(self, template_name: str, parent_index=None):
-        """Add tasks from a template"""
-        tasks = self.load_template(template_name)
-        for task in tasks:
-            self.add_task_to_tree(task, parent_index)
-        self.update_status_panel()
-
-    def import_template(self):
-        """Import a template file"""
-        filepath, _ = QFileDialog.getOpenFileName(
-            self, "Import Template", "", "Markdown Files (*.md);;All Files (*)"
+    def get_task_data_from_item(self, item) -> TaskCheckItem:
+        """Extract task data from a QTreeWidgetItem"""
+        return TaskCheckItem(
+            text=item.text(0),
+            completed=item.text(2) == "Completed",
+            category=item.text(3),
+            priority=RiskPriority[item.text(1)] if item.text(1) else RiskPriority.MEDIUM,
+            assigned_to=item.text(4),
+            due_date=datetime.strptime(item.text(5), "%Y-%m-%d") if item.text(5) else None
         )
-        if filepath:
-            try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    tasks = self.parse_template(f.read())
-                for task in tasks:
-                    self.add_task_to_tree(task)
-                self.update_status_panel()
-            except Exception as e:
-                QMessageBox.critical(self, "Import Error", f"Failed to import template: {e}")
-
-    def export_checklist(self, filepath: Optional[str] = None):
-        """Export current checklist as template"""
-        if not filepath:
-            filepath, _ = QFileDialog.getSaveFileName(
-                self, "Export Checklist", "", "Markdown Files (*.md);;All Files (*)"
-            )
-        
-        if filepath:
-            try:
-                tasks = [self.get_task_data(row) for row in range(self.tree_model.rowCount())]
-                content = self.generate_template_content(tasks)
-                with open(filepath, 'w', encoding='utf-8') as f:
-                    f.write(content)
-            except Exception as e:
-                QMessageBox.critical(self, "Export Error", f"Failed to export checklist: {e}")
 
 class TaskDialog(QDialog):
     def __init__(self, parent=None, task_data=None):
@@ -707,3 +694,46 @@ class TaskDialog(QDialog):
         if task.due_date:
             self.due_date.setDateTime(task.due_date)
         self.notes.setPlainText(task.notes)
+
+    def get_task_data(self, row: int) -> TaskCheckItem:
+        """Get task data from row"""
+        item = self.tree_model.item(row, 0)
+        if item:
+            return item.data(Qt.ItemDataRole.UserRole)
+        return None
+
+    def calculate_risk_score(self) -> float:
+        """Calculate overall risk score"""
+        total_score = 0
+        total_tasks = self.tree_model.rowCount()
+        
+        if total_tasks == 0:
+            return 0.0
+        
+        for row in range(total_tasks):
+            task = self.get_task_data(row)
+            if task:
+                priority_score = {
+                    RiskPriority.LOW: 1,
+                    RiskPriority.MEDIUM: 2,
+                    RiskPriority.HIGH: 3,
+                    RiskPriority.CRITICAL: 4
+                }.get(task.priority, 0)
+                
+                impact_score = {
+                    ImpactSeverity.LOW: 1,
+                    ImpactSeverity.MEDIUM: 2,
+                    ImpactSeverity.HIGH: 3,
+                    ImpactSeverity.CRITICAL: 4
+                }.get(task.impact, 0)
+                
+                total_score += (priority_score * impact_score)
+        
+        return total_score / total_tasks
+
+    def is_task_overdue(self, row: int) -> bool:
+        """Check if task is overdue"""
+        task = self.get_task_data(row)
+        if task and task.due_date:
+            return task.due_date < datetime.now()
+        return False

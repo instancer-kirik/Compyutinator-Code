@@ -1,0 +1,27 @@
+{
+    "seo_config": {
+        "site_name": "",
+        "default_title_template": "%s | Your Brand",
+        "default_description": "",
+        "default_keywords": [],
+        "social_media": {
+            "twitter_card": "summary_large_image",
+            "twitter_site": "@yourbrand",
+            "og_type": "website",
+            "og_site_name": "Your Brand"
+        },
+        "structured_data": {
+            "organization": {
+                "@type": "Organization",
+                "name": "",
+                "url": "",
+                "logo": ""
+            }
+        },
+        "tracking": {
+            "google_analytics_id": "",
+            "google_search_console": "",
+            "bing_webmaster": ""
+        }
+    }
+}

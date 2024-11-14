@@ -32,7 +32,11 @@ class FileOutlineWidget(QTreeWidget):
             f"Line {symbol.line}"
         ])
         
-        # Add icon or style based on symbol type
+        # Store symbol and file path for reference
+        item.symbol = symbol
+        item.file_path = parent_item.file_path
+        
+        # Add icon based on symbol type
         if symbol.type == 'class':
             item.setIcon(0, self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon))
         elif symbol.type in ('function', 'method'):

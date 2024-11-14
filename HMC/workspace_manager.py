@@ -47,7 +47,7 @@ class WorkspaceManager:
     def save_config(self):
         config = {
             'default_workspace': self.default_workspace_name,
-            'active_workspace': self.active_workspace_name if self.active_workspace else None
+            'active_workspace': self.active_workspace_name if self.active_workspaces.get(0) else None
         }
         os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
         with open(self.config_file, 'w') as f:

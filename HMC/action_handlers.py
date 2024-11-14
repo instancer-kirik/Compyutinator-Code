@@ -347,8 +347,44 @@ class ActionHandlers:
         pass
 
     def manage_workspaces(self):
-        # Implement workspace management functionality
-        pass
+        """Handle workspace management"""
+        try:
+            if hasattr(self.cccore, 'workspace_manager'):
+                self.cccore.workspace_manager.show_workspace_manager()
+            else:
+                QMessageBox.warning(
+                    self.main_window,
+                    "Not Available",
+                    "Workspace management is not available."
+                )
+        except Exception as e:
+            logging.error(f"Error managing workspaces: {e}")
+            QMessageBox.warning(
+                self.main_window,
+                "Error",
+                f"Failed to open workspace manager: {str(e)}"
+            )
+
+    def show_dashboard(self, main_window):
+        self.main_window=main_window
+        """Show the project dashboard"""
+        try:
+            current_project = self.cccore.project_manager.get_current_project()
+            if current_project:
+                self.cccore.widget_manager.show_dashboard(current_project)
+            else:
+                QMessageBox.warning(
+                    self.main_window,
+                    "No Project",
+                    "Please select or create a project first."
+                )
+        except Exception as e:
+            logging.error(f"Error showing project dashboard: {e}")
+            QMessageBox.warning(
+                self.main_window,
+                "Error",
+                f"Could not show dashboard: {str(e)}"
+            )
 
     def show_documentation(self):
         # Show or open documentation
@@ -405,4 +441,65 @@ class ActionHandlers:
     #     self.cccore.theme_manager.toggle_visibility()
     # def toggle_settings_manager(self):
     #     self.cccore.settings_manager.toggle_visibility()
+
+    def create_workspace(self):
+        """Handle create workspace action"""
+        try:
+            vault_dirs = self.cccore.vault_manager.get_vault_directories()
+            if not vault_dirs:
+                QMessageBox.warning(
+                    self.main_window,
+                    "No Vaults",
+                    "No vault directories available. Please add a vault first."
+                )
+                return
+                
+            vault_dir, ok = QInputDialog.getItem(
+                self.main_window,
+                "Select Vault",
+                "Choose a vault:",
+                vault_dirs,
+                0,
+                False
+            )
+            
+            if ok and vault_dir:
+                name, ok = QInputDialog.getText(
+                    self.main_window,
+                    "Create Workspace",
+                    "Enter workspace name:"
+                )
+                
+                if ok and name:
+                    self.cccore.workspace_manager.create_workspace(vault_dir, name)
+                    
+        except Exception as e:
+            logging.error(f"Error creating workspace: {e}")
+            QMessageBox.warning(
+                self.main_window,
+                "Error",
+                f"Failed to create workspace: {str(e)}"
+            )
+
+    def show_project_dashboard(self):
+        """Show the project dashboard"""
+        try:
+            current_project = self.cccore.project_manager.get_current_project()
+            if current_project:
+                self.cccore.widget_manager.show_dashboard(current_project)
+            else:
+                # Show empty dashboard if no project
+                self.cccore.widget_manager.show_dashboard()
+                QMessageBox.information(
+                    self.window,
+                    "No Project",
+                    "No project selected. Showing empty dashboard."
+                )
+        except Exception as e:
+            logging.error(f"Error showing project dashboard: {e}")
+            QMessageBox.warning(
+                self.window,
+                "Error",
+                f"Could not show dashboard: {str(e)}"
+            )
 

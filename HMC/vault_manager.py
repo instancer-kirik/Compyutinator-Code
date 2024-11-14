@@ -7,11 +7,14 @@ import tempfile
 import logging
 from PyQt6.QtCore import QObject, pyqtSignal
 from NITTY_GRITTY.knowledge_graph import KnowledgeGraph
-from .project_manager import Project
+from HMC.projects.project import Project
 import re
 import asyncio
 from PyQt6.QtCore import QTimer
 from datetime import datetime
+from typing import Optional, List
+from HMC.projects.project_config import ProjectConfig
+from riskkit.enums import ProjectType
 #WORKSPACES IS UI RELATED, probably, filesets open?
 ##Vaults can be considered as top-level containers.
 # Projects can exist within vaults.
@@ -72,20 +75,33 @@ class Vault:
         return None
 
     def load_config(self):
-        if self.config_file.exists():
-            with open(self.config_file, 'r') as f:
-                config = json.load(f)
-                self.projects = config.get('projects', {})
-        else:
-            self.save_config()
+        """Load vault configuration"""
+        try:
+            if self.config_file.exists():
+                with open(self.config_file, 'r') as f:
+                    config = json.load(f)
+                    self.projects = config.get('projects', {})
+                    self.workspaces = config.get('workspaces', {})
+            else:
+                self.save_config()
+        except Exception as e:
+            logging.error(f"Error loading vault config: {e}")
+            self.projects = {}
+            self.workspaces = {}
 
     def save_config(self):
-        config = {
-            'name': self.name,
-            'projects': self.projects
-        }
-        with open(self.config_file, 'w') as f:
-            json.dump(config, f, indent=4)
+        try:
+            config = {
+                'name': self.name,
+                'projects': self.projects,
+                'workspaces': self.workspaces,
+                'last_updated': datetime.now().isoformat()
+            }
+            self.config_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.config_file, 'w') as f:
+                json.dump(config, f, indent=4)
+        except Exception as e:
+            logging.error(f"Error saving vault config: {e}")
 
     def add_workspace(self, workspace_name):
         if workspace_name not in self.workspaces:
@@ -184,7 +200,6 @@ class Vault:
         
         if result.returncode == 0:
             self.index = json.loads(result.stdout)
-            
         else:
             raise RuntimeError(f"Error updating index: {result.stderr}")
 
@@ -241,33 +256,66 @@ class Vault:
     def get_file_info(self, rel_path):
         return self.index['files'].get(rel_path)
 
-    def add_project(self, project_name, project_path, language=None, version=None):
-        project_path = Path(project_path)
-        if not project_path.is_relative_to(self.path):
-            # Project is outside the vault, create a wrapper vault
-            return self.cccore.vault_manager.create_wrapper_vault_project(project_name, project_path, language, version)
-        
-        relative_path = project_path.relative_to(self.path)
-        self.projects[project_name] = str(relative_path)
-        self.save_config()
-        logging.warning(f"Added project {project_name} to vault {self.name}")
-        return True
+    def get_project(self, project_name: str) -> Optional[Project]:
+        """Get project by name"""
+        try:
+            if project_name not in self.projects:
+                return None
+                
+            project_path = self.path / self.projects[project_name]
+            if not project_path.exists():
+                logging.warning(f"Project path does not exist: {project_path}")
+                return None
+                
+            # Create config with only required fields
+            config = ProjectConfig(
+                name=project_name,
+                project_type=ProjectType.LOCAL,
+                path=project_path
+            )
+            
+            return Project(
+                name=project_name,
+                path=project_path,
+                type=ProjectType.LOCAL,
+                config=config
+            )
+            
+        except Exception as e:
+            logging.error(f"Error getting project {project_name}: {e}")
+            return None
 
-    def get_project_names(self):
-        return list(self.projects.keys())
+    def add_project(self, vault_name: str, project_name: str, project_path: str | Path, **kwargs) -> bool:
+        """Add project to vault"""
+        try:
+            if vault_name not in self.vaults:
+                logging.error(f"Vault not found: {vault_name}")
+                return False
+                
+            vault = self.vaults[vault_name]
+            project_path = Path(project_path)
+            
+            # Create config with only required fields
+            config = ProjectConfig(
+                name=project_name,
+                project_type=kwargs.get('project_type', ProjectType.LOCAL),
+                path=project_path
+            )
+            
+            # Create project
+            project = Project(
+                name=project_name,
+                path=project_path,
+                type=kwargs.get('project_type', ProjectType.LOCAL),
+                config=config
+            )
+            
+            return vault.add_project(project)
+            
+        except Exception as e:
+            logging.error(f"Error adding project: {e}")
+            return False
 
-    def _add_project(self, project_name, project):
-        self.projects[project_name] = project
-        self.save_config()
-        return True
-
-    def get_project(self, project_name):
-        return self.projects.get(project_name)
-
-    def get_project_path(self, project_name):
-        return self.projects.get(project_name)
-
-   
     def get_backlinks(self, file_path):
         return self.knowledge_graph.get_backlinks(file_path)
 
@@ -276,6 +324,74 @@ class Vault:
             self.load_index()
         rel_path = str(Path(file_path).relative_to(self.path))
         return rel_path in self.index['files']
+
+    def has_project(self, project_name: str) -> bool:
+        """Check if the vault contains a project by name."""
+        return project_name in self.projects
+
+    def get_projects(self):
+        """Get list of all projects in the vault"""
+        try:
+            return list(self.projects.keys())
+        except Exception as e:
+            logging.error(f"Error getting projects for vault {self.name}: {e}")
+            return []
+
+    def validate_project(self, project: Project) -> bool:
+        """Validate project before adding to vault"""
+        try:
+            if not project.name or not project.path:
+                return False
+                
+            project_path = Path(project.path)
+            if not project_path.exists():
+                return False
+                
+            # Check if project is within vault or can be linked
+            if not project_path.is_relative_to(self.path):
+                return self.cccore.vault_manager.can_create_wrapper_vault()
+                
+            # Check for name conflicts
+            if project.name in self.projects:
+                existing_path = self.path / self.projects[project.name]
+                if existing_path != project_path:
+                    return False
+                    
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error validating project: {e}")
+            return False
+
+    def get_project_full_path(self, project_name: str) -> Optional[Path]:
+        """Get full path for project"""
+        try:
+            if project_name not in self.projects:
+                return None
+                
+            relative_path = self.projects[project_name]
+            return self.path / relative_path
+            
+        except Exception as e:
+            logging.error(f"Error getting project path: {e}")
+            return None
+
+    def get_project_relative_path(self, project_path: Path) -> Optional[str]:
+        """Get relative path for project"""
+        try:
+            project_path = Path(project_path)
+            if not project_path.is_relative_to(self.path):
+                return None
+                
+            return str(project_path.relative_to(self.path))
+            
+        except Exception as e:
+            logging.error(f"Error getting relative path: {e}")
+            return None
+
+    def get_project_names(self) -> List[str]:
+        """Get list of project names in vault"""
+        return list(self.projects.keys())
 
 class VaultManager(QObject):
     vault_changed = pyqtSignal(str)
@@ -614,22 +730,7 @@ class VaultManager(QObject):
             return True
         return False
 
-    def add_project(self, vault_name, project_name, project_path, language=None, version=None):
-        vault = self.vaults.get(vault_name)
-        if vault:
-            success = vault.add_project(project_name, project_path, language, version)
-            if success:
-                self.project_added.emit(vault_name, project_name)
-                logging.info(f"Added project {project_name} to vault {vault_name}")
-            return success
-        else:
-            # If the specified vault doesn't exist, create a wrapper vault
-            try:
-                return self.create_wrapper_vault_project(project_name, project_path, language, version)
-            except:
-                logging.error(f"Failed to add project {project_name} to vault {vault_name}")
-                return False
-
+   
     def get_projects(self, vault_name):
         vault = self.vaults.get(vault_name)
         if vault:
@@ -762,3 +863,50 @@ class VaultManager(QObject):
             if project_name in vault.get_project_names():
                 return vault_name
         return None
+
+    def add_project(self, vault_name: str, project_name: str, project_path: str | Path, **kwargs) -> bool:
+        """Add project to vault"""
+        try:
+            if vault_name not in self.vaults:
+                logging.error(f"Vault not found: {vault_name}")
+                return False
+                
+            vault = self.vaults[vault_name]
+            project_path = Path(project_path)
+            
+            # Create config with only required fields
+            config = ProjectConfig(
+                name=project_name,
+                project_type=ProjectType.LOCAL,
+                path=project_path
+            )
+            
+            # Create project
+            project = Project(
+                name=project_name,
+                path=project_path,
+                type=ProjectType.LOCAL,
+                config=config
+            )
+            
+            return vault.add_project(project)
+            
+        except Exception as e:
+            logging.error(f"Error adding project: {e}")
+            return False
+
+    def get_project(self, project_name: str) -> Optional[Project]:
+        """Get project by name"""
+        try:
+            if not project_name:
+                return None
+                
+            for vault in self.vaults.values():
+                project = vault.get_project(project_name)
+                if project:
+                    return project
+            return None
+            
+        except Exception as e:
+            logging.error(f"Error getting project: {e}")
+            return None

@@ -10,14 +10,14 @@ import cProfile
 import pstats
 from NITTY_GRITTY.ThreadTrackers import ThreadTracker, QThreadTracker, global_thread_tracker, global_qthread_tracker
 profiler = cProfile.Profile()
- 
+from HMC.config_manager import ConfigManager
 # Now try to import from HMC
 from HMC.cccore import CCCore
 from HMC.sticky_note_manager import StickyNoteManager
 from PyQt6.QtWidgets import QWidget
 import io
 import logging
-from PyQt6.QtWidgets import QApplication, QMainWindow, QFileDialog, QTabWidget, QListWidget, QVBoxLayout, QWidget, QLabel, QPushButton
+from PyQt6.QtWidgets import QApplication, QMainWindow, QInputDialog, QMessageBox, QFileDialog, QTabWidget, QListWidget, QVBoxLayout, QWidget, QLabel, QPushButton
 from PyQt6.QtGui import QAction, QDesktopServices
 from PyQt6.QtWidgets import QMenu, QSizePolicy, QToolBar
 from PyQt6.QtCore import QSettings, QByteArray, QRect, QProcess,  QUrl, QTimer, Qt, pyqtSignal
@@ -39,13 +39,13 @@ from GUX.overlay import CompositeOverlay, Flashlight
 import json
 from HMC.theme_manager import ThemeManager
 from PyQt6.QtGui import QPalette, QColor
-from HMC.settings_manager import SettingsManager
+
 from PyQt6.QtWidgets import QInputDialog
 import threading
 from HMC.workspace_manager import WorkspaceManager
 from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, QEvent
 from NITTY_GRITTY.ThreadTrackers import SafeQThread
-from HMC.project_manager import ManyProjectsManagerWidget
+from GUX.widgets.many_project_manager_widget import ManyProjectsManagerWidget
 from PyQt6.QtWidgets import QDockWidget
 from HMC.vm_manager import VMManagerWidget
 from HMC.history_manager import HistoryManager
@@ -113,9 +113,9 @@ def qt_thread_exception_handler(type, value, tb):
 
 from HMC.workspace_manager import WorkspaceManager
 
-def initialize_managers(settings_manager):
+def initialize_core(config_manager):
     # Create CCCore with settings manager
-    cccore = CCCore(settings_manager)
+    cccore = CCCore(config_manager)
     
     # Create overlay after CCCore is initialized
     overlay = CompositeOverlay(
@@ -152,7 +152,6 @@ from typing import Optional
 from HMC.notification_manager import NotificationManager,  NotificationPriority
 from GUX.dialogs.login_dialog import LoginDialog
 from riskkit.events import NotificationType
-from riskkit.config import ConfigManager
 
 from PyQt6.QtWidgets import (
     QMainWindow, QToolBar, QDockWidget, 
@@ -166,37 +165,26 @@ from PyQt6.QtCore import (
 )
 
 class MainApplication(QMainWindow):
-    def __init__(self, cccore, settings_manager, widget_manager):
+    def __init__(self, cccore, widget_manager):
         super().__init__()
         self.cccore = cccore
-        self.settings_manager = settings_manager
+        
         self.widget_manager = widget_manager
         # Add opacity animation initialization
         self.opacity_animation = QPropertyAnimation(self, b"windowOpacity")
         self.opacity_animation.setDuration(200)  # 200ms duration
-        
+        self.is_dragging = False 
         try:
-            # Set window properties
-            self.setWindowTitle("Compyutinator Code")
-            self.setDockOptions(
-                QMainWindow.DockOption.AllowTabbedDocks |
-                QMainWindow.DockOption.AllowNestedDocks
-            )
-            
-            # Create central widget
-            self.central_widget = QWidget()
-            self.setCentralWidget(self.central_widget)
-            self.central_layout = QVBoxLayout(self.central_widget)
-            
+            self.setup_window()
+            self.setup_ui()    
             # Initialize managers
             self.menu_manager = MenuManager(self, self.cccore)
-            self.toolbar_manager = ToolbarManager(self, self.cccore)
             
             # Create toolbars
             self.create_toolbars()
             
             # Initialize other UI components
-            self.setup_ui()
+           
             self.setup_connections()
             
             logging.info("MainApplication initialized successfully")
@@ -277,7 +265,7 @@ class MainApplication(QMainWindow):
         """Initialize all UI components"""
         try:
             # Set window properties
-            self.setWindowTitle("Compyutinator")
+            
             self.setDockOptions(
                 QMainWindow.DockOption.AllowTabbedDocks |
                 QMainWindow.DockOption.AllowNestedDocks
@@ -481,19 +469,7 @@ class MainApplication(QMainWindow):
             logging.error(f"Error in closeEvent: {e}")
             logging.error(traceback.format_exc())
             event.accept()
-    def init_ui(self):
-        """Initialize the user interface components"""
-        self.setWindowTitle('Compyutinator')
-        self.setMinimumSize(800, 600)
-        
-        # Create central widget
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-        
-        # Create main layout
-        self.main_layout = QVBoxLayout(self.central_widget)
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
-   
+    
     def init_menu_bar(self):
         """Initialize the menu bar"""
         try:
@@ -502,7 +478,7 @@ class MainApplication(QMainWindow):
             # Create main menus
             self.file_menu = self.menuBar().addMenu("&File")
             self.edit_menu = self.menuBar().addMenu("&Edit")
-            self.view_menu = self.menuBar().addMenu("&View")  # Store reference
+            self.view_menu = self.menuBar().addMenu("&View")
             self.tools_menu = self.menuBar().addMenu("&Tools")
             self.vault_menu = self.menuBar().addMenu("&Vault")
             self.graph_menu = self.menuBar().addMenu("&Graph")
@@ -758,7 +734,7 @@ class MainApplication(QMainWindow):
 
     def leaveEvent(self, event):
         """Handle mouse leave events"""
-        if not self.isActiveWindow() and self.settings_manager.get_value("enable_window_fade", False):
+        if not self.isActiveWindow() and self.config_manager.get_value("enable_window_fade", False):
             self.opacity_animation.setStartValue(self.windowOpacity())
             self.opacity_animation.setEndValue(0.85)
             self.opacity_animation.start()
@@ -820,7 +796,7 @@ class MainApplication(QMainWindow):
 
     def setup_client(self):
         """Setup RiskkitClient and related widgets"""
-        api_config = self.settings_manager.get_riskkit_config()
+        api_config = self.config_manager.get_api_config()
         self.client = RiskkitClient(api_config)
         
         # Create risk manager widget using widget manager
@@ -835,13 +811,13 @@ class MainApplication(QMainWindow):
 
     def get_auth_token(self) -> Optional[str]:
         """Get authentication token from settings or login"""
-        token = self.settings_manager.get_setting("auth_token")
+        token = self.config_manager.get_setting("auth_token")
         if not token:
             # Show login dialog
             success = self.show_login_dialog()
             if not success:
                 return None
-            token = self.settings_manager.get_setting("auth_token")
+            token = self.config_manager.get_setting("auth_token")
         return token
 
     def handle_auth_failure(self, error_msg: str):
@@ -854,7 +830,7 @@ class MainApplication(QMainWindow):
             action="Login Again"
         )
         # Clear stored token
-        self.settings_manager.set_setting("auth_token", "")
+        self.config_manager.set_setting("auth_token", "")
         
         # Show login dialog
         self.show_login_dialog()
@@ -864,7 +840,7 @@ class MainApplication(QMainWindow):
         dialog = LoginDialog(self)
         if dialog.exec():
             # Store new token
-            self.settings_manager.set_setting("auth_token", dialog.token)
+            self.config_manager.set_setting("auth_token", dialog.token)
             return True
         return False
       
@@ -872,15 +848,15 @@ class MainApplication(QMainWindow):
     def setup_websocket(self):
         """Initialize and setup WebSocket client"""
         self.ws_client = WebSocketClient(
-            base_url=self.settings_manager.get_setting("websocket_url", "ws://localhost:4000"),
-            token=self.settings_manager.get_setting("websocket_token", "")
+            base_url=self.config_manager.get_setting("websocket_url", "ws://localhost:4000"),
+            token=self.config_manager.get_setting("websocket_token", "")
         )
         
         # Connect all signals
         self.setup_websocket_connections()
         
         # Subscribe to all channels if enabled in settings
-        if self.settings_manager.get_setting("subscribe_to_all_channels", True):
+        if self.config_manager.get_setting("subscribe_to_all_channels", True):
             self.ws_client.subscribe_to_all_channels()
         
         self.ws_client.connect_to_server()
@@ -926,7 +902,7 @@ class MainApplication(QMainWindow):
 
     def show_notification(self, title: str, message: str):
         """Show system notification"""
-        if self.settings_manager.get_setting("show_notifications", True):
+        if self.config_manager.get_setting("show_notifications", True):
             # You can implement this using your preferred notification system
             pass
 
@@ -972,12 +948,6 @@ class MainApplication(QMainWindow):
     def setup_ui(self):
         """Initialize all UI components"""
         try:
-            # Set window properties
-            self.setWindowTitle("Compyutinator")
-            self.setDockOptions(
-                QMainWindow.DockOption.AllowTabbedDocks |
-                QMainWindow.DockOption.AllowNestedDocks
-            )
             
             # Create central widget first
             self.central_widget = QWidget()
@@ -1191,10 +1161,10 @@ class MainApplication(QMainWindow):
         """)
 
     def save_layout(self):
-        self.settings_manager.save_layout(self)
+        self.config_manager.save_layout(self)
 
     def load_layout(self):
-        self.settings_manager.load_layout(self)
+        self.config_manager.load_layout(self)
 
     def on_theme_changed(self, theme_name):
         logging.info(f"Theme changed to: {theme_name}")
@@ -1229,27 +1199,43 @@ class MainApplication(QMainWindow):
         QDesktopServices.openUrl(QUrl("https://github.com/instancer-kirik/BigLinks"))
 
    
-    def create_workspace(self):
-        vault_dir, ok = QInputDialog.getItem(self, "Select Vault", 
-                                             "Choose a vault for the new workspace:", 
-                                             self.vault_manager.vault_directories, 0, False)
-        if ok and vault_dir:
-            name, ok = QInputDialog.getText(self, "New Workspace", "Enter workspace name:")
-            if ok and name:
-                self.workspace_manager.create_workspace(vault_dir, name)
-                self.switch_to_workspace(vault_dir, name)
-
+    
     def switch_workspace(self):
-        vault_dir, ok = QInputDialog.getItem(self, "Select Vault", 
-                                             "Choose a vault:", 
-                                             self.vault_manager.vault_directories, 0, False)
-        if ok and vault_dir:
-            workspace_names = self.workspace_manager.get_workspace_names(vault_dir)
-            workspace, ok = QInputDialog.getItem(self, "Switch Workspace", 
-                                                 "Choose a workspace:", 
-                                                 workspace_names, 0, False)
-            if ok and workspace:
-                self.switch_to_workspace(vault_dir, workspace)
+        """Switch to a different workspace"""
+        try:
+            # Get vault directories from cccore
+            vault_dirs = self.cccore.vault_manager.get_vault_directories()
+            vault_dir, ok = QInputDialog.getItem(
+                self, 
+                "Select Vault", 
+                "Choose a vault:", 
+                vault_dirs, 
+                0, 
+                False
+            )
+            
+            if ok and vault_dir:
+                workspace_names = self.cccore.workspace_manager.get_workspace_names(vault_dir)
+                workspace, ok = QInputDialog.getItem(
+                    self, 
+                    "Switch Workspace", 
+                    "Choose a workspace:", 
+                    workspace_names, 
+                    0, 
+                    False
+                )
+                
+                if ok and workspace:
+                    self.cccore.switch_to_workspace(vault_dir, workspace)
+                    self.update_workspace_dependent_ui()
+                    
+        except Exception as e:
+            logging.error(f"Error switching workspace: {e}")
+            QMessageBox.warning(
+                self,
+                "Error",
+                f"Failed to switch workspace: {str(e)}"
+            )
 
     def switch_to_workspace(self, vault_dir, workspace_name):
         vault = self.vault_manager.get_vault(vault_dir)
@@ -1350,11 +1336,11 @@ class MainApplication(QMainWindow):
         """Set up window properties and geometry"""
         try:
             # Set window title
-            self.setWindowTitle(self.settings_manager.get_value('window_title', 'Computinator Code'))
+            self.setWindowTitle(self.config_manager.get_value('window_title', 'Computinator Code'))
             
             # Set window geometry
             default_geometry = (100, 100, 1280, 720)  # x, y, width, height
-            geometry = self.settings_manager.get_value('window_geometry', default_geometry)
+            geometry = self.config_manager.get_value('window_geometry', default_geometry)
             self.setGeometry(*geometry)
             
             # Set window flags and attributes
@@ -1682,31 +1668,19 @@ def exception_hook(exctype, value, tb):
     traceback.print_exception(exctype, value, tb)
     QApplication.quit()
 
-def setup_logging():
-    log_directory = os.path.join(os.getcwd(), 'logs')
-    if not os.path.exists(log_directory):
-        os.makedirs(log_directory)
-
-    log_file_path = os.path.join(log_directory, 'app.log')
-
+def setup_logging(log_file_path):
     logging.basicConfig(
         level=logging.DEBUG,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(log_file_path, mode='w'),
+            logging.FileHandler(log_file_path, 'a'),
             logging.StreamHandler()
         ],
-        force=True  # Force reconfiguration
+        force=True
     )
 
-    # Test logging
-    logging.debug("Debug message")
-    logging.info("Info message")
-    logging.warning("Warning message")
-    logging.error("Error message")
-
 # Call this function at the beginning of your main() function
-setup_logging()
+setup_logging(log_file_path)
 
 def global_exception_handler(exctype, value, traceback):
     logging.critical("Unhandled exception", exc_info=(exctype, value, traceback))
@@ -1756,10 +1730,10 @@ def main():
         """)
        
         logging.debug("Creating SettingsManager")
-        settings_manager = SettingsManager()
+        config_manager = ConfigManager()
         
         logging.info("Initializing managers")
-        cccore, overlay = initialize_managers(settings_manager)
+        cccore, overlay = initialize_core(config_manager)
         
         logging.info("Creating WidgetManager")
         widget_manager = WidgetManager(cccore)
@@ -1774,7 +1748,7 @@ def main():
         cccore.set_widget_manager(widget_manager)
         
         logging.info("Creating MainApplication instance")
-        main_app = MainApplication(cccore, settings_manager, widget_manager)
+        main_app = MainApplication(cccore, widget_manager)
 
         # Set main window for widget manager and CCCore
         logging.info("Setting main_window for widget_manager and CCCore")

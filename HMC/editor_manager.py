@@ -207,10 +207,11 @@ class EditorManager:
         return False
 
     def close_tab(self, index):
+        """Close the tab at the specified index."""
         editor = self.current_window.tab_widget.widget(index)
         if isinstance(editor, CodeEditor):
             if editor.isModified():
-                reply = QMessageBox.question(self.tab_widget, 'Save Changes?',
+                reply = QMessageBox.question(self.current_window, 'Save Changes?',
                                              'This file has unsaved changes. Do you want to save them?',
                                              QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
                                              QMessageBox.StandardButton.Save)
@@ -218,7 +219,7 @@ class EditorManager:
                     self.save_file(index)
                 elif reply == QMessageBox.StandardButton.Cancel:
                     return False
-            
+
             # Remove the file from the current fileset if it exists
             current_vault = self.mm.vault_manager.get_current_vault()
             current_workspace = self.mm.workspace_manager.get_active_workspace()
@@ -230,23 +231,23 @@ class EditorManager:
                     file_path
                 )
 
-        # Check if the file needs to be saved
-        if editor.document().isModified():
-            # Implement save prompt logic here
-            save_prompt = QMessageBox.question(self.current_window, "Save File", "Do you want to save the file?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel)
-            if save_prompt == QMessageBox.StandardButton.Yes:
-                self.save_file(editor)
-            elif save_prompt == QMessageBox.StandardButton.Cancel:
-                return False
+        # # Check if the file needs to be saved
+        # if editor.document().isModified():
+        #     # Implement save prompt logic here
+        #     save_prompt = QMessageBox.question(self.current_window, "Save File", "Do you want to save the file?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel)
+        #     if save_prompt == QMessageBox.StandardButton.Yes:
+        #         self.save_file(editor)
+        #     elif save_prompt == QMessageBox.StandardButton.Cancel:
+        #         return False
 
-        # Remove the editor from the list safely
-        if self.current_window in self.window_editors:
-            if editor in self.window_editors[self.current_window]:
-                self.window_editors[self.current_window].remove(editor)
-            else:
-                logging.warning(f"Editor not found in window_editors list for the current window")
+        # # Remove the editor from the list safely
+        # if self.current_window in self.window_editors:
+        #     if editor in self.window_editors[self.current_window]:
+        #         self.window_editors[self.current_window].remove(editor)
+        #     else:
+        #         logging.warning(f"Editor not found in window_editors list for the current window")
 
-        # Close the tab
+        # # Close the tab
         self.current_window.tab_widget.removeTab(index)
 
         # If it was the current editor, set current_editor to None
@@ -254,9 +255,9 @@ class EditorManager:
             self.current_editor = None
 
         # Clean up the editor
-        editor.deleteLater()
+        # editor.deleteLater()
 
-        return True
+        # return True
 
     def apply_lexer(self, editor, file_extension):
         self.cccore.lexer_manager.apply_lexer(file_extension, editor)
@@ -389,15 +390,14 @@ class EditorManager:
         return False
 
     def get_open_files(self):
+        """Get a list of open files."""
         open_files = []
         for window, editors in self.window_editors.items():
             for editor in editors:
                 if editor.file_path:
                     open_files.append(editor.file_path)
                 else:
-                    # For untitled files, we'll use a placeholder name
                     open_files.append(f"Untitled_{id(editor)}")
-        
         logging.info(f"Open files: {open_files}")
         return open_files
 
@@ -496,13 +496,24 @@ class EditorManager:
             editor.update_context_bar()
             
     def add_editor_to_window(self, editor):
+        """Add an editor to the current window, or switch to it if already open."""
+        # Check if the editor for the same file is already open
+        existing_editor = self.get_editor_by_path(editor.file_path)
+        if existing_editor:
+            # Switch to the existing editor's tab
+            index = self.current_window.tab_widget.indexOf(existing_editor)
+            if index != -1:
+                self.current_window.tab_widget.setCurrentIndex(index)
+                return  # Exit if we are switching to an existing tab
+
+        # If not already open, proceed to add the new editor
         if editor.file_path:
             file_extension = self.get_file_extension(editor.file_path)
             self.apply_lexer(editor, file_extension)
             tab_name = os.path.basename(editor.file_path)
         else:
             tab_name = "Untitled"
-        
+
         index = self.current_window.add_new_tab(editor, tab_name)
         if index is not None:
             if self.current_window not in self.window_editors:

@@ -5,6 +5,7 @@ import json
 import logging
 from typing import Optional, Dict, Any, List, Callable
 from enum import Enum
+from HMC.secrets_manager import SecretsManager
 from riskkit.config import ApiConfig
 from riskkit.cache import Cache
 from riskkit.offline import OfflineQueue
@@ -52,8 +53,11 @@ class WebSocketClient(QObject):
     system_status_updated = pyqtSignal(dict)
     user_presence_changed = pyqtSignal(int, bool)  # user_id, is_online
 
-    def __init__(self, base_url: str, token: str, event_manager: EventManager = None):
+    def __init__(self, base_url: str, secrets_manager: SecretsManager, event_manager: EventManager = None):
         super().__init__()
+        self.secrets_manager = secrets_manager
+        self.token = self.secrets_manager.get_secret("websocket", "token")  # Retrieve token from secrets manager
+        
         # Enforce WSS for non-localhost
         if not base_url.startswith(('wss://', 'ws://')):
             base_url = f"wss://{base_url}"

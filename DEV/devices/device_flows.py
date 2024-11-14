@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 import json
 import logging
-from .device_manager import DeviceCommand  # Import from device_manager
+from .device_command import DeviceCommand  # Import from device_manager
 
 class DeviceFlow:
     def __init__(self, name, steps):

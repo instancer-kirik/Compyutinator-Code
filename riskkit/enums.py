@@ -1,4 +1,35 @@
 from enum import Enum
+class ProjectType(Enum):
+    LOCAL = "local"
+    RESOLVINATOR = "resolvinator"
+class MarkType(Enum):
+    TASK = "task"
+    RISK = "risk"
+    EVENT = "event"
+    REWARD = "reward"
+    MILESTONE = "milestone"
+    GOAL = "goal"
+    PROJECT = "project"
+    OTHER = "other"
+
+class WingStatus(Enum):
+    ACTIVE = "active"
+    DISABLED = "disabled"
+    DEVELOPMENT = "development"
+    DEPRECATED = "deprecated"
+    EXPERIMENTAL = "experimental"
+
+class WingType(Enum):
+    CORE = "core"           # Project core functionality
+    LANGUAGE = "language"   # Language-specific support
+    FRAMEWORK = "framework" # Framework integration
+    TOOL = "tool"          # Development tools
+    SERVICE = "service"     # External services
+    THEME = "theme"        # UI/UX components
+    DATA = "data"          # Data processing
+    UTILITY = "utility"    # Helper functions
+    CUSTOM = "custom"      # User-defined
+
 
 class EventPriority(str, Enum):
     LOW = "low"

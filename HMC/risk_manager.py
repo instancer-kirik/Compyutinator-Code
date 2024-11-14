@@ -16,10 +16,10 @@ from riskkit.enums import (
     RiskPriority, RiskStatus, RiskProbability, EventPriority,
     ImpactSeverity, ImpactArea, ImpactTimeframe, RewardType, ResourceType, RewardStatus, RewardTier
 )
-from riskkit.config import ConfigManager
+from HMC.config_manager import ConfigManager
 from riskkit.validator import RiskValidator
 from GUX.state_machine_editor import StateMachineEditor
-from .risk_editor_dialog import RiskEditorDialog
+from GUX.dialogs.risk_editor_dialog import RiskEditorDialog
 from HMC.notification_manager import NotificationManager
 
 import asyncio
@@ -118,7 +118,7 @@ class RiskManager(QMainWindow):
     news_received = pyqtSignal(dict)
     connection_status_changed = pyqtSignal(bool)
     sync_status_changed = pyqtSignal(str)
-
+    
     # Update weights to use enum values
     RISK_WEIGHTS = {
         RiskPriority.LOW.value: 1,
@@ -221,11 +221,12 @@ class RiskManager(QMainWindow):
         }
     ]
 
-    def __init__(self, parent=None, cccore=None, config_manager=None, notification_manager=None):
+    def __init__(self, parent=None, cccore=None, config_manager=None, notification_manager=None, project_manager=None):
         super().__init__(parent)
         self.cccore = cccore
-        self.config_manager = config_manager or ConfigManager()
+        self.config_manager = config_manager or ConfigManager(cccore)
         self.notification_manager = notification_manager
+        self.project_manager = project_manager
         
         # Initialize repository
         self.repository = RiskRepository(cccore.db_manager if cccore else DatabaseManager('local'))
@@ -1028,10 +1029,45 @@ class RiskManager(QMainWindow):
             logging.error(f"Error handling risk deletion: {e}")
             self.show_error("Failed to process risk deletion")
 
+    def show_add_risk_dialog(self):
+        """Show dialog for adding new risk"""
+        dialog = RiskEditorDialog(self)
+        if dialog.exec():
+            risk_data = dialog.get_risk_data()
+            self.add_risk(risk_data)
+            
+            # Update dashboard if it exists
+            if hasattr(self.cccore, 'widget_manager'):
+                dashboard = self.cccore.widget_manager.widgets.get('dashboard')
+                if dashboard:
+                    dashboard.update_risk_section()
+    def load_risk_data(self):
+        """Load risk data for the current project"""
+        try:
+            current_project = self.project_manager.get_current_project()
+            if not current_project:
+                logging.warning("No current project set")
+                return
+                
+            # Handle both Project objects and dictionaries
+            project_id = (current_project.id 
+                        if hasattr(current_project, 'id') 
+                        else current_project.get('id'))
+                        
+            if not project_id:
+                logging.warning("Project has no ID")
+                return
+                
+            # Load risks for project
+            risks = self.risk_repository.get_risks_for_project(project_id)
+            self.update_risk_list(risks)
+            
+        except Exception as e:
+            logging.error(f"Error initiating risk data load: {e}")
 if __name__ == '__main__':
     import sys
     from PyQt6.QtWidgets import QApplication
-    from riskkit.config import ConfigManager
+    from HMC.config_manager import ConfigManager
     
     app = QApplication(sys.argv)
     

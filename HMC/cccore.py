@@ -4,7 +4,7 @@ from .download_manager import DownloadManager
 from .theme_manager import ThemeManager
 from AuraText.auratext.Core.Lexers import LexerManager
 from .LSP_manager import LSPManager
-from .settings_manager import SettingsManager
+
 from .workspace_manager import WorkspaceManager
 from NITTY_GRITTY.database import DatabaseManager, setup_local_database
 from .editor_manager import EditorManager
@@ -12,6 +12,8 @@ from .cursor_text_manager import CursorManager
 import logging
 import os
 import tempfile
+from HMC.mark_manager import MarkManager
+from HMC.risk_manager import RiskManager
 from .file_manager import FileManager
 from PyQt6.QtWidgets import QDockWidget
 from PyQt6.QtCore import Qt
@@ -20,7 +22,7 @@ from GUX.fileset_manager_widget import FilesetManagerWidget
 from .project_manager import ProjectManager
 from .build_manager import BuildManager
 from GUX.radial_menu import RadialMenu
-from riskkit.config import ConfigManager
+from HMC.config_manager import ConfigManager
 from .context_manager import ContextManager
 from .environment_manager import EnvironmentManager
 from .secrets_manager import SecretsManager
@@ -44,24 +46,35 @@ from .notification_manager import NotificationManager
 import transformers
 import warnings
 
+
 class CCCore(QObject):  # referred to as mm in other files (auratext)
     lsp_manager_initialized = pyqtSignal()
 
-    def __init__(self, settings_manager=None):
+    def __init__(self, config_manager):
         super().__init__()
         
         # Suppress HuggingFace messages
         transformers.logging.set_verbosity_error()
         warnings.filterwarnings('ignore', category=UserWarning, module='transformers')
         
-        self.settings_manager = settings_manager
+        # Initialize core configuration
+        self.config_manager = config_manager
+        
+        # Initialize managers that depend on configuration
+        self.notification_manager = NotificationManager()
+        self.vault_manager = VaultManager(self)
+        self.env_manager = EnvironmentManager(self.config_manager.get('environments_path', './environments'))
+        self.project_manager = None  # Will be initialized later
+        self.secrets_manager = None  # Will be initialized later
+        
+        # Other initializations
         self.main_window = None
         self.main_window_set = False
-        self._window_ref = None  # Strong reference holder
-        self.settings_manager = settings_manager
+        self._window_ref = None
         self.action_handlers = None
         self.menu_manager = None
         self.widget_manager = None
+        
         self.auratext_windows = []
         self.editor_manager = None
         self.overlay = None
@@ -69,14 +82,13 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         self.project_manager = None
         self.secrets_manager = None
         self.macro_manager = MacroManager(self)
-        self.env_manager = EnvironmentManager(self.settings_manager.get_value("environments_path", "./environments"))
-        self.vault_manager = VaultManager(self.settings_manager, cccore=self)
+        self.vault_manager = VaultManager(self.config_manager, cccore=self)
         self.ai_memory_manager = AIMemoryManager()
         # Add debug logging
-        logging.debug(f"Initializing CCCore. Default vault path: {self.settings_manager.get_value('app_data_dir')}")
+        logging.debug(f"Initializing CCCore. Default vault path: {self.config_manager.get_value('app_data_dir')}")
         
         # Ensure default vault is created and set
-        default_vault_path = os.path.join(self.settings_manager.get_value('app_data_dir'), 'default_vault')
+        default_vault_path = os.path.join(self.config_manager.get_value('app_data_dir'), 'default_vault')
         if not self.vault_manager.get_current_vault():
             logging.info(f"Creating default vault at: {default_vault_path}")
             self.vault_manager.create_vault("Default Vault", default_vault_path)
@@ -95,7 +107,6 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         self.late_init_done = False
         self.vault_windows = {}  # Dictionary to store vault paths and their corresponding windows
         self.main_vault = None
-        self.config_manager = None
         self.notification_manager = NotificationManager()
         self.init_managers()
         logging.info("CCCore initialization complete")
@@ -114,7 +125,7 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         self.action_handlers = ActionHandlers(window=self.main_window, cccore=self)
         self.db_manager = DatabaseManager('local')
         from HMC.ai_model_manager import ModelManager
-        self.model_manager = ModelManager(self.settings_manager)
+        self.model_manager = ModelManager(self.config_manager)
         self.download_manager = DownloadManager(self)
         self.theme_manager = ThemeManager(self)
         self.lexer_manager = LexerManager(self)
@@ -126,16 +137,24 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         
         logging.info(f"Current vault: {self.vault_manager.current_vault.name if self.vault_manager.current_vault else 'None'}")
        
-        self.env_manager = EnvironmentManager(self.settings_manager.get_value("environments_path", "./environments"))
-        self.secrets_manager = SecretsManager(self.settings_manager)
-        self.project_manager = ProjectManager(self.settings_manager, self)
+        self.env_manager = EnvironmentManager(self.config_manager.get_value("environments_path", "./environments"))
+        self.secrets_manager = SecretsManager(self.config_manager)
+        self.project_manager = ProjectManager(self)
         self.build_manager = BuildManager(self)
         self.context_manager = ContextManager(self)
         self.file_manager = FileManager(self)
+        
         self.workspace_manager = WorkspaceManager(self)
         # Initialize FontManagerWidget
         self.font_manager = FontManager()
-        self.config_manager = ConfigManager()
+        self.risk_manager = RiskManager(
+            config_manager=self.config_manager,
+            notification_manager=self.notification_manager,
+            project_manager=self.project_manager,  # This will be None initially
+            cccore=self
+        )
+        self.macro_manager = MacroManager(self)
+        self.mark_manager = MarkManager(self)
     def late_init(self):
         if not self.late_init_done:
             try:
@@ -154,6 +173,9 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
                 # Late init editor manager
                 self.editor_manager.late_init()
                 
+                # Add automatic project loading
+                self.project_manager.load_default_project()
+                
                 # Ensure proper widget state
                 if self.main_window:
                     self.main_window.raise_()
@@ -165,6 +187,12 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
                             widget.setCursor(Qt.CursorShape.ArrowCursor)
                         if widget.windowFlags() & Qt.WindowType.WindowStaysOnTopHint:
                             widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+                    
+                    # Show dashboard for loaded project
+                    if hasattr(self, 'widget_manager'):
+                        current_project = self.project_manager.get_current_project()
+                        if current_project:
+                            self.widget_manager.show_dashboard(current_project.name)
                 
                 self.late_init_done = True
                 logging.info("CCCore late initialization complete")
@@ -443,3 +471,44 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         if current_vault and self.workspace_manager:
             return self.workspace_manager.set_active_workspace(current_vault.path, workspace_name)
         return False
+
+    def set_current_project(self, project_data):
+        """Set the current project in the project manager."""
+        try:
+            if isinstance(project_data, dict):
+                # Convert dict to Project object
+                from .project_manager import Project
+                project = Project(
+                    name=project_data['name'],
+                    path=project_data['path'],
+                    project_type=project_data['type'],
+                    created_at=project_data['created_at'],
+                    updated_at=project_data['updated_at']
+                )
+            else:
+                project = project_data
+                
+            if self.project_manager:
+                self.project_manager.current_project = project
+                logging.info(f"Current project set to: {project.name}")
+                # Update the dashboard if it exists
+                if hasattr(self, 'project_dashboard'):
+                    self.project_dashboard.update_dashboard(project)
+            else:
+                logging.error("Project manager is not initialized.")
+                
+        except Exception as e:
+            logging.error(f"Error setting project@cccore: {e}")
+    
+    def set_current_project(self, project_name):
+        """Set the current project in the project manager."""
+        if self.project_manager:
+            self.project_manager.current_project = project_name
+            logging.info(f"Current project set to: {project_name}")
+            # Update the dashboard if it exists
+            if hasattr(self, 'project_dashboard'):
+                self.project_dashboard.update_dashboard(project_name)
+        else:
+            logging.error("Project manager is not initialized.")
+
+    

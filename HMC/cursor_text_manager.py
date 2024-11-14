@@ -268,3 +268,9 @@ class EditorCursorManager:
                 new_index = min(bottom_cursor.index, len(self.editor.text(new_line)))
                 self.add_cursor(new_line, new_index)
 
+    def restore_default_cursor(self):
+        """Restore the default cursor state."""
+        if self.default_cursor:
+            # Logic to set the cursor back to the default
+            # For example, using QsciScintilla methods
+            self.editor.setCursor(self.default_cursor)

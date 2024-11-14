@@ -1,7 +1,7 @@
 # settings_manager.py
 from PyQt6.QtCore import QSettings
 import os
-from riskkit.config import ApiConfig
+from HMC.config.types import ApiConfig
 from PyQt6.QtCore import QSettings
 import os
 
@@ -47,7 +47,21 @@ class SettingsManager:
             "window_fade_opacity": 0.85,
             "save_window_state": True,
             "animation_duration": 200,
-            "default_opacity": 1.0
+            "default_opacity": 1.0,
+
+            # Hotkey settings
+            "hotkeys": {
+                "New File": "Ctrl+N",
+                "Open": "Ctrl+O",
+                "Save": "Ctrl+S",
+                "Find": "Ctrl+F",
+                "Replace": "Ctrl+H",
+                "Terminal": "Ctrl+`",
+                "Build": "F5",
+                "Debug": "F9",
+                "Project Dashboard": "Ctrl+Alt+D",
+                "Big Links": "Ctrl+B"
+            }
         }
 
         # Ensure all default settings are set
@@ -134,7 +148,7 @@ class SettingsManager:
 
     def get_riskkit_config(self) -> ApiConfig:
         """Get riskkit API configuration from settings"""
-        from riskkit.config import ApiConfig
+        from HMC.config.types import ApiConfig
         
         return ApiConfig(
             base_url=self.get_value("riskkit_url", "http://localhost:4000"),
@@ -155,3 +169,12 @@ class SettingsManager:
             "animation_duration": 200,
             "default_opacity": 1.0
         }
+
+    def get_hotkey(self, action_name):
+        hotkeys = self.get_value("hotkeys", self.default_settings["hotkeys"])
+        return hotkeys.get(action_name)
+
+    def set_hotkey(self, action_name, shortcut):
+        hotkeys = self.get_value("hotkeys", self.default_settings["hotkeys"])
+        hotkeys[action_name] = shortcut
+        self.set_value("hotkeys", hotkeys)

@@ -1,6 +1,7 @@
 import os
 import json
 from cryptography.fernet import Fernet
+from typing import Optional
 #https://www.youtube.com/watch?v=151-LPzcrjAv
 #
 #Pinned by Scholastum Provost
@@ -26,14 +27,25 @@ class SecretsManager:
                 key_file.write(key)
         return Fernet(key)
 
-    def set_secret(self, key, value):
+    def set_secret(self, service_name: str, key: str, value: str):
+        """Set a secret for a specific service."""
         secrets = self._load_secrets()
-        secrets[key] = value
+        if service_name not in secrets:
+            secrets[service_name] = {}
+        secrets[service_name][key] = value
         self._save_secrets(secrets)
 
-    def get_secret(self, key, default=None):
+    def get_secret(self, service_name: str, key: str, default=None):
+        """Get a secret for a specific service."""
         secrets = self._load_secrets()
-        return secrets.get(key, default)
+        return secrets.get(service_name, {}).get(key, default)
+
+    def delete_secret(self, service_name: str, key: str):
+        """Delete a secret for a specific service."""
+        secrets = self._load_secrets()
+        if service_name in secrets and key in secrets[service_name]:
+            del secrets[service_name][key]
+            self._save_secrets(secrets)
 
     def _load_secrets(self):
         if os.path.exists(self.secrets_file):

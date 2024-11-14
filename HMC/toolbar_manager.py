@@ -26,6 +26,11 @@ class ToolbarManager:
             self.add_actions_to_menu(file_menu, file_actions)
             toolbar.addAction(file_menu.menuAction())
             
+            # Add a button to create a new AuraText window
+            new_auratext_action = QAction("New AuraText Window", self.main_window)
+            new_auratext_action.triggered.connect(self.cccore.create_auratext_window)  # Connect to the method that creates a new window
+            toolbar.addAction(new_auratext_action)
+            
             # Edit dropdown
             edit_menu = QMenu("Edit")
             edit_actions = [

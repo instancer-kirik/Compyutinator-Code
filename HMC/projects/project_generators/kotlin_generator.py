@@ -6,7 +6,7 @@ from string import Template
 class KotlinProjectGenerator:
     def __init__(self, cccore):
         self.cccore = cccore
-        self.templates = KOTLIN_TEMPLATES
+        self.templates = {}
         
     def generate_project(self, template_name: str, project_path: str, project_name: str, options: Dict[str, Any] = None):
         if template_name not in self.templates:

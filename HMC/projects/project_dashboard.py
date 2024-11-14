@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, 
                             QTextEdit, QPushButton, QLabel, QScrollArea,
-                            QSplitter, QFrame, QTableWidget, QTableWidgetItem)
+                            QSplitter, QFrame, QTableWidget, QTableWidgetItem, QTreeWidget)
 from PyQt6.QtCore import Qt
 from GUX.markdown_viewer import MarkdownViewer
 from GUX.widgets.task_checklist_manager import TaskChecklistManager
@@ -11,19 +11,21 @@ from GUX.widgets.file_outline_widget import FileOutlineWidget
 from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPen, QPainterPath
-from .symbol_manager import CodeSymbol, SymbolManager
+from HMC.symbol_manager import CodeSymbol, SymbolManager
 from pathlib import Path
 from typing import Dict, List
+from GUX.dialogs.project_dialogs import ProjectConfig
 
 class ProjectDashboard(QWidget):
-    def __init__(self, cccore):
+    def __init__(self, cccore, project_config: ProjectConfig):
         super().__init__()
         self.cccore = cccore
+        self.project_config = project_config
         self.setup_ui()
         
     def setup_ui(self):
         layout = QVBoxLayout(self)
-        self.setWindowTitle("Project Dashboard")
+        self.setWindowTitle("Dashboard")
         
         # Project Header
         header_layout = QHBoxLayout()
@@ -34,7 +36,7 @@ class ProjectDashboard(QWidget):
         # Project Actions
         actions_layout = QHBoxLayout()
         self.add_note_btn = QPushButton("Add Note")
-        self.add_note_btn.clicked.connect(self.add_project_note)
+        self.add_note_btn.clicked.connect(self.create_new_note)
         self.add_task_btn = QPushButton("Add Task")
         self.add_task_btn.clicked.connect(self.add_project_task)
         actions_layout.addWidget(self.add_note_btn)
@@ -43,7 +45,7 @@ class ProjectDashboard(QWidget):
         header_layout.addLayout(actions_layout)
         layout.addLayout(header_layout)
         
-        # Main Content Area with Splitter
+        # Main Content Area
         splitter = QSplitter(Qt.Orientation.Horizontal)
         
         # Left side: Project Overview and Tasks
@@ -124,44 +126,42 @@ class ProjectDashboard(QWidget):
         self.risk_table.setColumnCount(4)
         self.risk_table.setHorizontalHeaderLabels(["Priority", "Description", "Status", "Owner"])
         left_layout.addWidget(self.risk_table)
-
         
-    def update_project_info(self, project_name):
-        """Update dashboard with current project information"""
-        if not project_name:
-            return
-            
-        self.project_title.setText(project_name)
-        project = self.cccore.project_manager.get_current_project()
+        # Add system overview tab
+        self.add_system_tab()
         
-        if project:
-            # Update stats
-            file_count = len(self.cccore.editor_manager.get_open_files())
-            task_count = self.task_manager.tree_model.rowCount()
-            
-            project_path = self.cccore.project_manager.get_project_path(project_name)
-            notes_path = os.path.join(project_path, "notes")
-            note_count = len([f for f in os.listdir(notes_path) if f.endswith('.md')]) if os.path.exists(notes_path) else 0
-            
-            self.file_count_label.setText(f"Files: {file_count}")
-            self.task_count_label.setText(f"Tasks: {task_count}")
-            self.note_count_label.setText(f"Notes: {note_count}")
-            
-            # Update notes viewer path
-            os.makedirs(notes_path, exist_ok=True)
-            self.notes_viewer.set_vault_path(notes_path)
-            
-            # Load most recent note
-            self.load_most_recent_note()
-            
-            # Update recent activity
-            self.update_recent_activity()
-            
-            # Update project outline
-            flow_map = self.cccore.project_manager.get_project_technical_flow(project_name)
-            self.project_outline.outline_tree.populate_project_outline(flow_map)
-            self.project_outline.update_references(flow_map)
-    
+    def add_system_tab(self):
+        """Add system monitoring tab"""
+        system_tab = QWidget()
+        layout = QVBoxLayout(system_tab)
+        
+        # Add system info tree
+        self.system_tree = QTreeWidget()
+        self.system_tree.setHeaderLabels(["Component", "Value", "Status"])
+        layout.addWidget(self.system_tree)
+        
+        # Add refresh button
+        refresh_btn = QPushButton("Refresh System Info")
+        refresh_btn.clicked.connect(self.update_system_info)
+        layout.addWidget(refresh_btn)
+        
+        self.tab_widget.addTab(system_tab, "System")
+        
+    def update_project_info(self):
+        """Update dashboard with current project info"""
+        self.project_title.setText(self.project_config.name)
+        
+        # Update metrics
+        coverage = self.project_config.get_setting('tracking', 'metrics', 'test_coverage_target')
+        complexity = self.project_config.get_setting('tracking', 'metrics', 'max_complexity')
+        
+        self.metrics_table.setItem(0, 1, QTableWidgetItem(str(coverage)))
+        self.metrics_table.setItem(1, 1, QTableWidgetItem(str(complexity)))
+        
+        # Update symbols outline
+        symbols = self.project_config.get_setting('tracking', 'symbols', default={})
+        self.outline_tree.populate_project_outline(symbols)
+        
     def create_new_note(self):
         """Create a new markdown note"""
         project = self.cccore.project_manager.get_current_project()
