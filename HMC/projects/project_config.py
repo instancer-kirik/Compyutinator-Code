@@ -11,55 +11,111 @@ from HMC.system_analyzer import SystemInfo
 from HMC.projects.project_structure import PROJECT_DIRECTORIES
 from HMC.symbol_manager import CodeSymbol
 from HMC.projects.project_wing import Wing
-from riskkit.enums import WingType, WingStatus
+
 from HMC.projects.wings_manager import WingsManager
-from .project_types import BaseProjectData, ProjectType, WingType, WingStatus
+from .project_types import (
+    BaseProjectData, ProjectType, WingType, WingStatus, TechnicalConfig,
+    DevelopmentConfig, TeamConfig, RiskManagement
+)
+
+from .wing_config import WingConfig
+from .technical_overview_generator import TechnicalOverviewGenerator
 
 @dataclass
 class ProjectConfig(BaseProjectData):
+    """Project configuration and settings management"""
+    # Core configs
+    technical: TechnicalConfig = field(default_factory=TechnicalConfig)
+    development: DevelopmentConfig = field(default_factory=DevelopmentConfig)
+    team: TeamConfig = field(default_factory=TeamConfig)
+    risk: RiskManagement = field(default_factory=RiskManagement)
+    
+    # Project Structure
+    directory_structure: Dict[str, Any] = field(default_factory=lambda: PROJECT_DIRECTORIES.copy())
+    relationships: Dict[str, List[str]] = field(default_factory=dict)
+    symbols: Dict[Path, List['CodeSymbol']] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if isinstance(self.path, str):
+            self.path = Path(self.path)
+        if isinstance(self.project_type, str):
+            self.project_type = ProjectType(self.project_type)
+
+    def validate(self) -> bool:
+        """Validate project configuration"""
+        return all([
+            self.name and self.path,
+            self.technical.validate(),
+            self.development.validate(),
+            self.team.validate(),
+            self.risk.validate()
+        ])
+
+    def get_setting(self, *path: str, default: Any = None) -> Any:
+        """Get setting using dot notation"""
+        current = self.__dict__
+        for key in path:
+            if not isinstance(current, dict):
+                return default
+            current = current.get(key, default)
+        return current
+
+    def update_setting(self, *path: str, value: Any) -> bool:
+        """Update setting value using dot notation"""
+        try:
+            current = self.settings
+            for key in path[:-1]:
+                current = current.setdefault(key, {})
+            current[path[-1]] = value
+            return True
+        except Exception as e:
+            logging.error(f"Error updating setting: {e}")
+            return False
+
+    def validate(self) -> bool:
+        return all([
+            self.name and self.path,
+            self.settings["development"]["code_style"].validate(),
+            self.settings["development"]["testing"].validate(),
+            self.settings["development"]["security"].validate(),
+            self.settings["team"]["roles"].validate(),
+            self.settings["team"]["communication"].validate(),
+            self.settings["team"]["documentation"].validate(),
+            self.settings["technical"]["languages"].validate(),
+            self.settings["technical"]["frameworks"].validate(),
+            self.settings["technical"]["entry_points"].validate(),
+            self.settings["technical"]["dependencies"].validate(),
+            self.dev_standards.validate(),
+          
+            self.risk_management.validate(),
+            self.tech_stack.validate(),
+            self.components.validate(),
+            self.dev_environment.validate()
+        ])
+
+    @property
+    def wings(self) -> Dict[str, Wing]:
+        # This should reference the Project's wings_manager
+        if hasattr(self, '_project') and hasattr(self._project, 'wings_manager'):
+            return self._project.wings_manager.wings
+        return {}
+    
+    def add_wing(self, name: str, wing_type: WingType, description: str = "", 
+                config: Optional[WingConfig] = None) -> Optional[Wing]:
+        """Delegate wing management to Project"""
+        if hasattr(self, '_project'):
+            return self._project.add_wing(name, wing_type, description, config)
+        return None
+
     # Symbol tracking (was missing)
     symbols: Dict[Path, List['CodeSymbol']] = field(default_factory=dict)
    
     # Project Structure and Symbols
     directory_structure: Dict[str, Any] = field(default_factory=lambda: PROJECT_DIRECTORIES.copy())
     relationships: Dict[str, List[str]] = field(default_factory=dict)
-    wings: Dict[str, Wing] = field(default_factory=dict)
     
-    @classmethod
-    def from_folder(cls, folder_path: str, project_name: str) -> 'ProjectConfig':
-        path = Path(folder_path)
-        project_type = cls._detect_project_type(path)
-        
-        config = cls(
-            name=project_name,
-            path=path,
-            project_type=project_type
-        )
-        
-        # Auto-detect wings
-        if (path / 'setup.py').exists() or list(path.glob('*.py')):
-            wing = config.wings_manager.create_wing('python', WingType.LANGUAGE)
-            if wing:
-                config.wings[wing.id] = wing
-                
-        if (path / 'package.json').exists():
-            wing = config.wings_manager.create_wing('javascript', WingType.LANGUAGE)
-            if wing:
-                config.wings[wing.id] = wing
-                
-        return config
+    
     # Technical Components
-    wings: Dict[str, Wing] = field(default_factory=lambda: {
-        "core": Wing(
-            id="core",
-            name="core",
-            type=WingType.CORE,
-            status=WingStatus.ACTIVE,
-            description="Core project functionality",
-            entry_points={"main": "src/main.py"}
-        )
-    })
-    
     components: Dict[str, Dict[str, Any]] = field(default_factory=lambda: {
         "languages": {},    # Language configurations
         "frameworks": {},   # Framework settings
@@ -293,7 +349,29 @@ class ProjectConfig(BaseProjectData):
     start_date: Optional[datetime] = None
     target_date: Optional[datetime] = None
     completion_date: Optional[datetime] = None
-    
+    @classmethod
+    def from_folder(cls, folder_path: str, project_name: str) -> 'ProjectConfig':
+        path = Path(folder_path)
+        project_type = cls._detect_project_type(path)
+        
+        config = cls(
+            name=project_name,
+            path=path,
+            project_type=project_type
+        )
+        
+        # Auto-detect wings
+        if (path / 'setup.py').exists() or list(path.glob('*.py')):
+            wing = config.wings_manager.create_wing('python', WingType.LANGUAGE)
+            if wing:
+                config.wings[wing.id] = wing
+                
+        if (path / 'package.json').exists():
+            wing = config.wings_manager.create_wing('javascript', WingType.LANGUAGE)
+            if wing:
+                config.wings[wing.id] = wing
+                
+        return config
     @classmethod
     def from_folder(cls, folder_path: str | Path, project_name: str) -> 'ProjectConfig':
         """Create a new ProjectConfig instance from a folder path"""
@@ -365,20 +443,13 @@ class ProjectConfig(BaseProjectData):
             logging.error(f"Error creating ProjectConfig from folder: {e}")
             raise
 
-    def __post_init__(self):
-        """Convert path to Path object if it's a string"""
-        if isinstance(self.path, str):
-            self.path = Path(self.path)
-        if isinstance(self.project_type, str):
-            self.project_type = ProjectType(self.project_type)
-        
-        # Ensure created_at and updated_at are datetime objects
-        if isinstance(self.created_at, str):
-            self.created_at = datetime.fromisoformat(self.created_at)
-        if isinstance(self.updated_at, str):
-            self.updated_at = datetime.fromisoformat(self.updated_at)
-        self.wings_manager = WingsManager(self)
-    
+    # Delegate wing management to WingsManager
+    def add_wing(self, name: str, wing_type: WingType, description: str = "", 
+                config: Optional[WingConfig] = None) -> Optional[Wing]:
+        """Add a new wing to the project"""
+        return self.wings_manager.create_wing(name, wing_type, description, config)
+
+   
     @classmethod
     def load(cls, path: Path) -> Optional['ProjectConfig']:
         """Load ProjectConfig from a config file"""
@@ -413,186 +484,6 @@ class ProjectConfig(BaseProjectData):
             logging.error(f"Error saving project config: {e}")
             return False
 
-    def get_setting(self, *keys: str, default: Any = None) -> Any:
-        """Get a nested setting value safely"""
-        current = self.__dict__
-        for key in keys:
-            if isinstance(current, dict) and key in current:
-                current = current[key]
-            else:
-                return default
-        return current
-
-    def update_setting(self, *keys: str, value: Any) -> bool:
-        """Update a nested setting value safely"""
-        try:
-            current = self.__dict__
-            for key in keys[:-1]:
-                current = current.setdefault(key, {})
-            current[keys[-1]] = value
-            self.updated_at = datetime.now()
-            return True
-        except Exception as e:
-            logging.error(f"Error updating setting: {e}")
-            return False
-
-    def get_technical_flow(self) -> Dict[str, Any]:
-        """Generate technical flow overview"""
-        flow_data = {
-            'project_info': {
-                'name': self.name,
-                'type': self.project_type.value,
-                'path': str(self.path),
-            },
-            'structure': self._analyze_structure(),
-            'dependencies': self._extract_dependencies(),
-            'entry_points': self._find_entry_points(),
-            'relationships': self._analyze_relationships()
-        }
-        return flow_data
-
-    def _analyze_structure(self) -> Dict[str, Any]:
-        """Analyze project structure"""
-        structure = {}
-        for file_path in self.path.rglob('*.py'):
-            if any(excluded in str(file_path) for excluded in self.excluded_dirs):
-                continue
-            relative_path = file_path.relative_to(self.path)
-            structure[str(relative_path)] = self._analyze_file(file_path)
-        return structure
-
-    def generate_technical_overview(self) -> str:
-        """Generate a markdown technical overview of the project"""
-        try:
-            # Get system info
-            sys_info = SystemInfo(
-                name=self.name,
-                system_type="software",
-                lifecycle_stage=self.get_setting('tracking', 'lifecycle_stage', 'development'),
-                root_path=self.path
-            )
-            
-            # Project Header
-            overview = f"""# {self.name} Technical Overview
-
-## System Environment
-{sys_info.to_markdown()}
-
-## Project Information
-- **Type:** {self.project_type.value}
-- **Status:** {self.status}
-- **Version:** {self.version}
-
-## Development Configuration
-- **Build Command:** `{self.get_setting('dev_settings', 'build_command') or 'N/A'}`
-- **Run Command:** `{self.get_setting('dev_settings', 'run_command') or 'N/A'}`
-- **Test Command:** `{self.get_setting('dev_settings', 'test_command') or 'N/A'}`
-
-## Project Structure
-"""
-            # Add file tree with symbols
-            tree_data = self._generate_file_tree()
-            overview += self._format_tree_as_markdown(tree_data)
-            
-            return overview
-            
-        except Exception as e:
-            logging.error(f"Error generating technical overview: {e}")
-            return f"Error generating overview: {str(e)}"
-
-    def _generate_file_tree(self) -> Dict[str, Any]:
-        """Generate hierarchical file tree with symbols"""
-        tree = {}
-        
-        try:
-            for file_path in self.path.rglob('*'):
-                if any(excluded in str(file_path) for excluded in self.excluded_dirs):
-                    continue
-                    
-                relative_path = file_path.relative_to(self.path)
-                parts = relative_path.parts
-                
-                current = tree
-                for part in parts[:-1]:
-                    current = current.setdefault(part, {})
-                    
-                if file_path.is_file() and file_path.suffix in self.file_extensions:
-                    symbols = self.get_setting('tracking', 'symbols', {}).get(str(relative_path), [])
-                    current[parts[-1]] = {
-                        'type': 'file',
-                        'symbols': [
-                            {
-                                'name': sym.name,
-                                'type': sym.type,
-                                'line': sym.line,
-                                'children': [c.name for c in sym.children] if hasattr(sym, 'children') else []
-                            }
-                            for sym in symbols
-                        ]
-                    }
-                else:
-                    current[parts[-1]] = {'type': 'directory'}
-                    
-            return tree
-            
-        except Exception as e:
-            logging.error(f"Error generating file tree: {e}")
-            return {}
-
-    def _format_tree_as_markdown(self, tree: Dict[str, Any], indent: int = 0) -> str:
-        """Format file tree as markdown with symbols"""
-        result = ""
-        
-        for name, content in sorted(tree.items()):
-            prefix = "    " * indent
-            
-            if content.get('type') == 'file':
-                result += f"{prefix}- 📄 `{name}`\n"
-                
-                # Add symbols if present
-                symbols = content.get('symbols', [])
-                for sym in symbols:
-                    sym_prefix = "    " * (indent + 1)
-                    icon = {
-                        'class': '🔷',
-                        'function': '🔶',
-                        'method': '🔸',
-                        'variable': '💠'
-                    }.get(sym.get('type', ''), '•')
-                    
-                    result += f"{sym_prefix}{icon} `{sym['name']}`"
-                    if sym.get('children'):
-                        result += f" (contains: {', '.join(sym['children'])})"
-                    result += "\n"
-                    
-            else:  # directory
-                result += f"{prefix}- 📁 **{name}/**\n"
-                if isinstance(content, dict):
-                    result += self._format_tree_as_markdown(content, indent + 1)
-                    
-        return result
-
-    def export_technical_overview(self, format: str = 'md') -> bool:
-        """Export technical overview to file"""
-        try:
-            overview = self.generate_technical_overview()
-            output_path = self.path / 'docs' / 'technical_overview'
-            output_path.mkdir(parents=True, exist_ok=True)
-            
-            if format == 'md':
-                with open(output_path / 'overview.md', 'w') as f:
-                    f.write(overview)
-            elif format == 'json':
-                tree_data = self._generate_file_tree()
-                with open(output_path / 'overview.json', 'w') as f:
-                    json.dump(tree_data, f, indent=2)
-            
-            return True
-            
-        except Exception as e:
-            logging.error(f"Error exporting technical overview: {e}")
-            return False
-
     def add_activity(self, activity_type: str, description: str):
         """Add new activity entry"""
         try:
@@ -601,36 +492,10 @@ class ProjectConfig(BaseProjectData):
                 'description': description,
                 'timestamp': datetime.now().isoformat()
             }
-            self.tracking.setdefault('activity', []).append(activity)
+            self.settings.tracking["activity"].append(activity)
             self.save()
         except Exception as e:
             logging.error(f"Error adding activity: {e}")
-            
-    def _setup_python_wing(self):
-        """Set up Python-specific wing"""
-        self.wings["python"] = {
-            "id": "python",
-            "type": "language",
-            "status": "active",
-            "config": {
-                "version": "3.x",
-                "package_manager": "poetry" if (self.path / "pyproject.toml").exists() else "pip",
-                "virtual_env": "venv" if (self.path / "venv").exists() else None
-            }
-        }
-        
-    def _setup_mojo_wing(self):
-        """Set up Mojo-specific wing"""
-        self.wings["mojo"] = {
-            "id": "mojo",
-            "type": "language",
-            "status": "active",
-            "config": {
-                "version": "latest",
-                "package_manager": "mojo",
-                "features": ["parallel", "simd"]
-            }
-        }
             
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ProjectConfig':
@@ -646,32 +511,6 @@ class ProjectConfig(BaseProjectData):
             data['path'] = Path(data['path'])
             
         return cls(**data)
-            
-    def add_wing(self, wing: Wing) -> bool:
-        """Add a new wing to the project"""
-        try:
-            if wing.id in self.wings:
-                return False
-            self.wings[wing.id] = wing
-            self.updated_at = datetime.now()
-            return True
-        except Exception as e:
-            logging.error(f"Error adding wing: {e}")
-            return False
-
-    def get_wing_config(self, wing_id: str) -> Optional[Dict[str, Any]]:
-        """Get merged configuration for a wing"""
-        wing = self.wings.get(wing_id)
-        if not wing:
-            return None
-        
-        return {
-            "project": {
-                "tech_stack": self.tech_stack,
-                "dev_settings": self.dev_settings
-            },
-            "wing": wing.config.to_dict()
-        }
             
     def validate(self) -> bool:
         """Validate project configuration"""
@@ -696,24 +535,7 @@ class ProjectConfig(BaseProjectData):
             logging.error(f"Configuration validation error: {e}")
             return False
             
-    def _validate_wing(self, wing: Wing) -> bool:
-        """Validate a wing configuration"""
-        try:
-            # Check required fields
-            if not wing.id or not wing.name or not wing.type:
-                return False
-                
-            # Check dependencies
-            for dep in wing.dependencies:
-                if dep not in self.wings:
-                    return False
-                    
-            return True
-            
-        except Exception as e:
-            logging.error(f"Wing validation error: {e}")
-            return False
-            
+    
     def validate_risk_settings(self) -> bool:
         """Validate risk management settings"""
         try:
@@ -739,3 +561,22 @@ class ProjectConfig(BaseProjectData):
             logging.error(f"Risk settings validation error: {e}")
             return False
             
+    def validate_resource_settings(self) -> bool:
+        """Validate resource management settings"""
+        try:
+            rules = self.resource_settings.get("allocation_rules", {})
+            if not isinstance(rules.get("max_allocation_period"), str):
+                return False
+                
+            tracking = self.resource_settings.get("tracking", {})
+            if not all(isinstance(v, bool) for v in tracking.values()):
+                return False
+                
+            notifications = self.resource_settings.get("notifications", {})
+            if not isinstance(notifications.get("low_resource_threshold"), (int, float)):
+                return False
+                
+            return True
+        except Exception as e:
+            logging.error(f"Resource settings validation error: {e}")
+            return False

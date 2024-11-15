@@ -7,8 +7,7 @@ import logging
 
 @dataclass
 class WingConfig:
-    """Structured configuration for wings"""
-    # Build and Runtime
+    """Configuration for a project wing"""
     build: Dict[str, Any] = field(default_factory=lambda: {
         "command": None,
         "args": [],
@@ -16,14 +15,11 @@ class WingConfig:
         "dependencies": [],
         "scripts": {}
     })
-    
     runtime: Dict[str, Any] = field(default_factory=lambda: {
         "entry_points": {},
         "environment": {},
         "requirements": []
     })
-    
-    # Development Settings
     development: Dict[str, Any] = field(default_factory=lambda: {
         "tools": [],
         "linters": [],

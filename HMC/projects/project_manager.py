@@ -24,7 +24,7 @@ import uuid
 from HMC.projects.project_types import ProjectType
 from HMC.symbol_manager import CodeSymbol
 from HMC.projects.project import Project
-
+from HMC.projects.project_registry import ProjectRegistry
 
 class ProjectManager(QObject):
     project_changed = pyqtSignal(str)
@@ -34,11 +34,11 @@ class ProjectManager(QObject):
         super().__init__()
         self.cccore = cccore
         self.config_manager = cccore.config_manager
+        self.registry = ProjectRegistry(self.config_manager.config_dir / "projects.json")
         self.projects: Dict[str, ProjectConfig] = {}
         self.current_project: Optional[Project] = None
         self.recent_projects: List[str] = []
         self.max_recent_projects = 10
-       
         self.build_manager = cccore.build_manager
         self._load_projects()
 
@@ -215,12 +215,15 @@ class ProjectManager(QObject):
             logging.error(f"Error setting default project: {e}")
             return False
     def _load_projects(self):
-        """Load projects from configuration"""
+        """Load projects from registry"""
         try:
-            projects_config = self.config_manager.get_value('projects', {})
-            for project_name, project_data in projects_config.items():
-                project_config = ProjectConfig.from_dict(project_data)
-                self.projects[project_name] = project_config
+            if self.registry.load():
+                self.projects = {
+                    name: ProjectConfig.from_dict(config) 
+                    for name, config in self.registry.projects.items()
+                }
+                if self.registry.active_project:
+                    self.set_current_project(self.registry.active_project)
         except Exception as e:
             logging.error(f"Error loading projects: {e}")
 

@@ -6,9 +6,17 @@ from .base_config import ProjectType
 from .project_config import ProjectConfig
 import logging
 from .wings_manager import WingsManager
+from .resource_manager import ResourceManager
 
 from HMC.projects.project_wing import Wing
-from .project_types import WingType, WingStatus
+from .project_types import (
+    DevelopmentStandards,
+    RiskManagement,
+    Resource,
+    ProjectType,
+    WingType,
+    WingStatus
+)
 import uuid
 @dataclass
 class Project:
@@ -17,44 +25,56 @@ class Project:
     project_type: ProjectType
     config: ProjectConfig
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    cccore: Any = field(default=None)
-    wings: Dict[str, Wing] = field(default_factory=dict)
+    cccore: Any = field(default=None, repr=False)
+    resources: Dict[str, 'Resource'] = field(default_factory=dict)
+    wings_manager: Optional[WingsManager] = None
     
     def __post_init__(self):
-        if isinstance(self.path, str):
-            self.path = Path(self.path)
-        if isinstance(self.project_type, str):
-            self.project_type = ProjectType(self.project_type)
-            
-        # Initialize wings from config
-        if hasattr(self.config, 'wings'):
-            self.wings = self.config.wings
-        else:
-            self.wings = {}
-            
-        # Initialize managers
+        self.path = Path(self.path) if isinstance(self.path, str) else self.path
+        self.project_type = ProjectType(self.project_type) if isinstance(self.project_type, str) else self.project_type
+        
         self.wings_manager = WingsManager(self.config)
-        if self.cccore:
-            self.code_manager = self.cccore.code_manager
-        else:
-            self.code_manager = None
+        self.code_manager = self.cccore.code_manager if self.cccore else None
+        self.resource_manager = ResourceManager(self)
+        
+        self.config._project = self
+
+    @property
+    def risk_manager(self) -> RiskManagement:
+        return self.config.risk_management
+
+    @property
+    def dev_standards(self) -> DevelopmentStandards:
+        return self.config.dev_standards
+
+    def calculate_risk_score(self, probability: str, impact: str) -> int:
+        return self.risk_manager.calculate_risk_score(probability, impact)
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Project':
-        """Create Project instance from dictionary"""
-        return cls(
-            name=data.get('name', ''),
-            path=Path(data.get('path', '')),
-            project_type=data.get('project_type', ProjectType.LOCAL),
-            config=ProjectConfig(**data.get('config', {})) if data.get('config') else None
+        """Create Project from dictionary"""
+        wings_data = data.pop('wings', {})
+        project = cls(
+            name=data['name'],
+            path=Path(data['path']),
+            project_type=ProjectType(data['project_type']),
+            config=ProjectConfig.from_dict(data['config']) if data.get('config') else None,
+            id=data.get('id')
         )
+        # Restore wings
+        for wing_id, wing_data in wings_data.items():
+            project.wings_manager.wings[wing_id] = Wing.from_dict(wing_data)
+        return project
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert Project to dictionary"""
         return {
             'name': self.name,
             'path': str(self.path),
-            'project_type': self.project_type,
-            'config': asdict(self.config) if self.config else None
+            'project_type': self.project_type.value,
+            'config': self.config.to_dict() if self.config else None,
+            'id': self.id,
+            'wings': {k: v.to_dict() for k, v in self.wings_manager.wings.items()}
         }   
     def add_wing(self, name: str, wing_type: WingType, description: str = "", 
                 config: Dict[str, Any] = None) -> Optional[Wing]:
@@ -73,46 +93,16 @@ class Project:
             path=path
         )
         
-        # Initialize wings manager
-        wing_manager = WingsManager(config)
-        
-        # Auto-detect and set up language wings
-        detected_wings = []
-        
-        # Python detection
-        if list(path.glob("*.py")) or (path / "pyproject.toml").exists():
-            detected_wings.append(("python", WingType.LANGUAGE))
-            
-        # Mojo detection
-        if list(path.glob("*.mojo")):
-            detected_wings.append(("mojo", WingType.LANGUAGE))
-            
-        # Create detected wings
-        for wing_name, wing_type in detected_wings:
-            wing_manager.create_wing(
-                name=wing_name,
-                wing_type=wing_type,
-                description=f"{wing_name.title()} language support"
-            )
-        
-        return cls(
+        # Create project instance (WingsManager will be initialized in __post_init__)
+        project = cls(
             name=name,
             path=path,
             project_type=project_type,
             config=config
         )
         
-    def calculate_risk_score(self, probability: str, impact: str) -> int:
-        """Calculate risk score based on probability and impact"""
-        try:
-            risk_config = self.config.management.get("risk", {}).get("matrix_config", {})
-            p_weight = risk_config.get("probability_weights", {}).get(probability, 1)
-            i_weight = risk_config.get("impact_weights", {}).get(impact, 1)
-            return p_weight * i_weight
-        except Exception as e:
-            logging.error(f"Error calculating risk score: {e}")
-            return 1
-
+        return project
+        
     def needs_risk_review(self, last_review_date: datetime) -> bool:
         """Check if risk needs review based on configuration"""
         try:
@@ -133,4 +123,21 @@ class Project:
             project_type=config.project_type,
             config=config
         )
+        
+    def allocate_resource(self, resource_id: str, allocation: Dict[str, Any]) -> bool:
+        """Allocate resource to project"""
+        try:
+            return self.resource_manager.allocate(resource_id, allocation)
+        except Exception as e:
+            logging.error(f"Error allocating resource: {e}")
+            return False
+
+    def get_resource_allocation(self, resource_id: str) -> Optional[Dict[str, Any]]:
+        """Get resource allocation details"""
+        return self.resource_manager.get_allocation(resource_id)
+        
+    def get_technical_overview(self) -> str:
+        """Generate technical overview"""
+        generator = TechnicalOverviewGenerator(self.config)
+        return generator.generate()
         

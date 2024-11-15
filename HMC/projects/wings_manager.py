@@ -7,10 +7,13 @@ import json
 from .project_types import WingType, WingStatus
 from .project_wing import Wing
 from .wing_config import WingConfig
+from .wings.language_wing_factory import LanguageWingFactory
+from .project_types import ProjectType
 class WingsManager:
     def __init__(self, project_path: Path):
         self.project_path = project_path
         self.wings: Dict[str, Wing] = {}
+        self.language_factory = LanguageWingFactory(project_path)
         
     def create_wing(self, name: str, wing_type: WingType, 
                    description: str = "", config: Optional[WingConfig] = None) -> Optional[Wing]:
@@ -115,3 +118,38 @@ class WingsManager:
     def get_dependent_wings(self, wing_id: str) -> List[Wing]:
         """Get wings that depend on the specified wing"""
         return [w for w in self.wings.values() if wing_id in w.dependencies] 
+    def _validate_wing(self, wing: Wing) -> bool:
+        """Validate a wing configuration"""
+        try:
+            # Check required fields
+            if not wing.id or not wing.name or not wing.type:
+                return False
+                
+            # Check dependencies
+            for dep in wing.dependencies:
+                if dep not in self.wings:
+                    return False
+                    
+            return True
+            
+        except Exception as e:
+            logging.error(f"Wing validation error: {e}")
+            return False
+            
+    def initialize_wings(self, project_type: ProjectType):
+        """Initialize wings based on project type"""
+        # Create core wing
+        core_wing = self.create_wing(
+            name="core",
+            wing_type=WingType.CORE,
+            description="Core project functionality"
+        )
+        if core_wing:
+            self.wings[core_wing.id] = core_wing
+
+        # Auto-detect and create language wings
+        for language in self.language_factory.detect_languages():
+            wing = self.language_factory.create_wing(language)
+            if wing:
+                self.wings[wing.id] = wing
+            

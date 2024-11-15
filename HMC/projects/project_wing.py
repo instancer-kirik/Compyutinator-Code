@@ -51,3 +51,13 @@ class Wing:
             "tags": self.tags,
             "metadata": self.metadata
         }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Wing':
+        if 'path' in data and data['path']:
+            data['path'] = Path(data['path'])
+        data['type'] = WingType(data['type'])
+        data['status'] = WingStatus(data['status'])
+        if 'config' in data:
+            data['config'] = WingConfig.from_dict(data['config'])
+        return cls(**data)
