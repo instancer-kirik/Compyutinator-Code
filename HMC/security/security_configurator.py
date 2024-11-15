@@ -12,8 +12,8 @@ import hashlib
 import os
 import random
 import time
-from .project_config import SecurityConfig
-from intrusion_monitor import IntrusionMonitor
+from HMC.project_config import SecurityConfig
+from HMC.security.intrusion_monitor import IntrusionMonitor
 
 class SecurityConfigurator:
     def __init__(self, config_path: Path):
@@ -43,6 +43,7 @@ class SecurityConfigurator:
 
     def setup_honeypots(self):
         """Configure honeypot traps"""
+        
         try:
             # Setup fake services
             for service, config in self.security_config.countermeasures["deception"]["fake_services"].items():

@@ -65,6 +65,9 @@ class SecurityConfig:
     }) 
 
     monitoring: Dict[str, Any] = field(default_factory=lambda: {
+        "deep_inspection": False,  # Only enable when needed
+        "scan_interval": 60,       # Seconds between scans
+        "max_concurrent": 2,        # Max concurrent scans
         "intrusion_detection": {
             "enabled": True,
             "patterns": {

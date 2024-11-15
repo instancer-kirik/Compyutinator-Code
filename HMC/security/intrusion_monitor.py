@@ -9,6 +9,7 @@ import psutil
 from pathlib import Path
 from collections import defaultdict
 from datetime import timedelta
+import nmap  # Add to imports
 
 
 class IntrusionMonitor:
@@ -24,14 +25,29 @@ class IntrusionMonitor:
         self.log_path.mkdir(exist_ok=True)
         self.scan_attempts = defaultdict(list)  # Track scan patterns
         self.scan_thresholds = {
-            "ports_per_minute": 5,
-            "syn_scan_threshold": 3,
-            "null_scan_threshold": 2,
-            "fin_scan_threshold": 2
+            "ports_per_minute": 10,  # Increased from 5
+            "syn_scan_threshold": 5,  # Increased from 3
+            "attempts_threshold": 15  # New threshold for total attempts
         }
         self.last_scan_alert = None
         self.scan_alert_cooldown = timedelta(minutes=5)
-        
+        # Initialize nmap scanner with safe defaults
+        try:
+            self.nmap_scanner = nmap.PortScanner()
+            self.nmap_enabled = True
+            logging.info("Nmap scanner initialized successfully")
+        except Exception as e:
+            self.nmap_enabled = False
+            logging.warning(f"Nmap initialization failed: {e}. Falling back to basic scanning.")
+
+        # Start with honeypots disabled
+        logging.warning("""
+        SECURITY NOTICE:
+        - Honeypots are disabled by default; tempting attackers gets attackers.
+        - Basic port monitoring is enabled
+        - Nmap scanning is configured for minimal system impact
+        - Enable additional features through security_config
+        """)
         # HTTP/HTTPS monitoring
         self.http_patterns = {
             "sql_injection": [
@@ -87,6 +103,9 @@ class IntrusionMonitor:
             ]
         }
         
+        # Add nmap scanner
+        self.nmap_scanner = nmap.PortScanner()
+        
     def start(self):
         """Start monitoring"""
         self.running = True
@@ -119,46 +138,103 @@ class IntrusionMonitor:
         """Set patterns to monitor for"""
         self.patterns = patterns
 
-    def detect_scan(self, ip: str, port: int, packet_type: str = "SYN"):
+    def detect_scan(self, ip: str, port: int):
         """Detect potential port scanning"""
         current_time = datetime.now()
         
-        # Add scan attempt
-        self.scan_attempts[ip].append({
-            "time": current_time,
-            "port": port,
-            "type": packet_type
-        })
+        with self.lock:
+            if ip not in self.suspicious_ips:
+                self.suspicious_ips[ip] = {
+                    "first_seen": current_time,
+                    "ports_tried": set(),
+                    "last_attempt": current_time,
+                    "attempt_count": 0
+                }
+            
+            data = self.suspicious_ips[ip]
+            data["ports_tried"].add(port)
+            data["last_attempt"] = current_time
+            data["attempt_count"] += 1
+            
+            # Check for suspicious behavior
+            time_window = (current_time - data["first_seen"]).total_seconds()
+            ports_per_second = len(data["ports_tried"]) / max(time_window, 1)
+            
+            if ports_per_second > 10 or data["attempt_count"] > 50:  # Thresholds
+                self._log_scan_attempt(ip, data)
+                return True
         
-        # Clean old attempts
-        self.scan_attempts[ip] = [
-            attempt for attempt in self.scan_attempts[ip]
-            if current_time - attempt["time"] < timedelta(minutes=1)
-        ]
-        
-        # Analyze scan pattern
-        scan_info = self._analyze_scan_pattern(ip)
-        
-        if scan_info["is_scanning"]:
-            self._handle_scan_detection(ip, scan_info)
-        
+        return False
+
+    def _log_scan_attempt(self, ip: str, data: Dict):
+        """Log scanning attempt"""
+        try:
+            log_entry = {
+                "timestamp": datetime.now().isoformat(),
+                "ip": ip,
+                "ports_tried": list(data["ports_tried"]),
+                "attempt_count": data["attempt_count"],
+                "duration": (datetime.now() - data["first_seen"]).total_seconds()
+            }
+            
+            log_file = self.log_path / "scan_attempts.log"
+            with open(log_file, "a") as f:
+                json.dump(log_entry, f)
+                f.write("\n")
+                
+        except Exception as e:
+            logging.error(f"Error logging scan attempt: {e}")
+
+    def get_service_info(self, ip: str, port: int) -> Dict[str, str]:
+        """Get basic service information without nmap"""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1)
+            sock.connect((ip, port))
+            
+            # Try to get banner
+            try:
+                banner = sock.recv(1024).decode().strip()
+            except:
+                banner = "No banner"
+                
+            sock.close()
+            
+            return {
+                "port": port,
+                "state": "open",
+                "banner": banner
+            }
+            
+        except Exception as e:
+            return {
+                "port": port,
+                "state": "closed",
+                "error": str(e)
+            }
+
     def _port_monitor_worker(self, port: int):
         """Worker thread for monitoring a port"""
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.bind(('0.0.0.0', port))
-        sock.listen(1)
-        sock.settimeout(1.0)
-        
-        while self.running:
-            try:
-                conn, addr = sock.accept()
-                self._handle_connection(conn, addr, port)
-            except socket.timeout:
-                continue
-            except Exception as e:
-                logging.error(f"Port monitor error on {port}: {e}")
-                
-        sock.close()
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.bind(('0.0.0.0', port))
+            sock.listen(1)
+            sock.settimeout(1.0)
+            
+            while self.running:
+                try:
+                    conn, addr = sock.accept()
+                    if self.detect_scan(addr[0], port):
+                        # Optional: Add immediate response actions here
+                        pass
+                    conn.close()
+                except socket.timeout:
+                    continue
+                    
+        except Exception as e:
+            logging.error(f"Port monitor error on {port}: {e}")
+        finally:
+            sock.close()
         
     def _handle_connection(self, conn: socket.socket, addr: tuple, port: int):
         """Handle incoming connection"""
@@ -317,7 +393,7 @@ class IntrusionMonitor:
         threading.Thread(target=rotate_logs, daemon=True).start()
 
     def _analyze_scan_pattern(self, ip: str) -> dict:
-        """Analyze scanning pattern for an IP"""
+        """Analyze potential scan patterns with minimal system impact"""
         attempts = self.scan_attempts[ip]
         unique_ports = len(set(a["port"] for a in attempts))
         
@@ -326,36 +402,40 @@ class IntrusionMonitor:
             "scan_type": None,
             "ports_hit": unique_ports,
             "techniques": [],
-            "intensity": "low"
+            "intensity": "low",
+            "scan_rate": 0
         }
         
-        # Check scan speed
-        if unique_ports >= self.scan_thresholds["ports_per_minute"]:
-            pattern["is_scanning"] = True
-            pattern["techniques"].append("port_sweep")
+        # Calculate scan rate (ports/second)
+        if attempts:
+            time_span = (attempts[-1]["time"] - attempts[0]["time"]).total_seconds()
+            pattern["scan_rate"] = unique_ports / max(time_span, 1)
             
-        # Check for SYN scans (half-open scanning)
-        syn_attempts = sum(1 for a in attempts if a["type"] == "SYN")
-        if syn_attempts >= self.scan_thresholds["syn_scan_threshold"]:
-            pattern["is_scanning"] = True
-            pattern["techniques"].append("syn_scan")
-            
-        # Check for stealth scanning
-        null_attempts = sum(1 for a in attempts if a["type"] == "NULL")
-        fin_attempts = sum(1 for a in attempts if a["type"] == "FIN")
+        # Only run nmap if we detect suspicious activity first
+        if pattern["scan_rate"] > self.scan_thresholds["ports_per_minute"]:
+            try:
+                # Limited scan with minimal options
+                scan_result = self.nmap_scanner.scan(
+                    ip, 
+                    arguments='-sS -T2 --max-rate 500 --max-retries 1'
+                )
+                
+                if ip in scan_result['scan']:
+                    scan_info = scan_result['scan'][ip]
+                    if 'tcp' in scan_info.get('scaninfo', {}):
+                        pattern["techniques"].append("tcp_scan")
+                        pattern["is_scanning"] = True
+                        
+            except Exception as e:
+                logging.error(f"Nmap scan detection error: {e}")
+                # Fallback to basic detection
+                pattern["is_scanning"] = True
+                pattern["techniques"].append("rapid_scan")
         
-        if null_attempts >= self.scan_thresholds["null_scan_threshold"]:
-            pattern["is_scanning"] = True
-            pattern["techniques"].append("null_scan")
-            
-        if fin_attempts >= self.scan_thresholds["fin_scan_threshold"]:
-            pattern["is_scanning"] = True
-            pattern["techniques"].append("fin_scan")
-            
-        # Determine intensity
-        if unique_ports > 20:
+        # Determine intensity based primarily on scan rate
+        if pattern["scan_rate"] > 100:
             pattern["intensity"] = "high"
-        elif unique_ports > 10:
+        elif pattern["scan_rate"] > 50:
             pattern["intensity"] = "medium"
             
         return pattern
@@ -396,20 +476,28 @@ class IntrusionMonitor:
             self._send_scan_alert(log_entry)
             
     def _fingerprint_scanner(self, ip: str) -> dict:
-        """Try to fingerprint the scanning tool"""
+        """Enhanced fingerprinting using nmap"""
         try:
-            nm = nmap.PortScanner()
-            result = nm.scan(ip, arguments="-O -sV")
+            # Run OS detection and service version detection
+            result = self.nmap_scanner.scan(
+                ip, 
+                arguments='-sV -O --version-intensity 5'
+            )
             
-            if ip in result["scan"]:
-                host_info = result["scan"][ip]
+            if ip in result['scan']:
+                host_info = result['scan'][ip]
                 return {
-                    "os": host_info.get("osmatch", [{}])[0].get("name", "unknown"),
-                    "accuracy": host_info.get("osmatch", [{}])[0].get("accuracy", "0"),
-                    "services": host_info.get("tcp", {})
+                    "os": host_info.get('osmatch', [{}])[0].get('name', 'unknown'),
+                    "os_accuracy": host_info.get('osmatch', [{}])[0].get('accuracy', '0'),
+                    "services": host_info.get('tcp', {}),
+                    "uptime": host_info.get('uptime', {}).get('seconds', 0),
+                    "last_boot": host_info.get('uptime', {}).get('lastboot', 'unknown'),
+                    "mac_address": host_info.get('addresses', {}).get('mac', 'unknown'),
+                    "vendor": host_info.get('vendor', {})
                 }
+                
         except Exception as e:
-            logging.error(f"Error fingerprinting scanner: {e}")
+            logging.error(f"Nmap fingerprinting error: {e}")
         return None
         
     def _send_scan_alert(self, scan_info: dict):
@@ -430,3 +518,4 @@ Ports Scanned: {scan_info['ports_scanned']}
         # Send to configured channels
         for channel in self.security_config.countermeasures["alerts"]["channels"]:
             self._send_alert_to_channel(channel, alert)
+    
