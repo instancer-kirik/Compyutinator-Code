@@ -29,6 +29,7 @@ class WingType(Enum):
 @dataclass
 class BaseProjectData:
     name: str
+   
     path: Path
     project_type: ProjectType = ProjectType.UNKNOWN
     description: str = ""
@@ -36,3 +37,4 @@ class BaseProjectData:
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
     metadata: Dict[str, Any] = field(default_factory=dict) 
+    type: WingType = WingType.CUSTOM

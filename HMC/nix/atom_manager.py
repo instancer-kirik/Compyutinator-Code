@@ -60,7 +60,7 @@ class AtomManager:
         return {
             'resolve': self._resolve_nix_atom,
             'publish': self._publish_nix_atom,
-            'get_deps': self._get_nix_atom_deps
+            'get_deps': self.get_nix_atom_deps
         }
         
     def get_atom_deps(self, path: str) -> List[str]:
@@ -87,3 +87,38 @@ class AtomManager:
         """Generate lock file for an atom"""
         result = self.nix_manager.run_command(['nix', 'generate-lock-file', path])
         return result.stdout.strip()
+    def _resolve_nix_atom(self, atom: AtomIdentifier) -> Dict:
+           """Resolve a Nix-based atom"""
+           try:
+               # Implementation for resolving a Nix atom
+               result = self.nix_manager.run_command([
+                   'nix-store', '--query', '--deriver',
+                   f"/nix/store/*-{atom.atom_id}*"
+               ])
+               return {
+                   'path': result.stdout.strip(),
+                   'version': atom.version,
+                   'id': atom.atom_id
+               }
+           except Exception as e:
+               logging.error(f"Error resolving Nix atom: {e}")
+               raise
+    def _publish_nix_atom(self, atom):
+        """Publish a Nix-based atom"""
+        try:
+            result = self.nix_manager.run_command([
+                'nix-store', '--add',
+                f"/nix/store/*-{atom.atom_id}*"
+            ])
+            return {
+                'path': result.stdout.strip(),
+                'version': atom.version,
+                'id': atom.atom_id
+            }
+        except Exception as e:
+            logging.error(f"Error publishing Nix atom: {e}")
+            raise
+
+    def get_nix_atom_deps(self, path: str) -> List[str]:
+        """Get Nix atom dependencies"""
+        return self.nix_manager.get_dependencies(Path(path))

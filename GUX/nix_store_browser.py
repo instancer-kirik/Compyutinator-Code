@@ -15,6 +15,7 @@ from typing import Optional, List, Dict
 import json
 from enum import Enum
 from datetime import datetime
+from HMC.nix.atom_manager import AtomManager
 import sys
 @dataclass
 class AtomIdentifier:

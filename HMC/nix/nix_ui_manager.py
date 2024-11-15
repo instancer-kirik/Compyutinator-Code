@@ -12,14 +12,14 @@ class NixUIManager:
         
     def create_store_browser(self, parent: Optional[QWidget] = None) -> QWidget:
         """Create a store browser widget"""
-        from ..GUX.nix_store_browser import NixStoreBrowser
+        from GUX.nix_store_browser import NixStoreBrowser
         browser = NixStoreBrowser(self.nix_manager, parent)
         self.widgets['store_browser'] = browser
         return browser
         
     def create_package_viewer(self, parent: Optional[QWidget] = None) -> QWidget:
         """Create a package viewer widget"""
-        from ..GUX.nix_package_viewer import NixPackageViewer
+        from GUX.nix_package_viewer import NixPackageViewer
         viewer = NixPackageViewer(self.nix_manager, parent)
         self.widgets['package_viewer'] = viewer
         return viewer

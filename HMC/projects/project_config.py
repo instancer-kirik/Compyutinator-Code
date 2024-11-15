@@ -19,7 +19,7 @@ from .project_types import BaseProjectData, ProjectType, WingType, WingStatus
 class ProjectConfig(BaseProjectData):
     # Symbol tracking (was missing)
     symbols: Dict[Path, List['CodeSymbol']] = field(default_factory=dict)
-    
+   
     # Project Structure and Symbols
     directory_structure: Dict[str, Any] = field(default_factory=lambda: PROJECT_DIRECTORIES.copy())
     relationships: Dict[str, List[str]] = field(default_factory=dict)

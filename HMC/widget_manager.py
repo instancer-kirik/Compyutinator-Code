@@ -1,5 +1,6 @@
 import sys
 import os
+import importlib
 
 # Add the AuraText directory to the Python path
 auratext_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'AuraText')
@@ -47,6 +48,7 @@ from GUX.device_manager_view import DeviceManagerView
 from HMC.dashboard import Dashboard
 from GUX.radial_menu import RadialMenu
 from typing import Optional
+from HMC.plugin_interface import WidgetRegistry, WidgetPlugin
 
 class WidgetReference:
     def __init__(self, widget, parent=None):
@@ -90,6 +92,9 @@ class WidgetManager:
         # Load configuration
         self.load_config()
         self.setup_widget_methods()
+        self.registry = WidgetRegistry()
+        self.setup_builtin_widgets()
+        self.load_plugins()
 
     def load_config(self):
         """Load widget/dock configuration from config manager"""
@@ -153,6 +158,7 @@ class WidgetManager:
                 'Nix Browser': lambda parent: self.get_nix_browser(),
             }
             logging.info("Widget methods initialized successfully")
+            
         except Exception as e:
             logging.error(f"Error setting up widget methods: {e}")
 
@@ -366,40 +372,30 @@ class WidgetManager:
             logging.error(f"Error setting main window: {e}")
             logging.error(traceback.format_exc())
 
-    def get_or_create_dock(self, widget_name):
-        """Get or create a dock widget"""
-        logging.info(f"Attempting to get or create dock: {widget_name}")
-        
-        # Return existing dock if valid
-        if widget_name in self.dock_widgets and self.is_dock_valid(self.dock_widgets[widget_name]):
-            logging.info(f"Existing valid dock found for {widget_name}")
-            return self.dock_widgets[widget_name]
-            
+    def get_or_create_dock(self, name: str, widget=None, area=Qt.DockWidgetArea.RightDockWidgetArea):
+        """Get existing dock or create new one"""
         try:
-            # Create widget
-            widget_method = self.widget_methods.get(widget_name)
-            if not widget_method:
-                logging.error(f"No widget method found for {widget_name}")
-                return None
+            if name in self.docks:
+                return self.docks[name]
                 
-            widget = widget_method(self.main_window)
-            if not widget:
-                logging.error(f"Failed to create widget for {widget_name}")
-                return None
-                
-            # Create dock
-            dock = QDockWidget(widget_name, self.main_window)
+            if widget is None:
+                widget = self.registry.create_widget(name, self.main_window)
+                if not widget:
+                    logging.error(f"Failed to create widget: {name}")
+                    return None
+                    
+            dock = QDockWidget(name, self.main_window)
             dock.setWidget(widget)
-            dock.setObjectName(widget_name)
+            dock.setObjectName(f"{name.lower().replace(' ', '_')}_dock")
             
-            # Store reference
-            self.dock_widgets[widget_name] = dock
-            logging.info(f"Created new dock: {widget_name}")
+            if area != Qt.DockWidgetArea.NoDockWidgetArea:
+                self.main_window.addDockWidget(area, dock)
+                
+            self.docks[name] = dock
             return dock
             
         except Exception as e:
-            logging.error(f"Error creating widget for {widget_name}: {e}")
-            logging.error(traceback.format_exc())
+            logging.error(f"Error creating dock widget: {e}")
             return None
 
     def create_dock(self, name: str, widget: QWidget, area: Qt.DockWidgetArea, 
@@ -592,10 +588,7 @@ class WidgetManager:
             logging.error(f"Error adding dock widget {title}: {e}")
             return None
 
-    def show_dock_widget(self, title):
-        if title in self.docks:
-            self.docks[title].show()   
-   
+ 
     def update_flashlight_settings(self, value):
         power = value / 100.0
         self.overlay.flashlight_overlay.set_power(power)
@@ -1075,7 +1068,7 @@ class WidgetManager:
         """Show device manager widget"""
         try:
             if 'Device Manager' not in self.widgets:
-                self.widgets['Device Manager'] = DeviceManagerView(self.cccore)
+                self.widgets['Device Manager'] = DeviceManagerView()
             dock = self.get_or_create_dock('Device Manager', self.widgets['Device Manager'])
             if dock:
                 dock.show()
@@ -1087,7 +1080,7 @@ class WidgetManager:
         """Show Unix/Linux file browser"""
         try:
             if 'nix_browser' not in self.widgets:
-                self.widgets['nix_browser'] = NixStoreBrowser(parent=self.main_window)
+                self.widgets['nix_browser'] = NixStoreBrowser(parent=self.main_window, nix_manager=self.cccore.nix_manager)
             dock = self.get_or_create_dock('Unix Browser', self.widgets['nix_browser'])
             if dock:
                 dock.show()
@@ -1095,18 +1088,47 @@ class WidgetManager:
         except Exception as e:
             logging.error(f"Error showing Unix browser: {e}")
 
-    def show_dashboard(self):
+    def show_dashboard(self, project=None):
         """Show dashboard widget"""
         try:
+            # Create the dashboard widget if it doesn't exist
             if 'dashboard' not in self.widgets:
-                self.widgets['dashboard'] = Dashboard(self.cccore)
-            dock = self.get_or_create_dock('Dashboard', self.widgets['dashboard'])
+                from HMC.dashboard import Dashboard
+                self.widgets['dashboard'] = Dashboard(self.cccore, project)
+            
+            # Create floating dock widget
+            dock = self.get_or_create_dock(
+                'Dashboard', 
+                self.widgets['dashboard'],
+                Qt.DockWidgetArea.NoDockWidgetArea  # Make it floating
+            )
+            
             if dock:
+                dock.setFloating(True)  # Ensure it's floating
                 dock.show()
                 dock.raise_()
+            
         except Exception as e:
             logging.error(f"Error showing dashboard: {e}")
+            raise
 
+    def show_dock_widget(self, name: str):
+        """Show/hide a dock widget"""
+        try:
+            dock = self.docks.get(name)
+            if not dock:
+                # Try to create the dock if it doesn't exist
+                dock = self.get_or_create_dock(name)
+                if not dock:
+                    return
+                
+            if isinstance(dock, QDockWidget):  # Ensure dock is a QDockWidget
+                dock.setVisible(not dock.isVisible())
+            else:
+                logging.error(f"Invalid dock widget type for {name}: {type(dock)}")
+                
+        except Exception as e:
+            logging.error(f"Unexpected error toggling dock visibility: {e}")
     def setup_menu_bar(self):
         """Initialize and setup menu bar"""
         try:
@@ -1143,3 +1165,46 @@ class WidgetManager:
             logging.error(f"Error creating menu bar: {e}")
             logging.error(traceback.format_exc())
             return None
+
+    def Dashboard(self, cccore, project=None):
+        """Create or return a Dashboard widget"""
+        if 'dashboard' not in self.widgets:
+            from HMC.dashboard import Dashboard
+            self.widgets['dashboard'] = Dashboard(cccore, project)
+        return self.widgets['dashboard']
+
+    def setup_builtin_widgets(self):
+        """Register built-in widgets"""
+        # Register factory functions for built-in widgets
+        self.registry.register_widget_factory('FileExplorer', 
+            lambda parent: FileExplorerWidget(parent))
+        self.registry.register_widget_factory('CodeEditor',
+            lambda parent: CodeEditorWidget(parent))
+        self.registry.register_widget_factory('Terminal',
+            lambda parent: TerminalWidget(parent))
+        # ... register other built-in widgets ...
+        
+    def load_plugins(self):
+        """Load widget plugins from plugins directory"""
+        try:
+            plugins_dir = os.path.join(os.path.dirname(__file__), '..', 'plugins')
+            for filename in os.listdir(plugins_dir):
+                if filename.endswith('.py') and not filename.startswith('_'):
+                    try:
+                        module_name = filename[:-3]
+                        module = importlib.import_module(f'plugins.{module_name}')
+                        
+                        # Look for plugin classes
+                        for item_name in dir(module):
+                            item = getattr(module, item_name)
+                            if (isinstance(item, type) and 
+                                issubclass(item, WidgetPlugin) and 
+                                item != WidgetPlugin):
+                                self.registry.register_plugin(item)
+                                
+                    except Exception as e:
+                        logging.error(f"Error loading plugin {filename}: {e}")
+                    
+        except Exception as e:
+            logging.error(f"Error loading plugins: {e}")
+        

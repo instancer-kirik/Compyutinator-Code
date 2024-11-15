@@ -122,4 +122,13 @@ class NixManager:
             self.run_command(['nix-store', '--delete', str(path)])
             return True
         except:
-            return False 
+            return False
+            
+    def get_package_info(self, package_name: str) -> str:
+        """Get detailed information about a specific Nix package"""
+        try:
+            result = self.run_command(['nix', 'path-info', '--json', package_name])
+            return result.stdout.strip()
+        except Exception as e:
+            return f"Error fetching package info: {e}"
+            

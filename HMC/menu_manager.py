@@ -118,7 +118,7 @@ class MenuManager:
             
             # Add dashboard action
             dashboard_action = QAction("Project Dashboard", self.main_window)
-            dashboard_action.triggered.connect(lambda: self.action_handlers.show_dashboard())
+            dashboard_action.triggered.connect(lambda: self.action_handlers.show_dashboard(main_window=self.main_window))
             dashboard_action.setShortcut("Ctrl+Shift+D")
             self.view_menu.addAction(dashboard_action)
             
@@ -242,7 +242,7 @@ class MenuManager:
             current_project = self.cccore.project_manager.get_current_project()
             if current_project:
                 # Use the widget manager to show the dashboard
-                self.cccore.widget_manager.show_dashboard(current_project.name)
+                self.cccore.widget_manager.show_dashboard(current_project)
             else:
                 QMessageBox.warning(self.main_window, "No Project", 
                                   "Please select or create a project first.")
@@ -290,11 +290,9 @@ class MenuManager:
 
     def toggle_dock_visibility(self, dock_widget, checked):
         try:
-            dock_widget.setVisible(checked)
-        except RuntimeError:
-            logging.warning(f"Failed to set visibility for a dock widget. It may have been deleted.")
+            self.cccore.widget_manager.show_dock_widget(dock_widget)
         except Exception as e:
-            logging.error(f"Unexpected error toggling dock visibility: {str(e)}")
+            logging.error(f"Error toggling dock visibility: {str(e)}")
 
     def spawn_prefilled_merger(self):
         # Sample data

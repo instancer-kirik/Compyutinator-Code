@@ -15,10 +15,10 @@ import tempfile
 from HMC.mark_manager import MarkManager
 from HMC.risk_manager import RiskManager
 from .file_manager import FileManager
-from PyQt6.QtWidgets import QDockWidget
+
 from PyQt6.QtCore import Qt
-from .workspace_manager import WorkspaceManager
-from GUX.fileset_manager_widget import FilesetManagerWidget
+
+
 from HMC.projects.project_manager import ProjectManager
 from .build_manager import BuildManager
 from GUX.radial_menu import RadialMenu

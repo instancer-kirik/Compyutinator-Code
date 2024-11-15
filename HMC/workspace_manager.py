@@ -19,11 +19,15 @@ class WorkspaceManager:
         self.cccore = cccore
         self.workspaces = {}
         self.active_workspaces = {}  # Map vault paths to active workspaces
+        self.portfolios = []
         self.config_file = os.path.join(self.cccore.vault_manager.get_current_vault_path() or tempfile.gettempdir(), "workspace_config.json")
         
         self.load_config()
         self.load_workspaces()
-
+      
+    def add_portfolio(self, portfolio):
+        self.portfolios.append(portfolio)
+        
     def load_config(self):
         if os.path.exists(self.config_file):
             with open(self.config_file, 'r') as f:
@@ -171,3 +175,13 @@ class WorkspaceManager:
             self.cccore.vault_manager.get_current_vault().knowledge_graph.remove_file_from_fileset(workspace.active_fileset, file_path)
             return True
         return False
+
+    def show_workspace_manager(self):
+        """Show the workspace management interface"""
+        try:
+            if not hasattr(self, 'workspace_dialog'):
+                from GUX.dialogs.workspace_dialog import WorkspaceManagerDialog
+                self.workspace_dialog = WorkspaceManagerDialog(self.cccore)
+            self.workspace_dialog.show()
+        except Exception as e:
+            logging.error(f"Error showing workspace manager: {e}")

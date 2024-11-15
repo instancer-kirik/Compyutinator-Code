@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QTabWidget,
                            QPushButton, QLabel, QTableWidget, QTableWidgetItem,
-                           QGroupBox, QGridLayout, QTextEdit, QTreeWidget, QComboBox)
+                           QGroupBox, QGridLayout, QTextEdit, QTreeWidget, QComboBox, QListWidget,QTreeWidgetItem)
 from PyQt6.QtCore import Qt
 from GUX.widgets.task_checklist_manager import TaskChecklistManager
 from GUX.markdown_viewer import MarkdownViewer
@@ -17,14 +17,44 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QListWidget
 from GUX.widgets.project_dashboard import ProjectDashboard
 from GUX.widgets.mark_board import MarkBoard
-from typing import List, Dict
+from typing import List, Dict, Any
+from HMC.projects.project_manager import Project
 
 class Dashboard(QWidget):
     """High-level project overview dashboard"""
-    def __init__(self, cccore, parent=None):
-        super().__init__(parent)
+    def __init__(self, cccore, project=None):
+        super().__init__()
         self.cccore = cccore
-        self.project_name = None
+        
+        # Add background styling
+        self.setObjectName("dashboardWidget")
+        self.setStyleSheet("""
+            QWidget#dashboardWidget {
+                background-color: palette(base);
+                border: 1px solid palette(mid);
+                border-radius: 4px;
+            }
+            QGroupBox {
+                background-color: palette(alternate-base);
+                border: 1px solid palette(mid);
+                border-radius: 4px;
+                margin-top: 0.5em;
+                padding-top: 0.5em;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 3px 0 3px;
+            }
+        """)    
+        # Handle both Project objects and project names
+        if isinstance(project, str):
+            self.project_name = project
+            self.project = self.cccore.project_manager.get_project(project)
+        else:
+            self.project = project
+            self.project_name = project.name if project else None
+        
         self.stat_tracker = StatTrackerPanel()
         self.technical_analyzer = TechnicalAnalyzer(cccore)
         self.activity_timer = QTimer()
@@ -374,3 +404,26 @@ class Dashboard(QWidget):
             
         except Exception as e:
             logging.error(f"Error updating statistics: {e}")
+
+    def update_metrics_table(self, metrics: Dict[str, Any]):
+        """Update technical metrics table"""
+        try:
+            self.metrics_table.setRowCount(len(metrics))
+            for i, (metric, value) in enumerate(metrics.items()):
+                self.metrics_table.setItem(i, 0, QTableWidgetItem(metric))
+                self.metrics_table.setItem(i, 1, QTableWidgetItem(str(value)))
+        except Exception as e:
+            logging.error(f"Error updating metrics table: {e}")
+
+    def update_system_tree(self, system_info: Dict[str, Any]):
+        """Update system information tree"""
+        try:
+            self.system_tree.clear()
+            for component, info in system_info.items():
+                item = QTreeWidgetItem([component])
+                for key, value in info.items():
+                    child = QTreeWidgetItem([key, str(value)])
+                    item.addChild(child)
+                self.system_tree.addTopLevelItem(item)
+        except Exception as e:
+            logging.error(f"Error updating system tree: {e}")

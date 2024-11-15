@@ -359,12 +359,7 @@ class ActionHandlers:
                 )
         except Exception as e:
             logging.error(f"Error managing workspaces: {e}")
-            QMessageBox.warning(
-                self.main_window,
-                "Error",
-                f"Failed to open workspace manager: {str(e)}"
-            )
-
+            
     def show_dashboard(self, main_window):
         self.main_window=main_window
         """Show the project dashboard"""

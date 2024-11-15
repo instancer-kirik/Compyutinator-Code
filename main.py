@@ -42,7 +42,7 @@ from PyQt6.QtGui import QPalette, QColor
 
 from PyQt6.QtWidgets import QInputDialog
 import threading
-from HMC.workspace_manager import WorkspaceManager
+
 from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, QEvent
 from NITTY_GRITTY.ThreadTrackers import SafeQThread
 from PyQt6.QtWidgets import QDockWidget
@@ -110,7 +110,7 @@ def qt_thread_exception_handler(type, value, tb):
 
 #SafeQThread.setExceptionHandler(qt_thread_exception_handler)
 
-from HMC.workspace_manager import WorkspaceManager
+
 
 def initialize_core(config_manager):
     # Create CCCore with settings manager
@@ -167,8 +167,9 @@ class MainApplication(QMainWindow):
     def __init__(self, cccore, widget_manager):
         super().__init__()
         self.cccore = cccore
-        
         self.widget_manager = widget_manager
+        self.config_manager = cccore.config_manager
+        
         # Add opacity animation initialization
         self.opacity_animation = QPropertyAnimation(self, b"windowOpacity")
         self.opacity_animation.setDuration(200)  # 200ms duration

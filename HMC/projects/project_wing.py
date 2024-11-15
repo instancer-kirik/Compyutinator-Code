@@ -17,7 +17,7 @@ class Wing:
     status: WingStatus = WingStatus.DEVELOPMENT
     config: WingConfig = field(default_factory=WingConfig)
     path: Optional[Path] = None
-    
+    entry_points: List[str] = field(default_factory=list)
     def __post_init__(self):
         if self.path:
             # Load existing config if available
