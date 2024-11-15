@@ -43,10 +43,11 @@ class NixStoreBrowser(QWidget):
     
     item_selected = pyqtSignal(str)  # Emits full store path when item selected
 
-    def __init__(self, parent=None):
+    def __init__(self, nix_manager, parent=None):
         super().__init__(parent)
-        self.nix_available = self.check_nix_installation()
-        self.setup_atom_support()
+        self.nix_manager = nix_manager
+        self.atom_manager = AtomManager(nix_manager)
+        self.nix_available = self.nix_manager.nix_available
         self.setup_ui()
         if self.nix_available:
             self.load_store_items()
@@ -84,30 +85,8 @@ class NixStoreBrowser(QWidget):
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
         msg.exec()
 
-    def setup_atom_support(self):
-        """Initialize Atom support"""
-        self.atom_config = self.load_atom_config()
-        self.atom_stores = {}
-        self.setup_atom_stores()
-        
-    def load_atom_config(self) -> Dict:
-        """Load eka config"""
-        try:
-            config_path = os.path.expanduser("~/.config/eka/eka.json")
-            if os.path.exists(config_path):
-                with open(config_path) as f:
-                    return json.load(f)
-            return {}
-        except Exception as e:
-            logging.error(f"Error loading Atom config: {e}")
-            return {}
-
-    def setup_atom_stores(self):
-        """Initialize configured Atom stores"""
-        # Setup store backends based on config
-        pass
-
     def setup_ui(self):
+        """Setup the main UI components"""
         layout = QVBoxLayout()
         
         # Add Atom URI input
@@ -120,7 +99,7 @@ class NixStoreBrowser(QWidget):
         uri_layout.addWidget(self.uri_input)
         uri_layout.addWidget(self.resolve_btn)
         layout.addLayout(uri_layout)
-
+        
         # Add store type selector
         store_layout = QHBoxLayout()
         self.store_combo = QComboBox()
@@ -128,86 +107,33 @@ class NixStoreBrowser(QWidget):
         store_layout.addWidget(QLabel("Store Type:"))
         store_layout.addWidget(self.store_combo)
         layout.addLayout(store_layout)
-
-        # Existing UI components...
-        self.setup_existing_ui(layout)
         
-        # Add Atom-specific actions
-        self.setup_atom_actions()
+        # Add main store browser components
+        self.setup_store_browser(layout)
         
         self.setLayout(layout)
-
     def setup_atom_actions(self):
-        """Setup Atom-specific actions"""
-        self.atom_actions = [
-            ("Show Dependencies", self.show_atom_deps),
-            ("Show Reverse Dependencies", self.show_atom_reverse_deps),
-            ("Show Build Log", self.show_atom_build_log),
-            ("Copy Atom URI", self.copy_atom_uri),
-            ("Publish Atom", self.publish_atom),
-            ("Generate Lock", self.generate_lock),
-            ("Show Module Info", self.show_module_info)
-        ]
-
+            """Setup Atom-specific actions"""
+            self.atom_actions = [
+                ("Show Dependencies", self.show_atom_deps),
+                ("Show Reverse Dependencies", self.show_atom_reverse_deps),
+                ("Show Build Log", self.show_atom_build_log),
+                ("Copy Atom URI", self.copy_atom_uri),
+                ("Publish Atom", self.publish_atom),
+                ("Generate Lock", self.generate_lock),
+                ("Show Module Info", self.show_module_info)
+            ]
     def resolve_atom(self):
-        """Resolve an Atom URI and display package info"""
+        """Resolve an Atom URI and display info"""
         try:
             uri = self.uri_input.text()
-            atom = AtomIdentifier.parse(uri)
-            
-            # Resolve the Atom using appropriate store
             store_type = AtomStore(self.store_combo.currentText())
-            if store_type in self.atom_stores:
-                store = self.atom_stores[store_type]
-                info = store.resolve(atom)
-                self.display_atom_info(info)
-            else:
-                raise Exception(f"Unsupported store type: {store_type}")
-                
+            
+            info = self.atom_manager.resolve_atom(uri, store_type)
+            self.display_atom_info(info)
+            
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to resolve Atom: {e}")
-
-    def publish_atom(self, path: str):
-        """Publish a new Atom version"""
-        try:
-            store_type = AtomStore(self.store_combo.currentText())
-            if store_type in self.atom_stores:
-                store = self.atom_stores[store_type]
-                result = store.publish(path)
-                QMessageBox.information(self, "Success", f"Published Atom: {result}")
-            else:
-                raise Exception(f"Unsupported store type: {store_type}")
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to publish Atom: {e}")
-
-    def show_context_menu(self, position):
-        """Enhanced context menu with Atom support"""
-        menu = QMenu()
-        item = self.store_tree.itemAt(position)
-        
-        if item:
-            # Add standard Nix actions
-            self.add_standard_actions(menu, item)
-            
-            # Add Atom-specific actions
-            menu.addSeparator()
-            for label, callback in self.atom_actions:
-                action = menu.addAction(label)
-                action.triggered.connect(
-                    lambda checked, cb=callback: self.create_safe_callback(cb)(item)
-                )
-        
-        menu.exec(self.store_tree.viewport().mapToGlobal(position))
-
-    def create_safe_callback(self, callback):
-        """Create a callback with error handling"""
-        def safe_callback():
-            try:
-                callback()
-            except Exception as e:
-                logging.error(f"Error in menu action: {e}")
-                QMessageBox.critical(self, "Error", str(e))
-        return safe_callback
 
     def show_nix_info(self, path):
         """Show detailed Nix package information"""
@@ -502,103 +428,62 @@ class NixStoreBrowser(QWidget):
             size_bytes /= 1024
         return f"{size_bytes:.1f} PB"
 
+
     def show_context_menu(self, position):
         """Show context menu for store items"""
         item = self.store_tree.itemAt(position)
         if not item:
             return
             
+        path = item.toolTip(0)  # Full path stored in tooltip
         menu = QMenu(self)
         
-        # Add basic actions
-        menu.addAction("Copy Path", lambda: self.copy_path(item))
-        menu.addAction("Show Info", lambda: self.show_item_info(item))
-        menu.addAction("Delete", lambda: self.delete_item(item.toolTip(0)))
+        # Basic Nix actions
+        menu.addAction("Show Info", lambda: self.show_nix_info(path))
+        menu.addAction("Show Dependencies", lambda: self.show_dependencies(path))
+        menu.addAction("Show Referrers", lambda: self.show_referrers(path))
+        menu.addAction("Copy Path", lambda: self.copy_to_clipboard(path))
         
-        # Add Atom-specific actions if configured
-        if hasattr(self, 'atom_actions'):
-            menu.addSeparator()
-            for action_name, action_handler in self.atom_actions:
-                menu.addAction(action_name, 
-                             lambda h=action_handler: h(item.toolTip(0)))
+        # Atom-specific actions
+        menu.addSeparator()
+        menu.addAction("Show Atom Dependencies", lambda: self.show_atom_deps(path))
+        menu.addAction("Show Atom Reverse Deps", lambda: self.show_atom_reverse_deps(path))
+        menu.addAction("Show Build Log", lambda: self.show_atom_build_log(path))
+        menu.addAction("Copy Atom URI", lambda: self.copy_atom_uri(path))
+        menu.addAction("Generate Lock File", lambda: self.generate_lock(path))
         
         menu.exec(self.store_tree.viewport().mapToGlobal(position))
 
-    def copy_path(self, item):
-        """Copy full path to clipboard"""
-        from PyQt6.QtWidgets import QApplication
-        QApplication.clipboard().setText(item.toolTip(0))
-
-    def show_item_info(self, item):
-        """Show detailed information about store item"""
-        path = item.toolTip(0)
-        try:
-            result = subprocess.run(
-                ['nix-store', '--query', '--references', path],
-                capture_output=True,
-                text=True
-            )
-            refs = result.stdout.strip().split('\n')
-            
-            info = f"Path: {path}\n"
-            info += f"Size: {item.text(1)}\n"
-            info += f"Modified: {item.text(2)}\n"
-            info += f"\nReferences ({len(refs)}):\n"
-            info += '\n'.join(refs)
-            
-            self.show_info_dialog("Store Item Info", info)
-            
-        except Exception as e:
-            QMessageBox.warning(self, "Error", f"Failed to get item info: {e}")
-        
     def show_atom_deps(self, path):
         """Show Atom dependencies"""
         try:
-            result = self.run_nix_command(['nix-store', '--query', '--references', path])
-            deps = result.stdout.strip().split('\n')
-            
+            deps = self.atom_manager.get_atom_deps(path)
             info = f"Dependencies for {os.path.basename(path)}:\n\n"
             for dep in deps:
                 if dep:
                     info += f"• {os.path.basename(dep)}\n"
                     info += f"  {dep}\n"
-            
             self.show_info_dialog("Atom Dependencies", info)
-            
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to get dependencies: {e}")
 
     def show_atom_reverse_deps(self, path):
-        """Show reverse dependencies (what depends on this atom)"""
+        """Show reverse dependencies"""
         try:
-            result = subprocess.run(
-                ['nix-store', '--query', '--referrers', path],
-                capture_output=True,
-                text=True
-            )
-            rev_deps = result.stdout.strip().split('\n')
-            
+            rev_deps = self.atom_manager.get_atom_reverse_deps(path)
             info = f"Reverse Dependencies for {os.path.basename(path)}:\n\n"
             for dep in rev_deps:
                 if dep:
                     info += f"• {os.path.basename(dep)}\n"
                     info += f"  {dep}\n"
-            
             self.show_info_dialog("Reverse Dependencies", info)
-            
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to get reverse dependencies: {e}")
 
     def show_atom_build_log(self, path):
-        """Show build log for an atom"""
+        """Show build log"""
         try:
-            result = subprocess.run(
-                ['nix', 'log', path],
-                capture_output=True,
-                text=True
-            )
-            log = result.stdout.strip()
-            
+            log = self.atom_manager.get_atom_build_log(path)
             if log:
                 self.show_info_dialog(
                     f"Build Log - {os.path.basename(path)}", 
@@ -606,77 +491,15 @@ class NixStoreBrowser(QWidget):
                     monospace=True
                 )
             else:
-                QMessageBox.information(
-                    self,
-                    "No Build Log",
-                    "No build log found for this item"
-                )
-                
+                QMessageBox.information(self, "No Build Log", "No build log found")
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to get build log: {e}")
 
     def copy_atom_uri(self, path):
         """Copy Atom URI to clipboard"""
         try:
-            # Extract Atom identifier from path
-            match = re.search(r'/nix/store/[^-]+-([^/]+)', path)
-            if match:
-                atom_name = match.group(1)
-                uri = f"nix:{atom_name}"
-                QApplication.clipboard().setText(uri)
-                QMessageBox.information(
-                    self,
-                    "URI Copied",
-                    f"Copied Atom URI: {uri}"
-                )
-            else:
-                raise ValueError("Could not extract Atom name from path")
-                
+            uri = self.atom_manager.get_atom_uri(path)
+            QApplication.clipboard().setText(uri)
+            QMessageBox.information(self, "URI Copied", f"Copied Atom URI: {uri}")
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to copy URI: {e}")
-    def generate_lock(self, path):
-        """Generate a lock file for an atom"""
-        try:
-            result = subprocess.run(
-                ['nix', 'generate-lock-file', path],
-                capture_output=True,
-                text=True
-            )
-            lock_file = result.stdout.strip()
-            
-            self.show_info_dialog(
-                f"Lock File - {os.path.basename(path)}",
-                lock_file,
-                monospace=True
-            )
-        except Exception as e:
-            QMessageBox.warning(self, "Error", f"Failed to generate lock file: {e}")
-
-    def show_module_info(self, path):
-        """Show detailed information about a Nix module"""
-        try:
-            result = subprocess.run(
-                ['nix', 'show-derivation', path],   
-                capture_output=True,
-                text=True
-            )
-            info = result.stdout.strip()
-            
-            self.show_info_dialog("Module Info", info)
-        except Exception as e:
-            QMessageBox.warning(self, "Error", f"Failed to get module info: {e}")
-
-    def run_nix_command(self, cmd, **kwargs):
-        """Run a Nix command with proper error handling"""
-        if not self.nix_available:
-            raise FileNotFoundError("Nix package manager is not installed")
-        
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
-            if result.returncode != 0:
-                raise Exception(f"Command failed: {result.stderr}")
-            return result
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Command not found: {cmd[0]}")
-        except Exception as e:
-            raise Exception(f"Error running command: {e}")

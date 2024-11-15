@@ -47,6 +47,8 @@ import transformers
 import warnings
 from .code_manager import CodeManager
 from .ai_model_manager import ModelManager
+from .nix.nix_manager import NixManager
+from .nix.nix_ui_manager import NixUIManager
 
 class CCCore(QObject):  # referred to as mm in other files (auratext)
     lsp_manager_initialized = pyqtSignal()
@@ -113,6 +115,9 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         self.notification_manager = NotificationManager()
         self.init_managers()
         logging.info("CCCore initialization complete")
+        
+        self.nix_manager = NixManager()
+        self.nix_ui_manager = NixUIManager(self.nix_manager)
         
     def set_widget_manager(self, widget_manager):
         self.widget_manager = widget_manager
