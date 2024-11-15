@@ -11,6 +11,7 @@ class ProjectType(Enum):
 
 @dataclass
 class BaseProjectData:
+    """Base project data and metadata"""
     name: str
     path: Path
     project_type: ProjectType = ProjectType.UNKNOWN
@@ -18,37 +19,19 @@ class BaseProjectData:
     status: str = "active"
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
-    metadata: Dict[str, Any] = field(default_factory=dict)
     
-    def __post_init__(self):
-        if isinstance(self.path, str):
-            self.path = Path(self.path) 
-
-
-class ProjectConfig(BaseProjectData)    :
-    visibility: str = "private"
-    domain: str = ""
-    version: str = "0.1.0"
-        # Adding missing metadata fields
+    # Basic metadata
     metadata: Dict[str, Any] = field(default_factory=lambda: {
         "repository_url": None,
         "documentation_url": None,
         "issue_tracker_url": None,
         "keywords": [],
         "categories": [],
-        "language": None,
-        "framework": None,
-        "dependencies": {},
-        "dev_dependencies": {},
-        "contributors": [],
-        "maintainers": [],
         "license": None,
-        "primary_language": None,
-        "entry_points": {"main": "src/main.py"},
-        "dependencies": {},
-        "dev_dependencies": {},
-        "cloud_services": {},
-        "databases": {},
-        "apis": {},
-        "tools": {}
+        "contributors": [],
+        "maintainers": []
     })
+
+    def __post_init__(self):
+        if isinstance(self.path, str):
+            self.path = Path(self.path)

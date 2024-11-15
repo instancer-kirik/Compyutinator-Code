@@ -30,10 +30,6 @@ class WingStatus(Enum):
 @dataclass
 class ProjectSettings:
     """Core project settings"""
-    risk_appetite: str = "cautious"
-    start_date: Optional[datetime] = None
-    target_date: Optional[datetime] = None
-    completion_date: Optional[datetime] = None
     tracking: Dict[str, Any] = field(default_factory=lambda: {
         "activity": [],
         "lifecycle_stage": "development",
@@ -42,6 +38,7 @@ class ProjectSettings:
 
 @dataclass
 class BaseProjectData:
+    """Base project data structure"""
     name: str
     path: Path
     project_type: ProjectType = ProjectType.UNKNOWN
@@ -52,55 +49,9 @@ class BaseProjectData:
     metadata: Dict[str, Any] = field(default_factory=dict)
     settings: ProjectSettings = field(default_factory=ProjectSettings)
 
-@dataclass
-class DevelopmentStandards:
-    """Development standards and practices configuration"""
-    code_style: Dict[str, Any] = field(default_factory=lambda: {
-        "guide": "pep8",
-        "max_complexity": 10,
-        "formatters": [],
-        "linters": []
-    })
-    testing: Dict[str, Any] = field(default_factory=lambda: {
-        "framework": "pytest",
-        "coverage_target": 80,
-        "strategies": ["unit", "integration"]
-    })
-    security: Dict[str, Any] = field(default_factory=lambda: {
-        "scan_frequency": "weekly",
-        "vulnerability_threshold": "high"
-    })
-
-@dataclass
-class RiskManagement:
-    """Risk management configuration"""
-    risk_appetite: str = "cautious"
-    matrix_config: Dict[str, Dict[str, int]] = field(default_factory=lambda: {
-        "probability_weights": {
-            "rare": 1,
-            "unlikely": 2,
-            "possible": 3,
-            "likely": 4,
-            "certain": 5
-        },
-        "impact_weights": {
-            "negligible": 1,
-            "minor": 2,
-            "moderate": 3,
-            "major": 4,
-            "severe": 5
-        }
-    })
-    notification_preferences: Dict[str, Any] = field(default_factory=lambda: {
-        "review_period_days": 30,
-        "high_risk_threshold": 12
-    })
-
-    def calculate_risk_score(self, probability: str, impact: str) -> int:
-        """Calculate risk score based on probability and impact"""
-        p_weight = self.matrix_config["probability_weights"].get(probability, 1)
-        i_weight = self.matrix_config["impact_weights"].get(impact, 1)
-        return p_weight * i_weight
+    def __post_init__(self):
+        if isinstance(self.path, str):
+            self.path = Path(self.path)
 
 @dataclass
 class Resource:
@@ -127,80 +78,3 @@ class Resource:
             "allocation": self.allocation,
             "metadata": self.metadata
         }
-@dataclass
-class TechnicalConfig:
-    """Technical configuration management"""
-    tech_stack: Dict[str, Any] = field(default_factory=lambda: {
-        "languages": [],
-        "frameworks": [],
-        "primary_language": None,
-        "entry_points": {"main": "src/main.py"}
-    })
-    components: Dict[str, Dict[str, Any]] = field(default_factory=lambda: {
-        "languages": {},
-        "frameworks": {},
-        "services": {},
-        "databases": {},
-        "apis": {},
-        "tools": {}
-    })
-
-    def validate(self) -> bool:
-        if self.tech_stack["primary_language"] and \
-           self.tech_stack["primary_language"] not in self.tech_stack["languages"]:
-            return False
-        return True
-@dataclass
-class DevelopmentConfig:
-    """Development environment and standards"""
-    dev_settings: Dict[str, Any] = field(default_factory=lambda: {
-        "environment": {
-            "variables": {},
-            "virtual_env": None,
-            "required_tools": [],
-            "tool_versions": {},
-            "workspace_path": None,
-            "file_extensions": [".py", ".json", ".yml"],
-            "excluded_dirs": ["__pycache__", ".git", "venv"]
-        },
-        "commands": {
-            "build": None,
-            "run": None,
-            "test": None,
-            "lint": None,
-            "deploy": None
-        }
-    })
-    dev_standards: Dict[str, Any] = field(default_factory=lambda: {
-        "code_style": {
-            "style_guide": "pep8",
-            "max_complexity": 10,
-            "formatters": [],
-            "linters": []
-        },
-        "testing": {
-            "framework": "pytest",
-            "coverage_target": 80,
-            "strategies": ["unit", "integration"]
-        }
-    })
-@dataclass
-class TeamConfig:
-    """Team and collaboration settings"""
-    team: Dict[str, Any] = field(default_factory=lambda: {
-        "roles": {
-            "owners": [],
-            "maintainers": [],
-            "contributors": [],
-            "reviewers": []
-        },
-        "communication": {
-            "primary_channel": None,
-            "meetings": {"schedule": [], "templates": {}}
-        },
-        "documentation": {
-            "wiki": None,
-            "api_docs": None,
-            "architecture": None
-        }
-    })

@@ -7,7 +7,7 @@ from .project_config import ProjectConfig
 import logging
 from .wings_manager import WingsManager
 from .resource_manager import ResourceManager
-
+from .technical_overview_generator import TechnicalOverviewGenerator
 from HMC.projects.project_wing import Wing
 from .project_types import (
     DevelopmentStandards,

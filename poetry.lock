@@ -5504,6 +5504,16 @@ files = [
 Levenshtein = "0.26.1"
 
 [[package]]
+name = "python-nmap"
+version = "0.7.1"
+description = "This is a python class to use nmap and access scan results from python3"
+optional = false
+python-versions = "*"
+files = [
+    {file = "python-nmap-0.7.1.tar.gz", hash = "sha256:f75af6b91dd8e3b0c31f869db32163f62ada686945e5b7c25f84bc0f7fad3b64"},
+]
+
+[[package]]
 name = "python-xlib"
 version = "0.33"
 description = "Python X Library"
@@ -6867,4 +6877,4 @@ typing_extensions = ">=4.0.0"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<4.0"
-content-hash = "c258753fa432e797d47d3a71b1482a963c6f1aedabc79be3b14fb964d2826885"
+content-hash = "b561d92eff4fc56c139d764e5a02e9260ad331c630f8c044f4224b127be4ee4a"

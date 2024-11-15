@@ -10,89 +10,87 @@ from dataclasses import field
 from HMC.system_analyzer import SystemInfo
 from HMC.projects.project_structure import PROJECT_DIRECTORIES
 from HMC.symbol_manager import CodeSymbol
-from HMC.projects.project_wing import Wing
+from HMC.projects.project_wing import Wing, WingType
 
 from HMC.projects.wings_manager import WingsManager
-from .project_types import (
-    BaseProjectData, ProjectType, WingType, WingStatus, TechnicalConfig,
-    DevelopmentConfig, TeamConfig, RiskManagement
-)
-
+from .base_config import BaseProjectData, ProjectType
+from .configs.technical_config import TechnicalConfig
+from .configs.development_config import DevelopmentConfig
+from .configs.project_management_config import ProjectManagementConfig
+from .configs.project_operations_config import ProjectOperationsConfig
+from .configs.team_config import TeamConfig
+from .configs.security_config import SecurityConfig
+from .configs.infrastructure_config import InfrastructureConfig
+from .configs.quality_config import QualityConfig
+from .configs.market_config import MarketConfig
 from .wing_config import WingConfig
+
 from .technical_overview_generator import TechnicalOverviewGenerator
+from .validators.config_validators import InfrastructureValidator, SecurityValidator
 
 @dataclass
 class ProjectConfig(BaseProjectData):
     """Project configuration and settings management"""
+    # Add these fields
+    visibility: str = "private"
+    domain: str = ""
+    version: str = "0.1.0"
+    
     # Core configs
     technical: TechnicalConfig = field(default_factory=TechnicalConfig)
     development: DevelopmentConfig = field(default_factory=DevelopmentConfig)
     team: TeamConfig = field(default_factory=TeamConfig)
-    risk: RiskManagement = field(default_factory=RiskManagement)
+    operations: ProjectOperationsConfig = field(default_factory=ProjectOperationsConfig)
+    project_management: ProjectManagementConfig = field(default_factory=ProjectManagementConfig)
+    security: SecurityConfig = field(default_factory=SecurityConfig)
+    infrastructure: InfrastructureConfig = field(default_factory=InfrastructureConfig)
+    quality: QualityConfig = field(default_factory=QualityConfig)
+    market: MarketConfig = field(default_factory=MarketConfig)
     
     # Project Structure
     directory_structure: Dict[str, Any] = field(default_factory=lambda: PROJECT_DIRECTORIES.copy())
     relationships: Dict[str, List[str]] = field(default_factory=dict)
     symbols: Dict[Path, List['CodeSymbol']] = field(default_factory=dict)
-
+    
     def __post_init__(self):
         if isinstance(self.path, str):
             self.path = Path(self.path)
         if isinstance(self.project_type, str):
             self.project_type = ProjectType(self.project_type)
 
-    def validate(self) -> bool:
-        """Validate project configuration"""
-        return all([
-            self.name and self.path,
-            self.technical.validate(),
-            self.development.validate(),
-            self.team.validate(),
-            self.risk.validate()
-        ])
-
     def get_setting(self, *path: str, default: Any = None) -> Any:
         """Get setting using dot notation"""
-        current = self.__dict__
-        for key in path:
-            if not isinstance(current, dict):
-                return default
-            current = current.get(key, default)
-        return current
+        try:
+            current = self.__dict__
+            for key in path:
+                if not isinstance(current, dict):
+                    if hasattr(current, key):
+                        current = getattr(current, key)
+                    else:
+                        return default
+                else:
+                    current = current.get(key, default)
+            return current
+        except Exception as e:
+            logging.error(f"Error getting setting: {e}")
+            return default
 
     def update_setting(self, *path: str, value: Any) -> bool:
         """Update setting value using dot notation"""
         try:
-            current = self.settings
+            current = self
             for key in path[:-1]:
-                current = current.setdefault(key, {})
-            current[path[-1]] = value
+                if hasattr(current, key):
+                    current = getattr(current, key)
+                else:
+                    return False
+            setattr(current, path[-1], value)
             return True
         except Exception as e:
             logging.error(f"Error updating setting: {e}")
             return False
 
-    def validate(self) -> bool:
-        return all([
-            self.name and self.path,
-            self.settings["development"]["code_style"].validate(),
-            self.settings["development"]["testing"].validate(),
-            self.settings["development"]["security"].validate(),
-            self.settings["team"]["roles"].validate(),
-            self.settings["team"]["communication"].validate(),
-            self.settings["team"]["documentation"].validate(),
-            self.settings["technical"]["languages"].validate(),
-            self.settings["technical"]["frameworks"].validate(),
-            self.settings["technical"]["entry_points"].validate(),
-            self.settings["technical"]["dependencies"].validate(),
-            self.dev_standards.validate(),
-          
-            self.risk_management.validate(),
-            self.tech_stack.validate(),
-            self.components.validate(),
-            self.dev_environment.validate()
-        ])
-
+    
     @property
     def wings(self) -> Dict[str, Wing]:
         # This should reference the Project's wings_manager
@@ -107,248 +105,6 @@ class ProjectConfig(BaseProjectData):
             return self._project.add_wing(name, wing_type, description, config)
         return None
 
-    # Symbol tracking (was missing)
-    symbols: Dict[Path, List['CodeSymbol']] = field(default_factory=dict)
-   
-    # Project Structure and Symbols
-    directory_structure: Dict[str, Any] = field(default_factory=lambda: PROJECT_DIRECTORIES.copy())
-    relationships: Dict[str, List[str]] = field(default_factory=dict)
-    
-    
-    # Technical Components
-    components: Dict[str, Dict[str, Any]] = field(default_factory=lambda: {
-        "languages": {},    # Language configurations
-        "frameworks": {},   # Framework settings
-        "services": {},     # External services
-        "databases": {},    # Database connections
-        "apis": {},         # API configurations
-        "tools": {}         # Development tools
-    })
-    
-    # Technical Stack
-    tech_stack: Dict[str, Any] = field(default_factory=lambda: {
-        "languages": [],
-        "frameworks": [],
-        "primary_language": None,
-        "entry_points": {"main": "src/main.py"}
-    })
-    
-    # Development Environment
-    dev_settings: Dict[str, Any] = field(default_factory=lambda: {
-        "environment": {
-            "variables": {},
-            "virtual_env": None,
-            "required_tools": [],
-            "tool_versions": {},
-            "workspace_path": None,
-            "file_extensions": [".py", ".json", ".yml"],
-            "excluded_dirs": ["__pycache__", ".git", "venv"]
-        },
-        "commands": {
-            "build": None,
-            "run": None,
-            "test": None,
-            "lint": None,
-            "deploy": None
-        },
-        "scripts": [],
-        "workspace": {
-            "path": None,
-            "file_extensions": [".py", ".json", ".yml", ".mojo"],
-            "excluded_dirs": ["__pycache__", ".git", "venv"]
-        }
-    })
-    
-    # Development Standards
-    dev_standards: Dict[str, Any] = field(default_factory=lambda: {
-        "code_style": {
-            "style_guide": "pep8",
-            "max_complexity": 10,
-            "formatters": [],
-            "linters": []
-        },
-        "testing": {
-            "framework": "pytest",
-            "coverage_target": 80,
-            "strategies": ["unit", "integration"],
-            "performance_benchmarks": {}
-        },
-        "documentation": {
-            "required_sections": ["API", "Setup", "Usage"],
-            "format": "markdown",
-            "tools": []
-        },
-        "security": {
-            "requirements": [],
-            "scan_frequency": "weekly",
-            "vulnerability_threshold": "high"
-        }
-    })
-    
-    # Team and Collaboration
-    team: Dict[str, Any] = field(default_factory=lambda: {
-        "roles": {
-            "owners": [],
-            "maintainers": [],
-            "contributors": [],
-            "reviewers": []
-        },
-        "communication": {
-            "primary_channel": None,
-            "meetings": {
-                "schedule": [],
-                "templates": {}
-            }
-        },
-        "documentation": {
-            "wiki": None,
-            "api_docs": None,
-            "architecture": None
-        }
-    })
-    
-    # Project Management
-    management: Dict[str, Any] = field(default_factory=lambda: {
-        "issue_tracking": {
-            "provider": None,
-            "project_url": None,
-            "labels": ["bug", "feature", "enhancement"],
-            "templates": {}
-        },
-        "ci_cd": {
-            "provider": None,
-            "config_path": None,
-            "triggers": [],
-            "environments": ["dev", "staging", "prod"]
-        },
-        "review_process": {
-            "required_approvals": 1,
-            "review_checklist": [],
-            "automated_checks": []
-        },
-        "risk": {
-            "matrix_config": {
-                "probability_weights": {
-                    "rare": 1,
-                    "unlikely": 2,
-                    "possible": 3,
-                    "likely": 4,
-                    "certain": 5
-                },
-                "impact_weights": {
-                    "negligible": 1,
-                    "minor": 2,
-                    "moderate": 3,
-                    "major": 4,
-                    "severe": 5
-                }
-            },
-            "notification_preferences": {
-                "high_risk_threshold": 12,
-                "review_period_days": 30,
-                "alert_channels": [],
-                "monitoring_intervals": {
-                    "risk_review": "30d",
-                    "dependency_check": "7d",
-                    "security_scan": "14d"
-                }
-            }
-        }
-    })
-    
-    # Target Audience and Market
-    target_audience: Dict[str, Any] = field(default_factory=lambda: {
-        "primary": {
-            "description": "",
-            "demographics": {},
-            "needs": [],
-            "pain_points": []
-        },
-        "secondary": {
-            "description": "",
-            "demographics": {},
-            "needs": [],
-            "pain_points": []
-        },
-        "market_segment": "",
-        "user_personas": [],
-        "accessibility_requirements": []
-    })
-    
-    # Integration and Security
-    integrations: Dict[str, Any] = field(default_factory=lambda: {
-        "services": {
-            "websocket": {"enabled": False},
-            "webhooks": [],
-            "apis": {},
-            "cloud_services": {}
-        },
-        "ci_cd": {
-            "provider": None,
-            "config_path": None,
-            "triggers": []
-        },
-        "security": {
-            "auth_providers": [],
-            "secret_management": None,
-            "compliance": []
-        },
-        "notifications": {
-            "channels": [],
-            "preferences": {
-                "high_risk_threshold": 12,
-                "review_period_days": 30
-            }
-        }
-    })
-    # Activity and History
-    activity: Dict[str, Any] = field(default_factory=lambda: {
-        "changelog": [],
-        "decisions": [],
-        "reviews": [],
-        "incidents": [],
-        "metrics": {}
-    })
-    
-    # Monitoring and Analytics
-    monitoring: Dict[str, Any] = field(default_factory=lambda: {
-        "metrics": {
-            "performance": {},
-            "usage": {},
-            "errors": {}
-        },
-        "alerts": {
-            "thresholds": {},
-            "notifications": {}
-        },
-        "logging": {
-            "level": "INFO",
-            "handlers": [],
-            "retention": "30d"
-        }
-    })
-    # Quality and Risk Management
-    quality_metrics: Dict[str, Any] = field(default_factory=lambda: {
-        "testing": {
-            "coverage_target": 80,
-            "framework": "pytest"
-        },
-        "code_quality": {
-            "max_complexity": 10,
-            "style_guide": "pep8"
-        },
-        "performance": {
-            "benchmarks": {},
-            "targets": {},
-            "metrics": {}
-        }
-    })
-    
-    # Risk Management (add these)
-    risk_appetite: str = "cautious"
-    start_date: Optional[datetime] = None
-    target_date: Optional[datetime] = None
-    completion_date: Optional[datetime] = None
     @classmethod
     def from_folder(cls, folder_path: str, project_name: str) -> 'ProjectConfig':
         path = Path(folder_path)
@@ -446,8 +202,11 @@ class ProjectConfig(BaseProjectData):
     # Delegate wing management to WingsManager
     def add_wing(self, name: str, wing_type: WingType, description: str = "", 
                 config: Optional[WingConfig] = None) -> Optional[Wing]:
-        """Add a new wing to the project"""
-        return self.wings_manager.create_wing(name, wing_type, description, config)
+        """Delegate wing management to Project"""
+        if hasattr(self, '_project'):
+            return self._project.add_wing(name, wing_type, description, config)
+        logging.error("Project instance not found, cannot add wing")
+        return None
 
    
     @classmethod
@@ -511,72 +270,69 @@ class ProjectConfig(BaseProjectData):
             data['path'] = Path(data['path'])
             
         return cls(**data)
-            
+   
     def validate(self) -> bool:
         """Validate project configuration"""
         try:
-            # Validate core requirements
-            if not self.name or not self.path:
+            # Core validation
+            if not all([self.name, self.path]):
+                return False
+            
+            # Config component validation
+            if not all([
+                self.technical.validate(),
+                self.development.validate(),
+                self.team.validate(),
+                self.operations.validate(),
+                self.project_management.validate()
+            ]):
+                return False
+               
+            # Validate using separate validators
+            if not InfrastructureValidator.validate_infrastructure(self.infrastructure):
+                return False
+                
+            if not SecurityValidator.validate_security(self.security):
                 return False
                 
             # Validate wings
             for wing in self.wings.values():
                 if not self._validate_wing(wing):
                     return False
-                    
-            # Validate technical stack
-            if self.tech_stack["primary_language"] and \
-               self.tech_stack["primary_language"] not in self.tech_stack["languages"]:
-                return False
-                
-            return True
             
+            return True
         except Exception as e:
             logging.error(f"Configuration validation error: {e}")
             return False
-            
-    
-    def validate_risk_settings(self) -> bool:
-        """Validate risk management settings"""
-        try:
-            valid_risk_appetites = ["averse", "minimal", "cautious", "flexible", "aggressive"]
-            if self.risk_appetite not in valid_risk_appetites:
-                return False
-                
-            # Validate dates
-            if self.start_date and self.target_date:
-                if self.start_date > self.target_date:
-                    return False
-                    
-            # Validate risk matrix configuration
-            risk_config = self.management.get("risk", {}).get("matrix_config", {})
-            if not all(isinstance(w, int) for w in risk_config.get("probability_weights", {}).values()):
-                return False
-            if not all(isinstance(w, int) for w in risk_config.get("impact_weights", {}).values()):
-                return False
-                
-            return True
-            
-        except Exception as e:
-            logging.error(f"Risk settings validation error: {e}")
-            return False
-            
-    def validate_resource_settings(self) -> bool:
-        """Validate resource management settings"""
-        try:
-            rules = self.resource_settings.get("allocation_rules", {})
-            if not isinstance(rules.get("max_allocation_period"), str):
-                return False
-                
-            tracking = self.resource_settings.get("tracking", {})
-            if not all(isinstance(v, bool) for v in tracking.values()):
-                return False
-                
-            notifications = self.resource_settings.get("notifications", {})
-            if not isinstance(notifications.get("low_resource_threshold"), (int, float)):
-                return False
-                
-            return True
-        except Exception as e:
-            logging.error(f"Resource settings validation error: {e}")
-            return False
+   
+    @property
+    def tech_stack(self) -> Dict[str, Any]:
+        return self.technical.tech_stack
+
+    @property
+    def components(self) -> Dict[str, Dict[str, Any]]:
+        return self.technical.components
+
+    @property
+    def dev_settings(self) -> Dict[str, Any]:
+        return self.development.dev_settings
+
+    @property
+    def dev_standards(self) -> Dict[str, Any]:
+        return self.development.dev_standards
+
+    @property
+    def team_settings(self) -> Dict[str, Any]:
+        return self.team.team
+
+    @property
+    def risk_settings(self) -> Dict[str, Any]:
+        return self.operations.risk_matrix
+
+    @property
+    def resource_settings(self) -> Dict[str, Any]:
+        return self.operations.resource_settings
+
+    @property
+    def timeline(self) -> Dict[str, Any]:
+        return self.operations.timeline
