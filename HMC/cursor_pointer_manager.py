@@ -141,3 +141,14 @@ class CursorPointerManager(QObject):
     def get_current_pos(self) -> QPoint:
         """Another alias for get_position() for backward compatibility."""
         return self.get_position()
+    
+    def set_transparent_cursor(self):
+        """Set cursor to blank/transparent"""
+        blank_pixmap = QPixmap(1, 1)
+        blank_pixmap.fill(Qt.GlobalColor.transparent)
+        blank_cursor = QCursor(blank_pixmap)
+        QApplication.setOverrideCursor(blank_cursor)
+        
+    def restore_default_cursor(self):
+        """Restore the default cursor"""
+        QApplication.restoreOverrideCursor()

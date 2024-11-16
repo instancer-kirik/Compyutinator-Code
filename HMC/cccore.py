@@ -49,6 +49,7 @@ from .code_manager import CodeManager
 from .ai_model_manager import ModelManager
 from .nix.nix_manager import NixManager
 from .nix.nix_ui_manager import NixUIManager
+from .cursor_pointer_manager import CursorPointerManager
 
 class CCCore(QObject):  # referred to as mm in other files (auratext)
     lsp_manager_initialized = pyqtSignal()
@@ -119,6 +120,12 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         self.nix_manager = NixManager()
         self.nix_ui_manager = NixUIManager(self.nix_manager)
         
+        # Initialize cursor manager
+        self.cursor_pointer_manager = None
+        
+        # Initialize overlay
+        self.overlay = None
+        
     def set_widget_manager(self, widget_manager):
         self.widget_manager = widget_manager
         # Instead of directly accessing auratext_window, let's create it if needed
@@ -133,7 +140,7 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         """Initialize all managers in correct order"""
         try:
             logging.info("Initializing managers")
-            
+            self.cursor_pointer_manager = CursorPointerManager(self)
             # Core managers first
             self.code_manager = CodeManager(self)
             logging.info("Code manager initialized")
@@ -193,6 +200,7 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         )
         self.macro_manager = MacroManager(self)
         self.mark_manager = MarkManager(self)
+        
     def late_init(self):
         if not self.late_init_done:
             try:
@@ -334,7 +342,14 @@ class CCCore(QObject):  # referred to as mm in other files (auratext)
         return self.workspace_manager.get_active_workspace()
 
     def set_overlay(self, overlay):
-          self.overlay = overlay
+        """Set the main application overlay"""
+        self.overlay = overlay
+        if self.main_window:
+            self.overlay.setParent(self.main_window)
+            self.overlay.resize(self.main_window.size())
+            self.overlay.show()
+            self.overlay.raise_()
+            logging.info("Overlay initialized and shown")
 
     def open_vault(self, path):
         vault = self.vault_manager.get_vault(path)

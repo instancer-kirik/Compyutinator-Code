@@ -142,11 +142,17 @@ class CustomchorderOverlay(Overlay):
             self.serial_thread.start()
 
 class CompositeOverlay(Overlay):
-    def __init__(self, cccore, flashlight_size=200, flashlight_power=0.5, serial_port=None, baud_rate=115200):
+    def __init__(self, cccore, flashlight_size=200, flashlight_power=0.07, serial_port=None, baud_rate=115200):
         super().__init__()
-        self.cursor_manager = CursorPointerManager(cccore)
-        self.cursor_pos = self.cursor_manager.get_current_pos()
+        self.cccore = cccore
+        self.cursor_pointer_manager = cccore.cursor_pointer_manager
         
+        # Create main layout
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(self.main_layout)
+        
+        # Create flashlight overlay
         self.flashlight_overlay = Flashlight(cccore, size=flashlight_size, power=flashlight_power)
         self.flashlight_overlay.setParent(self)
         
@@ -166,20 +172,29 @@ class CompositeOverlay(Overlay):
 
         # Enable mouse tracking
         self.setMouseTracking(True)
+# Show the overlay
+        self.show()
+        self.raise_()
+        
+    def add_layer(self, widget):
+        """Add a new layer to the overlay"""
+        self.main_layout.addWidget(widget)
+        widget.show()
+        widget.raise_()
 
     def enterEvent(self, event):
         # Set transparent cursor when mouse enters the overlay
-        self.cursor_manager.set_transparent_cursor()
+        self.cccore.cursor_pointer_manager.set_transparent_cursor()
         super().enterEvent(event)
 
     def leaveEvent(self, event):
         # Restore default cursor when mouse leaves the overlay
-        self.cursor_manager.restore_default_cursor()
+        self.cccore.cursor_pointer_manager.restore_default_cursor()
         super().leaveEvent(event)
 
     def update_cursor_effect(self):
         try:
-            self.cursor_pos = self.cursor_manager.get_current_pos()
+            self.cursor_pos = self.cccore.cursor_pointer_manager.get_current_pos()
             if self.flashlight_overlay:
                 self.flashlight_overlay.cursor_pos = self.cursor_pos
                 self.flashlight_overlay.update()

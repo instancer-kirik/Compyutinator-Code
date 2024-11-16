@@ -124,6 +124,11 @@ def initialize_core(config_manager):
         serial_port=None
     )
     
+    # Set overlay for CCCore
+    cccore.set_overlay(overlay)
+    overlay.show()
+    overlay.raise_()
+    
     return cccore, overlay
 
 def merge_themes(default_theme, custom_theme):
