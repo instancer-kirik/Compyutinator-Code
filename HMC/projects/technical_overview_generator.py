@@ -1,10 +1,11 @@
-from HMC.projects.project_config import ProjectConfig
+
 import logging
 from typing import Dict, Any
 from HMC.system_analyzer import SystemInfo
+from HMC.projects.project_types import BaseProjectData
 import json
 class TechnicalOverviewGenerator:
-    def __init__(self, config: ProjectConfig):
+    def __init__(self, config: BaseProjectData):
         self.config = config
 
     def generate(self) -> str:

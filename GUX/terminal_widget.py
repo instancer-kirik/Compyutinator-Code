@@ -13,17 +13,21 @@ class TerminalWidget(QWidget):
         super().__init__(parent)
         self.cccore = cccore
         self.setLayout(QVBoxLayout())
+        self.terminals = []  # Keep track of terminals
         self.add_terminal()
 
     def add_terminal(self):
         try:
             terminal = TerminalEmulator(self, mm=self.cccore)
+            self.terminals.append(terminal)
             self.layout().addWidget(terminal)
+            return terminal
         except Exception as e:
             logging.error(f"Error creating terminal: {e}")
             error_label = QLabel("Failed to initialize terminal. Check logs for details.")
             error_label.setStyleSheet("color: red;")
             self.layout().addWidget(error_label)
+            return None
 
     def setup_shortcuts(self):
         QShortcut(QKeySequence("Ctrl+Shift+H"), self, self.split_horizontal)
@@ -92,6 +96,11 @@ class TerminalWidget(QWidget):
         self.output.clear()
 
     def closeEvent(self, event):
-        self.process.terminate()
-        self.process.waitForFinished()
+        """Clean up terminals before closing"""
+        try:
+            for terminal in self.terminals:
+                if terminal:
+                    terminal.cleanup()
+        except Exception as e:
+            logging.error(f"Error cleaning up terminals: {e}")
         super().closeEvent(event)

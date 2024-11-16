@@ -8,16 +8,19 @@ import logging
 from .wings_manager import WingsManager
 from .resource_manager import ResourceManager
 from .technical_overview_generator import TechnicalOverviewGenerator
-from HMC.projects.project_wing import Wing
+from .project_wing import Wing
 from .project_types import (
-    DevelopmentStandards,
-    RiskManagement,
     Resource,
     ProjectType,
     WingType,
     WingStatus
 )
 import uuid
+from typing import Any
+from HMC.projects.project_config import ProjectConfig
+from .configs.development_config import DevelopmentConfig
+from .configs.project_operations_config import ProjectOperationsConfig
+
 @dataclass
 class Project:
     name: str
@@ -40,15 +43,12 @@ class Project:
         self.config._project = self
 
     @property
-    def risk_manager(self) -> RiskManagement:
-        return self.config.risk_management
+    def operations(self) -> ProjectOperationsConfig:
+        return self.config.operations
 
     @property
-    def dev_standards(self) -> DevelopmentStandards:
-        return self.config.dev_standards
-
-    def calculate_risk_score(self, probability: str, impact: str) -> int:
-        return self.risk_manager.calculate_risk_score(probability, impact)
+    def dev_config(self) -> DevelopmentConfig:
+        return self.config.development
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Project':

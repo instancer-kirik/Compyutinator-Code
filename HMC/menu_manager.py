@@ -93,7 +93,7 @@ class MenuManager:
         self.file_menu.addAction('Save &As', self.action_handlers.save_file_as)
         
         # Add a new action for creating a new AuraText window
-        self.file_menu.addAction('New AuraText Window', self.cccore.create_auratext_window)  # Connect to the method that creates a new window
+        self.file_menu.addAction('New Vortex Window', self.cccore.create_auratext_window)  # Connect to the method that creates a new window
         
         self.file_menu.addSeparator()
         self.file_menu.addAction('&Exit', self.main_window.close)

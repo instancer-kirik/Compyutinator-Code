@@ -5,15 +5,14 @@ import json
 import os
 import logging
 from pathlib import Path
-from enum import Enum
 from dataclasses import field
 from HMC.system_analyzer import SystemInfo
 from HMC.projects.project_structure import PROJECT_DIRECTORIES
 from HMC.symbol_manager import CodeSymbol
 from HMC.projects.project_wing import Wing, WingType
-
 from HMC.projects.wings_manager import WingsManager
-from .base_config import BaseProjectData, ProjectType
+from .project_types import BaseProjectData, ProjectType
+
 from .configs.technical_config import TechnicalConfig
 from .configs.development_config import DevelopmentConfig
 from .configs.project_management_config import ProjectManagementConfig
@@ -25,7 +24,6 @@ from .configs.quality_config import QualityConfig
 from .configs.market_config import MarketConfig
 from .wing_config import WingConfig
 
-from .technical_overview_generator import TechnicalOverviewGenerator
 from .validators.config_validators import InfrastructureValidator, SecurityValidator
 
 @dataclass

@@ -164,49 +164,73 @@ class VoiceTypingWidget(QWidget):
     @pyqtSlot(str, bool)
     def update_transcription(self, text, is_final):
         try:
-            # Update the in-app text box for reference
-            cursor = self.text_edit.textCursor()
+            # Get the current cursor position from the active window
+            active_window = QApplication.focusWidget()
+            if not active_window or not isinstance(active_window, QTextEdit):
+                # If no text widget is focused, update only our preview
+                self._update_preview(text, is_final)
+                return
 
+            cursor = active_window.textCursor()
+            
             if is_final:
-                # For final text, replace the previous partial text with the new final text
+                # Remove partial text if it exists
                 if self.partial_text:
-                    # Remove the previous partial text from the GUI and screen
-                    cursor.movePosition(QTextCursor.MoveOperation.End)
-                    cursor.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.KeepAnchor, len(self.partial_text))
+                    cursor.movePosition(QTextCursor.MoveOperation.Left, 
+                                     QTextCursor.MoveMode.KeepAnchor, 
+                                     len(self.partial_text))
                     cursor.removeSelectedText()
-
-                    self.typing_flag = True
-                    pyautogui.press('backspace', presses=len(self.partial_text))
-                    self.typing_flag = False
-
-                # Insert the new final text
+                    
+                # Insert final text
                 cursor.insertText(text + " ")
-                self.text_edit.setTextCursor(cursor)
-                self.text_edit.ensureCursorVisible()
-
-                # Type the final text using pyautogui
-                self.typing_flag = True
-                pyautogui.write(text + " ")
-                self.typing_flag = False
-
+                active_window.setTextCursor(cursor)
                 self.partial_text = ""
+                
             else:
-                # Append the new partial text
-                cursor.insertText(text[len(self.partial_text):])
-                self.text_edit.setTextCursor(cursor)
-                self.text_edit.ensureCursorVisible()
-
-                # Type the partial text using pyautogui
-                self.typing_flag = True
-                pyautogui.write(text[len(self.partial_text):])
-                self.typing_flag = False
-
+                # Remove previous partial text
+                if self.partial_text:
+                    cursor.movePosition(QTextCursor.MoveOperation.Left, 
+                                     QTextCursor.MoveMode.KeepAnchor, 
+                                     len(self.partial_text))
+                    cursor.removeSelectedText()
+                
+                # Insert new partial text
+                cursor.insertText(text)
+                active_window.setTextCursor(cursor)
                 self.partial_text = text
-
-            # Force the GUI to update
-            QApplication.processEvents()
+                
+            # Update preview
+            self._update_preview(text, is_final)
+            
         except Exception as e:
-            logging.error("Error updating transcription: %s", str(e))
+            logging.error(f"Error updating transcription: {e}")
+
+    def _update_preview(self, text: str, is_final: bool):
+        """Update the preview text box"""
+        try:
+            cursor = self.text_edit.textCursor()
+            
+            if is_final:
+                if self.partial_text:
+                    cursor.movePosition(QTextCursor.MoveOperation.End)
+                    cursor.movePosition(QTextCursor.MoveOperation.Left, 
+                                     QTextCursor.MoveMode.KeepAnchor, 
+                                     len(self.partial_text))
+                    cursor.removeSelectedText()
+                cursor.insertText(text + " ")
+            else:
+                cursor.movePosition(QTextCursor.MoveOperation.End)
+                if self.partial_text:
+                    cursor.movePosition(QTextCursor.MoveOperation.Left, 
+                                     QTextCursor.MoveMode.KeepAnchor, 
+                                     len(self.partial_text))
+                cursor.insertText(text)
+                
+            self.text_edit.setTextCursor(cursor)
+            self.text_edit.ensureCursorVisible()
+            
+        except Exception as e:
+            logging.error(f"Error updating preview: {e}")
 
     def keyPressEvent(self, event):
         try:

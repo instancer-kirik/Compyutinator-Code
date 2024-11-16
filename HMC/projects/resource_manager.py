@@ -3,10 +3,11 @@ from typing import Dict, Optional, List, Any
 from datetime import datetime
 from pathlib import Path
 import logging
-from .project import Project
+from HMC.projects.project_types import BaseProjectData
+
 @dataclass
 class ResourceManager:
-    project: 'Project'
+    project: BaseProjectData
     allocations: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     
     def allocate(self, resource_id: str, allocation: Dict[str, Any]) -> bool:
